@@ -2,14 +2,12 @@ SISH (SImount Shell)
 =================
 Unix like Shell for OpenQM and UniVerse
 
-[TOC]
-
 ## 概要
 
 Unix系のShellライクな操作でコマンド入力が出来るようになります。 
 また、アイテムやBASICソースを効率よく編集するスクリーンエディタも備えています。
 
-![](./SISH Manual_files/Shell.png)
+![](./resources/Shell.png)
 
 ## コンパイル確認プラットフォーム
 
@@ -270,7 +268,7 @@ BASICプログラムは構文が装飾されて表示されます。分岐やル
 [http://d.hatena.ne.jp/amachang/20111226/1324874731](http://d.hatena.ne.jp/amachang/20111226/1324874731)
 
 以下は適応した場合の画面キャプチャー 
-![](./SISH Manual_files/Consolas.png)
+![](./resources/Consolas.png)
 
 導入方法は少しややこしいですが、MSゴシックより見やすくなるので対応する価値はあるかと思います。
 
@@ -279,7 +277,7 @@ BASICプログラムは構文が装飾されて表示されます。分岐やル
 ### 2016/07/07 0.9.0リリース
 
 - シェル機能
-	- L-Typeの辞書フィールド補完に対応 (OpenQM)
+	- L-Typeの辞書フィールド補完に対応
 	- Basic系コマンド利用時にBPを省略するとBP.OUTの内容を補完するようになりました。
 	- Ctrl+Rでのコマンド履歴のインクリメンタルサーチが出来るようになりました。
 
@@ -305,4 +303,4 @@ BASICプログラムは構文が装飾されて表示されます。分岐やル
 
 ## License
 
-[GPLv2](./LICENSE)
+[MIT](./LICENSE)
