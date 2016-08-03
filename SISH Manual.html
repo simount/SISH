@@ -59,16 +59,23 @@
 </ul>
 </li>
 <li><a href="#todo">TODO</a></li>
+<li><a href="#license">License</a></li>
 </ul>
 </li>
 </ul>
 </div>
 </p>
 
+
+
 <h2 id="概要">概要</h2>
 
 <p>Unix系のShellライクな操作でコマンド入力が出来るようになります。  <br>
 また、アイテムやBASICソースを効率よく編集するスクリーンエディタも備えています。</p>
+
+<p>![](./SISH Manual_files/Shell.png)</p>
+
+
 
 <h2 id="コンパイル確認プラットフォーム">コンパイル確認プラットフォーム</h2>
 
@@ -108,6 +115,8 @@ Windowsのコマンドプロンプトでは非対応となります。 <br>
 
 <p>これらの端末で正しく動作させる為には、同梱されている<a href="./SISH.SETTING.H">SISH.SETTING.H</a>のキーシーケンスの設定とカラーパレット設定を端末側とうまく合わせる事により対応させる事ができます。</p>
 
+
+
 <h4 id="sishのコンパイルとグローバルカタログ化">SISHのコンパイルとグローバルカタログ化</h4>
 
 <p>同梱のソース<code>SISH</code> <code>SISH.SETTING.H</code>を<code>BP</code>ディレクトリに置きます。  <br>
@@ -121,6 +130,8 @@ Windowsのコマンドプロンプトでは非対応となります。 <br>
 
 <p><code>SISH.SETTING.H</code>を独自にカスタマイズした場合は他の人とバッティングしないために自分用の名前でカタログ化して下さい。</p>
 
+
+
 <h4 id="linuxに接続時の注意点">Linuxに接続時の注意点</h4>
 
 <p>SISHでは<code>Ctrl</code>+<code>Z</code>と<code>Ctrl</code>+<code>S</code>をショートカットキーとして使用します。 </p>
@@ -130,6 +141,8 @@ Windowsのコマンドプロンプトでは非対応となります。 <br>
 <pre><code>stty stop undef
 stty susp ^K
 </code></pre>
+
+
 
 <h2 id="機能">機能</h2>
 
@@ -148,6 +161,8 @@ stty susp ^K
 <li><code>%</code>後のL-Typeフィールドの辞書フィールド補完に対応(OpenQM)</li>
 </ul>
 
+
+
 <h3 id="英小文字大文字反転入力の切替機能">英小文字大文字反転入力の切替機能</h3>
 
 <p><code>Insert</code>キーでON/OFFを切り替えます</p>
@@ -159,6 +174,8 @@ stty susp ^K
 <p><code>F11</code>キーでカラーテーマを切り替える事ができます。(OSCによるカラーパレット変更に対応している端末のみ) <br>
 パレットは以下のサイトのSolarized-lightとdarkが利用できます。 <br>
 <a href="http://ethanschoonover.com/solarized">http://ethanschoonover.com/solarized</a></p>
+
+
 
 <h3 id="ターミナルサイズの自動変更機能">ターミナルサイズの自動変更機能</h3>
 
@@ -205,6 +222,8 @@ stty susp ^K
 <p>BASICプログラムは構文が装飾されて表示されます。分岐やループで自動的にインデントが増えます。</p>
 
 <p>※エディタ使用中にターミナルエミュレータのサイズを小さくした場合は、表示が崩れますのでその時は一度エディタを抜けてから戻ってきて下さい。<code>Ctrl+E</code> <code>Ctrl+E</code></p>
+
+
 
 <h2 id="キー別機能一覧">キー別機能一覧</h2>
 
@@ -312,7 +331,7 @@ stty susp ^K
 　　　　　　　　　　　　　　　　 |
 　　　　　　　　　　　　　　　　&lt;↑&gt;
 　　　　　　　　　　　　　　　　 |
-&lt;Home&gt; -- &lt;Ctrl+←&gt; -- &lt;←&gt; --|-- &lt;→&gt; -- &lt;Ctrl+→&gt; -- &lt;End&gt;
+　&lt;Home&gt; -- &lt;Ctrl+←&gt; -- &lt;←&gt; --|-- &lt;→&gt; -- &lt;Ctrl+→&gt; -- &lt;End&gt;
 　　　　　　　　　　　　　　　　 |
 　　　　　　　　　　　　　　　　&lt;↓&gt;
 　　　　　　　　　　　　　　　　 |
@@ -324,6 +343,8 @@ stty susp ^K
 　　　　　　　　　　　　　　　　 |
 　　　　　　　　　　　　　　&lt;Ctrl+End&gt;
 </code></pre>
+
+
 
 <h4 id="編集操作">編集操作</h4>
 
@@ -363,6 +384,8 @@ stty susp ^K
   <td>選択領域の拡張（押すたびに以下を繰り返します）<br><code>選択なし</code>-&gt;<code>単語選択</code>-&gt;<code>空白文字まで選択</code>-&gt;<code>1行選択</code>-&gt;<code>同一インデント行を選択</code>-&gt;<code>全行選択</code>-&gt;<code>選択なし</code></td>
 </tr>
 </tbody></table>
+
+
 
 
 <h4 id="その他操作">その他操作</h4>
@@ -437,6 +460,8 @@ stty susp ^K
   <td>エディタ画面に遷移</td>
 </tr>
 </tbody></table>
+
+
 
 
 <h3 id="エディタのみ">エディタのみ</h3>
@@ -587,6 +612,8 @@ stty susp ^K
 </tbody></table>
 
 
+
+
 <h2 id="制限事項">制限事項</h2>
 
 <ul>
@@ -634,15 +661,25 @@ stty susp ^K
 <li><p>キーシーケンスとカラーパレットの設定部分のソースを外だしにしました。</p></li>
 </ul>
 
+
+
 <h3 id="20140910-080リリース">2014/09/10 0.8.0リリース</h3>
 
 <ul>
 <li>初回リリース</li>
 </ul>
 
+
+
 <h2 id="todo">TODO</h2>
 
 <ul>
 <li>エディタ内単語の入力補完機能</li>
-</ul></div></body>
+</ul>
+
+
+
+<h2 id="license">License</h2>
+
+<p><a href="./LICENSE">GPLv2</a></p></div></body>
 </html>

@@ -9,6 +9,8 @@ Unix like Shell for OpenQM and UniVerse
 Unix系のShellライクな操作でコマンド入力が出来るようになります。 
 また、アイテムやBASICソースを効率よく編集するスクリーンエディタも備えています。
 
+![](./SISH Manual_files/Shell.png)
+
 ## コンパイル確認プラットフォーム
 
 -	OpenQM 3.4-6 or later
@@ -300,3 +302,7 @@ BASICプログラムは構文が装飾されて表示されます。分岐やル
 ## TODO
 
 - エディタ内単語の入力補完機能
+
+## License
+
+[GPLv2](./LICENSE)
