@@ -34,8 +34,8 @@ putty.iniにxtermキーシーケンスの設定を追記します。
 
 - Gnome-terminal(Linux)
 - iTurm2(Mac)
-	- プロファイルのKeysの設定を`xterm Defaults`に設定
-	- プロファイルのColorsの設定を`Solarized light`に設定
+	- プロファイル設定のKeysのプリセットを`xterm Defaults`に変更
+	- プロファイル設定のColorsのプリセットを`Solarized light`に変更
 
 これらの端末で正しく動作させる為には、同梱されている[SISH.SETTING.H](./BP/SISH.SETTING.H)のキーシーケンスの設定とカラーパレット設定を端末側とうまく合わせる事により対応させる事ができます。
 
@@ -72,6 +72,8 @@ Linuxでは以下の制御コードと重複しているので抑制する必要
 - `,`後のマルチパートファイル
 - `LOGTO`コマンドの後は登録アカウントテーブルの内容から補完
 - `%`後のL-Typeフィールドの辞書フィールド補完に対応(OpenQM)
+
+OpenQMでは'OPTION QUERY.NO.CASE'を設定しておく事で大文字小文字に関係なく補完する事ができます。
 
 ### 英小文字大文字反転入力の切替機能
 
