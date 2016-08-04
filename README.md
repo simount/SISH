@@ -103,7 +103,8 @@ http://ethanschoonover.com/solarized
 `.E [File] [Item] [FieldId...]`
 
 > `[Item]`は選択リスト時に省略可能です。  
-> `[FieldId]`を指定すると指定フィールドを辞書に基づいて編集するモードで起動します。行数表示横にフィールド名が表示されます。Conversion指定があれば保存時に自動的に変換されます。マルチバリューの場合はマルチバリュー編集モードになります。
+> `[FieldId]`を指定すると指定フィールドを辞書に基づいて編集するモードで起動します。行数表示横にフィールド名が表示されます。
+> Conversion指定があれば保存時に自動的に変換されます。マルチバリューの場合はマルチバリュー編集モードになります。
 
 デフォルトのキー操作はWindowsの一般的なテキストエディタと同様です。
 
@@ -154,27 +155,27 @@ BASICプログラムは構文が装飾されて表示されます。分岐やル
 
 カーソル移動早見表
 
-    　　　　　　　　　　　　　　<Ctrl+Home>
-    　　　　　　　　　　　　　　　　 |
-    　　　　　　　　　　　　　　<Ctrl+PgUp>
-    　　　　　　　　　　　　　　　　 |
-    　　　　　　　　　　　　　　　<PgUp>
-    　　　　　　　　　　　　　　　　 |
-    　　　　　　　　　　　　　　 <Ctrl+↑>
-    　　　　　　　　　　　　　　　　 |
-    　　　　　　　　　　　　　　　　<↑>
-    　　　　　　　　　　　　　　　　 |
-    　<Home> -- <Ctrl+←> -- <←> --|-- <→> -- <Ctrl+→> -- <End>
-    　　　　　　　　　　　　　　　　 |
-    　　　　　　　　　　　　　　　　<↓>
-    　　　　　　　　　　　　　　　　 |
-    　　　　　　　　　　　　　　 <Ctrl+↓>
-    　　　　　　　　　　　　　　　　 |
-    　　　　　　　　　　　　　　　<PgDown>
-    　　　　　　　　　　　　　　　　 |
-    　　　　　　　　　　　　　<Ctrl+PgDown>
-    　　　　　　　　　　　　　　　　 |
-    　　　　　　　　　　　　　　<Ctrl+End>
+                                 Ctrl+Home
+                                     |
+                                 Ctrl+PgUp
+                                     |
+                                    PgUp
+                                     |
+                                   Ctrl+↑
+                                     |
+                                     ↑  
+                                     |
+        Home  --  Ctrl+<-  --  <-  --|--  ->  --  Ctrl+->  --  End
+                                     |
+                                     ↓  
+                                     |
+                                   Ctrl+↓
+                                     |
+                                   PgDown
+                                     |
+                                Ctrl+PgDown
+                                     |
+                                  Ctrl+End
 
 #### 編集操作
 
