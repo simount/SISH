@@ -16,14 +16,14 @@ Program SISH
 **
 **  DATE
 **
-**    2016/07/07
-**
+**    2016/08/16
+**  
 **  AUTHOR
 **    
 **    Kazuya Kosaku <kosaku@simount.com>
 **  
 **  LICENSE
-**    
+**  
 **    Copyright (C) 2016  SImount <info@simount.com>
 **    
 **    This program is free software; you can redistribute it and/or
@@ -41,6 +41,8 @@ Program SISH
 **    Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 **    
 **========================================================================================
+
+Equ SISH.VERSION To "[ SISH v0.9.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -373,6 +375,8 @@ Shell.Main:
 		bAutoTermSize = @TRUE
 		bInvert = @FALSE
 		bTimer = @FALSE
+		theme = 1
+		Crt SISH.VERSION
 	End
 
 	** DICT.DESCの取得
@@ -750,11 +754,6 @@ Run.Command:
 		cmdline = ""
 	End
 
-	If cmdline = "" Then
-		Gosub CLEAR.FOR.PERFORM
-		GoTo Run.Command.Ending
-	End
-	
 	If cmdline[' ',1,1] Matches "...SISH..." Then GoTo Run.Command.Ending
 	
 	** コマンドスタックの更新
@@ -794,6 +793,11 @@ Run.Command:
 		Crt ""
 	End
 	
+	If cmdline = "" Then
+		Gosub CLEAR.FOR.PERFORM
+		GoTo Run.Command.Ending
+	End
+
 	bFirstCurTop = @TRUE
 
 	Gosub CLEAR.FOR.PERFORM
@@ -3199,8 +3203,7 @@ Initialise:
 *--------------------------------------------------------------------------
 InitTerminal: 
 	
-	prompt ''
-	PROMPT.STR = "si>"
+!! 	prompt ''
 	
 $IFDEF U2__UNIVERSE
 	Ttyget ttys Then
@@ -3222,9 +3225,8 @@ $ELSE
 	If System(1044) Then
 		!! ECS Mode
 		x = PTERM(7,1) ;** UTF8固定
-		PROMPT.STR[1] = ECHAR(0x25B8) ;** "si▸"
 	End
-	IF Len(@(IT$CUD))=0 Then Perform "TERM XTERM"
+	IF Len(@(IT$CUD))=0 Then Execute "$ECHO":@FM:"TERM XTERM"
 $ENDIF
 	
 	Return
@@ -4209,14 +4211,12 @@ LoadKeyBindings:
 			!! シーケンス解析
 			n = seq(z[1,1])
 			If n > 31 And n < 127 Then
-					Crt "Key binding for action ":action:" does not start with a control character"
-					err = @TRUE
+			   Display "Key binding for action ":action:" does not start with a control character"
+			   err = @TRUE
 			End Else
 				Locate z In keys By 'AL' Setting i Then
-					If action <> keysToAction<i> Then
-						Crt "Duplicate key bindings. Actions ":keysToAction<i>:" and ":action
-						err = @true
-					End
+					Display "Duplicate key bindings. Actions ":keysToAction<i>:" and ":action
+					err = @true
 				End Else
 					Ins z Before keys<i>
 					Ins action Before keysToAction<i>
@@ -6817,6 +6817,8 @@ Set.Theme:
 	
 		Crt crtBuff:
 		GoSub GetKey
+		If actNo = A.THEME Then GoTo Act.SwitchTheme
+
 		Redraw = REDRAW.ALL
 	End
 	
