@@ -42,7 +42,7 @@ Program SISH
 **    
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.9.1 ]"
+Equ SISH.VERSION To "[ SISH v0.9.2 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -1577,7 +1577,7 @@ ParseCommandLine:
 					Select TempFL
 					ReadList tmp Then ItemList<-1> = tmp
 				End Else If arg >< "" Then
-					If Trans(dictFileName,arg,0,'X') Or arg Matches "F1N0N" Then
+					If Not(DICT) And (Trans(dictFileName,arg,0,'X') Or arg Matches "F1N0N") Then
 						!! 辞書にある引数はフィールドとみなす(F1 F2 等は特別)
 						FldInfo<-1> = arg
 					End Else
@@ -2697,11 +2697,11 @@ AfterKeyWait:
 		
 		n = UniSeq(C) ;** １文字目の文字列数値表記
 		If n > 31 Then
-			If bPrevEsc And Len(C) > 1 Then
-				!! 前回が制御シーケンスの場合は誤入力を弾くために１文字のみとする
-				bPrevEsc = @FALSE
-				GoTo GetKey
-			End
+!! 			If bPrevEsc And Len(C) > 1 Then
+!! 				!! 前回が制御シーケンスの場合は誤入力を弾くために１文字のみとする
+!! 				bPrevEsc = @FALSE
+!! 				GoTo GetKey
+!! 			End
 			actNo = A.INSCHAR
 			bPrevEsc = @FALSE
 			Return
