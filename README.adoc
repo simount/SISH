@@ -44,8 +44,8 @@ image:resources/Shell.png[Overview]
 `SISH` はxterm系の制御シーケンスが理解できるターミナルエミュレータから接続して使用される必要があります。 +
 Windowsのコマンドプロンプトでは動作しません。 +
 デフォルトの設定では `Ctrl` `Shift` `Alt` などの装飾キーの多重押しに対応するために
-link:http://invisible-island.net/xterm/ctlseqs/ctlseqs.html[xterm制御シーケンス]の `modifyCursorKeys=2` , `modifyOtherKeys=2` の
-シーケンスが送信されることが想定されています。
+link:http://invisible-island.net/xterm/ctlseqs/ctlseqs.html[xterm制御シーケンス]の
+`modifyCursorKeys=2` , `modifyOtherKeys=2` のシーケンスが送信されることが想定されています。
 
 動作確認環境として以下サイトで配布されているGDI版puttyで正しく動作する事を確認しています。
 
@@ -61,6 +61,7 @@ putty.iniにxtermキーシーケンスの設定を追記します。 +
 - iTurm2(Mac)
   * プロファイル設定のKeysのプリセットを `xterm Defaults` に変更
   * プロファイル設定のColorsのプリセットを `Solarized light` に変更
+- TeraTerm(Windows)
 
 これらの端末で正しく動作させる為には、同梱されているlink:BP/SISH.SETTING.H[SISH.SETTING.H]の
 キーシーケンスの設定とカラーパレット設定を端末側とうまく合わせる事により対応させる事ができます。
@@ -424,7 +425,7 @@ BASICプログラムは構文が装飾されて表示されます。 +
 
 == 制限事項 ==
 
-- UniVerse版ではコマンド実行中にAbortすると`SISH`もAbortします。
+- UniVerse版ではコマンド実行中にAbortすると `SISH` ごとAbortします。
 
 == おまけ ==
 
