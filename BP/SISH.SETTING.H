@@ -1,9 +1,13 @@
 **
 ** Editor Setting
 **
-
-EQU STDTAB TO 2                    ; * Indent Tab size
+ 
+EQU DEFAULT.INDENT TO 2            ; * Default Indent size
+EQU DEFAULT.INDENT.TYPE TO "Tab"   ; * Default Indent Type "Tab" ot "SP"
 EQU SCROLLMERGINE To 3             ; * Line number to start the scroll when the cursor came in near the top or bottom
+
+EQU INS.MODE.SEQ Lit "ESC:'[1=c'"      ;* Insert Mode Cursor
+EQU OVERLAY.MODE.SEQ Lit "ESC:'[2=c'"  ;* Overlay Mode Cursor
 
 **
 ** Keybinding Setting
@@ -60,6 +64,7 @@ Equ K.F4 To               "@[OS"
 Equ K.C_F4 To             "@[O5S"
 Equ K.F5 To               "@[[15~"
 Equ K.F7 To               "@[[18~"
+Equ K.F9 To               "@[[20~"
 Equ K.F10 To              "@[[21~"
 Equ K.F11 To              "@[[23~"
 Equ K.F12 To              "@[[24~"
@@ -177,7 +182,7 @@ Equ K.ESC To              "@["
 	keySeq<A.EXIT>             = K.C_E
 	keySeq<A.CLOSEBUF>         = K.C_W:" ":K.C_F4
 	keySeq<A.DIVE>             = K.F4:" ":KEY.FUNCTION.4
-	keySeq<A.CASEINVERT>       = K.INS:" ":KEY.INSERT.LINE
+	keySeq<A.CASEINVERT>       = K.F9
 	keySeq<A.THEME>            = K.F11:" ":KEY.FUNCTION.11
 	keySeq<A.CANCEL>           = K.ESC
 
