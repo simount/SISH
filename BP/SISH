@@ -16,7 +16,7 @@ Program SISH
 **
 **  DATE
 **
-**    2016/10/19
+**    2016/11/01
 **  
 **  AUTHOR
 **    
@@ -42,7 +42,7 @@ Program SISH
 **    
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.10.0 ]"
+Equ SISH.VERSION To "[ SISH v0.11.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -230,8 +230,9 @@ Equ OS.GATES To SYSTEM(91)
 	Equ A.CLOSEBUF To 76
 	Equ A.DIVE To 77
 	Equ A.CASEINVERT To 78
+	Equ A.FIT.TERM To 79
 * ↑ここに追加していく
-  Equ ACTION.ENUM.LAST To 79
+  Equ ACTION.ENUM.LAST To 80
 
 !! 外部設定の読み込み
 $INCLUDE SISH.SETTING.H
@@ -324,8 +325,8 @@ Shell.Main:
 	End
 	
 	
-!!   EQU CRT.BUFF.FLUSH Lit "ESC:'[?25l':crtBuff:ESC:'[?25h'" <--- カーソル消すと処理が遅くなってしまう
-	EQU CRT.BUFF.FLUSH Lit "crtBuff" 
+  EQU CRT.BUFF.FLUSH Lit "ESC:'[?12l':ESC:'[?25l':crtBuff:ESC:'[?25h'" ;** <--- カーソル消すと処理が遅くなってしまう
+!! 	EQU CRT.BUFF.FLUSH Lit "crtBuff" 
 
 	Equ Depth Lit "(@CRTHIGH - 2)"
 	Equ Width Lit "(@CRTWIDE - biInfoWide)"
@@ -372,6 +373,9 @@ Shell.Main:
 	
 	GoSub InitTerminal
 	GoSub Initialise  
+	
+	EQU PY Lit "@CRTHIGH - 2"
+	EQU LISTDEPTH Lit "Depth - 2"
 	
 	* セッショングローバル
 	COMMON /SISH.SHELL/ cmdStack,ShInfo
@@ -424,6 +428,7 @@ $IFNDEF U2__UNIVERSE
 	Next line
 $ENDIF
 
+	prevListStackCmd = ".L" ;** 直前のstack一覧コマンド
 	prevFileName = "" ;** 直前のコマンドのファイル名
 
 	bFirstCurTop = @TRUE ;** カーソルを画面の最上部に初めての移動か
@@ -437,9 +442,6 @@ $ENDIF
 		GoSub Set.Theme
 	End
 	noThemePopup = @FALSE
-		
-	PY = @CRTHIGH - 2
-	LISTDEPTH = Depth - 2
 	
 	!! 大文字小文字変換の初期化
 	Perform "PTERM CASE ":If bInvert Then "INVERT" Else "NOINVERT"
@@ -481,8 +483,6 @@ $ENDIF
 	!!
 	!! 表示の初期化
 	!!
-	
-	If bAutoTermSize Then Crt CSI:"18;;t": ;** 端末サイズ教えて
 	
 	** 端末のウィンドウタイトルを変更する
 	If prevPath >< @PATH Then
@@ -557,6 +557,7 @@ Shell.KeyLoop.Start:
 		
 		!! １行に固定する
 		Y = 1
+		
 		Rec = Rec<1>
 		Line = Rec
 		
@@ -585,7 +586,6 @@ Shell.KeyLoop.Start:
 		End
 		prmptStr := PROMPT.STR
 		If System(11) Then prmptStr := PROMPT.STR ;** アクティブな選択リストあり
-		
 		
 		!! コマンド行表示 (Auto Wrap) 
 		cl = prmptStr : cmdline
@@ -636,7 +636,7 @@ Shell.KeyLoop.Start:
 		
 		!! 自動的にコマンドを実行するモード
 		If bAutoCommand Then GoTo Run.Command
-		If bAutoEditor Then bAutoEditor=@FALSE; GoTo Launch.Editor
+		If bAutoEditor Then bAutoEditor = @FALSE; GoTo Launch.Editor
 		
 		prevC = C ;** 前回の入力文字を保持
 		
@@ -699,9 +699,11 @@ Shell.KeyLoop.Start:
 			Case actNo = A.NEXTHALF Or actNo = A.NEXTPAGE
 				pageNum += 1
 				GoSub TAB.HOKAN
+				
 			Case actNo = A.PREVHALF Or actNo = A.PREVPAGE
 				pageNum -= 1
 				GoSub TAB.HOKAN
+				
 			Case actNo = A.REPEAT ;** F3
 				If Not(bFirstCurTop) Then
 					PromptLine = "Input Filter (Word or Pattern)->" ; GoSub PromptLine
@@ -710,8 +712,10 @@ Shell.KeyLoop.Start:
 					candidateFilter = inputBox
 					GoSub TAB.HOKAN
 				End
+				
 			Case C = CTRL.T
 				GoSub ACTION.INPUT.PREV.FILENAME
+				
 			Case C = CTRL.R
 				!! コマンド履歴逆順インクリメンタルサーチ
 				If bIncSearch <> "R" Then
@@ -721,7 +725,8 @@ Shell.KeyLoop.Start:
 					bIncSearch = "R"
 				End
 				GoSub ACTION.CMDSTACK.INC.SEARCH
-			Case C = CTRL.S
+				
+			Case C = CTRL.F
 				!! コマンド履歴正順インクリメンタルサーチ
 				If bIncSearch <> "F" Then
 					If bIncSearch = "" Then
@@ -730,6 +735,12 @@ Shell.KeyLoop.Start:
 					bIncSearch = "F"
 				End
 				GoSub ACTION.CMDSTACK.INC.SEARCH
+				
+			Case C = CTRL.L
+				!! 前回の.Lを実行
+				cmdline = prevListStackCmd
+				bAutoCommand = @TRUE
+				bAutoEditor = @FALSE
 				
 			Case actNo = A.NEWLINE
 				GoTo Run.Command
@@ -744,6 +755,10 @@ Shell.KeyLoop.Start:
 				crtBuff = ESC.CUR.TOP:CHAR(8):@(-3)
 				Crt crtBuff:
 
+			Case actNo = A.FIT.TERM
+				!! 端末サイズ自動設定
+				GoSub AutoTermSize
+				
 			Case actNo = A.EXIT
 				!! エディタ起動
 				If Not(bFirstCurTop) Then
@@ -825,6 +840,30 @@ Shell.KeyLoop.End:
 	
 GoTo Shell.KeyLoop.Start; * キー入力待ちに戻る
 
+
+*---------------------------
+* ターミナルサイズの自動設定
+*---------------------------
+AutoTermSize:
+	Crt CSI:"18;;t": ;** 端末サイズ教えて
+	GoSub GetKey
+	If C Matches "'":ESC:"[8'...'t'" Then
+		** DECSLPP -> CSI Ps1 ; Ps2 ; Ps3 t
+		csiPrm = C[3,HUGE]['t',1,1]
+		** 端末サイズを指定のサイズにする
+		wide = csiPrm[';',3,1]
+		high = csiPrm[';',2,1]
+	End Else
+		Return
+	End
+	
+	If @CRTWIDE:@CRTHIGH >< wide:high Then
+		!! サイズが変わった
+		cmdline = "TERM ":wide:",":high
+		bAutoCommand = @TRUE
+	End
+	
+	Return
 
 *---------------------
 * コマンドラインクリア
@@ -933,25 +972,10 @@ Run.Command:
 
 	Gosub CLEAR.FOR.PERFORM
 
-	** 端末サイズ特殊処理
-	If verb="TERM" And Trim(cmdline)><"TERM" Then
-		If Trim(cmdline) = "TERM AUTO" Then
-			bAutoTermSize = @TRUE
-			Crt CHAR(27):"[18;;t": ;** 端末サイズ教えて
-			GoTo After.Perform.Cmd
-		End Else
-			bAutoTermSize = @FALSE
-			newSize = TrimS(Convert(',',@FM,cmdline[' ',2,999][',',1,2]))
-			If Sum(Nums(newSize))=2 Then
-				Crt CSI:"8;":newSize<2>:";":newSize<1>:"t":
-			End
-		End
-	End
-
 	If cmdline[1,11] = "READ.BUFFER" Then
 		!! スクリーンエディタの起動
 		editerCmd = cmdline
-		GoSub Editor.Main
+		bAutoEditor = @TRUE
 		GoTo After.Perform.Cmd
 	End
 
@@ -966,6 +990,9 @@ $ELSE
 	x = PTERM(1,@TRUE)
 	x = PTERM(4,@TRUE)
 $ENDIF
+
+	!! 実行前の端末サイズ
+	prevCrt = @CRTHIGH:@CRTWIDE
 
 	@USER.RETURN.CODE = 999999999
 	
@@ -989,6 +1016,10 @@ $ENDIF
 		endTime = Time()
 		endTimeCpu = System(9)
 		Crt "実行時間  " : (endTime - startTime) : "s  (CPU時間  " : (endTimeCpu - startTimeCpu) : "s)":ESC.CRT.MOVE_NEXT_LINE:
+	End
+	
+	IF prevCrt <> @CRTHIGH:@CRTWIDE Then
+		Crt CSI:"8;":@CRTHIGH:";":@CRTWIDE:"t":
 	End
 	
 After.Perform.Cmd:
@@ -1020,10 +1051,12 @@ $ENDIF
 	
 Run.Command.Ending:
 	If bAutoCommand Then
-		!! エディタに戻る
 		bAutoCommand = @FALSE
-		GoSub GetKey
-		bAutoEditor = @TRUE
+		If bAutoEditor Then
+			!! エディタに戻る前に停止
+			Print "Back to the editor, please press any key. :":
+			GoSub GetKey
+		End
 	End
 	
 GoTo Shell.Input.Begin; * 先頭に戻る
@@ -1580,7 +1613,7 @@ $ENDIF
 					ids = ""
 					Loop
 						id = Remove(desc,sep)
-						non = Remove(desc,sep)
+						non = Remove(desc,s)
 						ids := If id[1] = " " Then id Else id:" "
 					While sep
 					Repeat
@@ -1595,7 +1628,7 @@ $ENDIF
 				!! 2次元目
 				Loop
 					id = Remove(grpDesc,sep2)
-					desc = Remove(grpDesc,sep2)
+					desc = Remove(grpDesc,s)
 					keyInfos<-1> = id
 					descInfos<-1> = Len(commonId):@VM:desc
 				While sep2 >= 3 ;** VM以上
@@ -1705,6 +1738,7 @@ $ENDIF
 Return
 
 Prev.Match.Filter:
+	If Len(nowWordU) = 0 Then Return
 	slistU.old = slistU
 	slist.old = slist
 	dlist.old = dlist
@@ -1713,8 +1747,8 @@ Prev.Match.Filter:
 	dlist = ""
 	Loop
 		idU = Remove(slistU.old,sep)
-		id = Remove(slist.old,sep)
-		desc = Remove(dlist.old,sep)
+		id = Remove(slist.old,s)
+		desc = Remove(dlist.old,s)
 		If idU[1,nowWord.len] = nowWordU Then
 			!! NO.CASEで前方一致
 			slistU<-1> = idU
@@ -1735,8 +1769,8 @@ Match.CancidateFilter:
 	dlist = ""
 	Loop
 		id = Remove(slist.old,sep)
-		idU = Remove(slistU.old,sep)
-		desc = Remove(dlist.old,sep)
+		idU = Remove(slistU.old,s)
+		desc = Remove(dlist.old,s)
 		If Index(Trim(idU):@FM:UpCase(desc),filterU) Or Trim(id) Matches candidateFilter Or desc Matches candidateFilter Then
 			slist<-1> = id
 			slistU<-1> = idU
@@ -1910,7 +1944,7 @@ Get.SList.FLATFILE:
 	Next
 	
 	If flatFile = "" Then
-		If UpCase(words<1>) Matches "RUN":@VM:"BASIC":@VM:"CATALOG":@VM:"DELETE.CATALOG":@VM:"CATALOGUE":@VM:"DELETE.CATALOGUE" Then
+		If UpCase(words<1>) Matches Convert(" ",@VM,"RUN BASIC CATALOG DELETE.CATALOG CATALOGUE DELETE.CATALOGUE") Then
 			!! VerbがBasic系でフラットファイル指定がない場合は BP.OUT を候補に入れる
 			Open "BP.OUT" To fpFlat Then
 				fileType = FileInfo(fpFlat,3)
@@ -1918,7 +1952,7 @@ Get.SList.FLATFILE:
 					flatFile = "BP.OUT"
 				End
 			End
-		End Else If UpCase(words<1>) Matches "GET.LIST":@VM:"SAVE.LIST":@VM:"COPY.LIST":@VM:"SORT.LIST":@VM:"EDIT.LIST" Then
+		End Else If UpCase(words<1>) Matches Convert(" ",@VM,"GET.LIST SAVE.LIST COPY.LIST SORT.LIST EDIT.LIST") Then
 			!! VerbがSaved.List系でフラットファイル指定がない場合は $SAVEDLIST に入れる
 			Open SAVEDLISTS.FILE To fpFlat Then
 				fileType = FileInfo(fpFlat,3)
@@ -2068,11 +2102,14 @@ ACTION.CMDSTACK.LIST:
 		Print result<i,3>:FMT(result<i,1>,w:"R"):" ":result<i,2>
 	Next i
 
+	!! コマンドを保存
+	prevListStackCmd = cmdline
+
 	!! 現在行の調整
 	GoSub ACTION.CMDSTACK.NEXT
 	GoSub ACTION.CMDSTACK.BACK
 	
-GoTo Shell.KeyLoop.End
+GoTo Run.Command.Ending
 
 *--------------------------------
 * コマンドスタックジャンプ Action
@@ -2472,8 +2509,14 @@ ParseCommandLine:
 	ignoreCase = False
 	searchReverse = False
 	
-	crtBuff = CHAR(27):"[18;;t" ;** 端末サイズ教えて
 	GoSub GoAltScreenBuf ;** 代替画面バッファ
+	
+	!! Brackets Paste Mode on
+	crtBuff := CSI:"?2004h"
+	
+!! 	** Mouse Tracking on
+!! 	crtBuff := CSI:"?1006h"
+	
 	Crt crtBuff:
 	
 	GoSub DoShowDictInfo
@@ -2488,6 +2531,13 @@ ParseCommandLine:
 	Repeat
 	
 	crtBuff = ""
+	
+	** Brackets Paste Mode off
+	crtBuff := CSI:"?2004l"
+	
+!! 	** Mouse Tracking off
+!! 	crtBuff := CSI:"?1006l"
+	
 	GoSub BackAltScreenBuf ;** 代替画面バッファから戻る
 	Crt crtBuff:
 	
@@ -2512,7 +2562,7 @@ BackAltScreenBuf:
 	crtBuff := ESC:"[?25h"
 	crtBuff := ESC:"[?1049l"
 	Return
-	
+
 *--------------------------------------------------------------------------
 * Action
 *--------------------------------------------------------------------------
@@ -2655,6 +2705,7 @@ Catalog:
 			Return
 		End Case
 	bAutoCommand = @TRUE
+	bAutoEditor = @TRUE
 	GoSub Act.Exit
 Return
 
@@ -3603,8 +3654,8 @@ GetKey:
 	Loop
 		
 		If keyQueue <> "" Then
-			C = keyQueue[1,1]
-			keyQueue = keyQueue[2,9999]
+			C = keyQueue
+			keyQueue = ""
 		End Else
 			** キー入力待ち
 			C = KeyIn()
@@ -3625,7 +3676,7 @@ AfterKeyWait:
 		n = UniSeq(C) ;** １文字目の文字列数値表記
 		If n > 31 Then
 			If Len(C) > 1 Then
-				keyQueue = C[2,9999]
+				keyQueue = C[2,99999]
 				C = C[1,1]
 			End
 			actNo = A.INSCHAR
@@ -3640,6 +3691,31 @@ AfterKeyWait:
 			End Else
 				Crt INS.MODE.SEQ:
 			End
+			Return
+		End
+		
+		!! Bracketed Paste
+		If C Matches "'":ESC:"[200~'..." Then
+			end.pos = Index(C,ESC:"[201~",1)
+			If end.pos > 0 Then
+				C = C[7,end.pos-7]
+			End Else
+				C = ""
+				Loop
+					k = KeyIn()
+				While k <> ESC
+					C := k
+				Repeat
+				
+				k = KeyIn() ;** [
+				k = KeyIn() ;** 2
+				k = KeyIn() ;** 0
+				k = KeyIn() ;** 1
+				k = KeyIn() ;** ~
+				
+			End
+			
+			actNo = A.INSCHAR
 			Return
 		End
 		
@@ -3663,41 +3739,21 @@ $ENDIF
 			Return
 		End
 		
-		!! 見つからなかった
-		
-		!! 端末サイズの変更があった    
+		!! 端末サイズの取得
 		If C Matches "'":ESC:"[8'...'t'" Then
 			** DECSLPP -> CSI Ps1 ; Ps2 ; Ps3 t
-			If bAutoTermSize Then 
-				csiPrm = C[3,HUGE]['t',1,1]
-				** 端末サイズを指定のサイズにする
-				wide = csiPrm[';',3,1]
-				high = csiPrm[';',2,1]
-				If @CRTWIDE:@CRTHIGH >< wide:high Then
-					HUSH ON
-					Perform "TERM ":wide:",":high
-					HUSH OFF
-					PY = @CRTHIGH - 2
-					LISTDEPTH = Depth - 2
-					Crt CSI:"1,":wide:"s": ;** 左右マージンの設定
-				End
-			End
 			Return
 		End
+		
+		!! Mause Tracking (SGR)
+!! 		If C[1,3] = CSI:"<" Then
+!! 			
+!! 		End
+		
 		If C[1,2] = ESC:"]" Then
 			** OSCを処理する
 			no = C[3,2]
-			If no = "11" Then
-				** 背景色取得
-				color = C[3,99][';',2,1][':',2,1]
-				red = XTD(color['/',1,1][1,2])
-!!		     backGround = (If red > 128 Then ESC:"[47m" Else ESC:"[40m")
-!!		     HI.LINENO.ON = backGround
-!!		     HI.DIR.ON = ESC:"[47m":ESC:"[36m"
-!!		     HI.COMMENT.ON = backGround:ESC:"[34m"
-				Redraw = REDRAW.ALL
-				Return
-			End Else If no = "52" Then
+			If no = "52" Then
 				** クリップボード貼り付け
 				cdata = C
 				Loop
@@ -3727,12 +3783,10 @@ $ENDIF
 			End
 			Return
 		End
-
-Get.Key.Err:
-		Crt @SYS.BELL:
 		
-		!! たまっているキーキューをクリア
-		Nap 200
+Get.Key.Err:
+		
+		!! 残りのキーを待ってみる
 		Loop
 $IFDEF U2__UNIVERSE
 			Input test,-1
@@ -3742,6 +3796,34 @@ $ENDIF
 		While test Do
 			C := KeyIn()
 		Repeat
+			
+		!! キーシーケンスからアクションを取得
+		len = DCount(keys,@FM)
+		For i = 1 To len
+			key = keys<i>
+			If key = ESC Then Continue
+			key.len = Len(key)
+			If C[1,key.len] = key Then
+				actNo = keysToAction<i,1>
+				keyQueue = C[key.len+1,99999]
+				Return
+			End
+		Next i
+		
+		Crt @SYS.BELL:
+		
+$IFDEF DEBUG
+		strKey = ""
+		z = Len(C)
+		For i = 1 To z
+			c = C[i,1]
+			n = Seq(c)
+			If n < 32 Then strKey := '@' : Char(n + 64)
+			Else strKey := c
+		Next
+		StatusMessage = strKey
+		Nap 200
+$ENDIF
 		
 	Repeat
 	Return
@@ -3752,12 +3834,15 @@ $ENDIF
 Enters:
 
 	** カーソル位置指定
+!! 	crtBuff := @(biInfoWide + DP_X - XOffSet, Y - Top):CSI:"?12l":CSI:"?25h"
 	crtBuff := @(biInfoWide + DP_X - XOffSet, Y - Top)
-	 
+	
 	** CRTフラッシュ処理
 	Crt CRT.BUFF.FLUSH:
 	
 	GoSub GetKey
+	
+!! 	Crt CSI:"?25l":
 	
 	crtBuff = ""
 	
@@ -4186,6 +4271,7 @@ $ELSE
 		x = PTERM(7,1) ;** UTF8固定
 	End
 	IF Len(@(IT$CUD))=0 Then Execute "$ECHO":@FM:"TERM XTERM"
+	x = PTERM(8,8) ;** Backspace ^H
 $ENDIF
 	
 	Return
@@ -4813,11 +4899,11 @@ MenuLine:
 		If ch = '' Then Exit
 		If f Then
 			If ch = 'E' And MenuLine[i,3] = "ESC" Then
-				crtBuff := ESC:"[":FG.BASE03:"m":"ESC":HI.STATUS.ON
+				crtBuff := ESC:"[1;":FG.BASE2:"mESC":ESC:"[22m":HI.STATUS.ON
 				f = @FALSE
 				i += 2
 			End Else If ((ch >= 'A' And ch <= 'Z') or ch = '!') Then
-				crtBuff := ESC:"[":FG.BASE03:"m":ch:HI.STATUS.ON
+				crtBuff := ESC:"[1;":FG.BASE2:"m":ch:ESC:"[22m":HI.STATUS.ON
 				f = @FALSE
 			End Else 
 				crtBuff := ch
@@ -5207,6 +5293,7 @@ LoadKeyBindings:
 *-----------------------------------------------------------------------
 SetupTokens: 
 	KEYWORDS = ""
+	AddKeyWord "ABORT"
 	AddKeyWord "AND"
 	AddKeyWord "BEGIN"
 	AddKeyWord "CALL"
@@ -5222,6 +5309,7 @@ SetupTokens:
 	AddKeyWord "DELETE"
 	AddKeyWord "DELETELIST"
 	AddKeyWord "DELETEU"
+	AddKeyWord "DELIMITER"
 	AddKeyWord "DIM"
 	AddKeyWord "DO"
 	AddKeyWord "EACH"
@@ -5712,9 +5800,21 @@ Switch.Actions:
 								Act.Exit,
 								Act.CloseBuff,
 								Act.GoDive,
-								Act.ToggleCaseInvert
+								Act.ToggleCaseInvert,
+								Act.Fit.Term
 								
 NULL.Action:
+	Return
+
+* **************************************************************************
+* Act.Left
+
+Act.Fit.Term:
+	GoSub AutoTermSize
+	IF bAutoCommand Then
+		bAutoEditor = @TRUE
+		GoSub Act.Exit
+	End
 	Return
 
 * **************************************************************************
@@ -5757,7 +5857,7 @@ Act.Up:
 		If Y < Top + SCROLLMERGINE And Top > 1 Then
 			** 高速１行上スクロール
 			Top -= 1
-			crtBuff := ESC:"[1;":Depth:"r":ESC:"[1;1H":ESC:"[L":ESC:"[1;":@CRTHIGH:"r"
+			crtBuff := ESC:"[1;":Depth:"r":ESC:"[T":ESC:"[1;":@CRTHIGH:"r"
 			Redraw<-1> = Top:@FM:prevY:@FM:Y
 		End
 		moveY = True
@@ -5777,7 +5877,7 @@ Act.Down:
 		If Y = bottomY - SCROLLMERGINE Then
 			** 高速１行下スクロール
 			Top += 1
-			crtBuff := ESC:"[1;":Depth:"r":ESC:"[":Depth:";1H":CHAR(10):ESC:"[1;":@CRTHIGH:"r"
+			crtBuff := ESC:"[1;":Depth:"r":ESC:"[S":ESC:"[1;":@CRTHIGH:"r"
 			Redraw<-1> = bottomY:@FM:prevY:@FM:Y
 		End
 		moveY = True
@@ -6989,7 +7089,7 @@ Act.Cut:
 * **************************************************************************
 * Act.SendRemotePasteCmd
 
-Act.SendRemotePasteCmd:  
+Act.SendRemotePasteCmd:
 	!! リモート端末のクリップボードから取得を要求
 	Crt ESC:"]52;0;?":CHAR(7):
 	keepSelection = True
@@ -7608,6 +7708,7 @@ $ELSE
 	cmdline = "BASIC ":FileName:" ":ItemName:" CHANGED DEBUGGING"
 $ENDIF
 	bAutoCommand = @TRUE
+	bAutoEditor = @TRUE
 	GoSub Act.Exit
 	Return
 
@@ -7732,21 +7833,21 @@ Set.Theme:
 		Case theme = 2
 		
 			themeName = "Solarized - dark"
-			
-			crtBuff := ESC:"]4;8;#fdf6e3":BEL
-			crtBuff := ESC:"]4;0;#eee8d5":BEL
-			crtBuff := ESC:"]4;10;#93a1a1":BEL
-			crtBuff := ESC:"]4;11;#839496":BEL
-			crtBuff := ESC:"]4;12;#657b83":BEL
-			crtBuff := ESC:"]4;14;#586e75":BEL
-			crtBuff := ESC:"]4;7;#073642":BEL
-			crtBuff := ESC:"]4;15;#002b36":BEL
+
+			crtBuff := ESC:"]4;0;#002b36":BEL
+			crtBuff := ESC:"]4;10;#073642":BEL
+			crtBuff := ESC:"]4;11;#586e75":BEL
+			crtBuff := ESC:"]4;8;#657b83":BEL
+			crtBuff := ESC:"]4;12;#839496":BEL
+			crtBuff := ESC:"]4;7;#93a1a1":BEL
+			crtBuff := ESC:"]4;13;#eee8d5":BEL
+			crtBuff := ESC:"]4;15;#fdf6e3":BEL
 			
 			crtBuff := ESC:"]4;3;#b58900":BEL
 			crtBuff := ESC:"]4;9;#cb4b16":BEL
 			crtBuff := ESC:"]4;1;#dc322f":BEL
-			crtBuff := ESC:"]4;5;#d33682":BEL
-			crtBuff := ESC:"]4;13;#6c71c4":BEL
+			crtBuff := ESC:"]4;14;#d33682":BEL
+			crtBuff := ESC:"]4;5;#6c71c4":BEL
 			crtBuff := ESC:"]4;4;#268bd2":BEL
 			crtBuff := ESC:"]4;6;#2aa198":BEL
 			crtBuff := ESC:"]4;2;#859900":BEL
@@ -7755,25 +7856,25 @@ Set.Theme:
 			crtBuff := ESC:"]11;#002b36":BEL
 			crtBuff := ESC:"]4;260;#000000":BEL
 			crtBuff := ESC:"]12;#ffffff":BEL
-			
+		
 		Case theme = 3
 			
 			themeName = "Solarized - light"
 			
-			crtBuff := ESC:"]4;8;#002b36":BEL
-			crtBuff := ESC:"]4;0;#073642":BEL
-			crtBuff := ESC:"]4;10;#586e75":BEL
-			crtBuff := ESC:"]4;11;#657b83":BEL
-			crtBuff := ESC:"]4;12;#839496":BEL
-			crtBuff := ESC:"]4;14;#93a1a1":BEL
-			crtBuff := ESC:"]4;7;#eee8d5":BEL
-			crtBuff := ESC:"]4;15;#fdf6e3":BEL
+			crtBuff := ESC:"]4;0;#fdf6e3":BEL
+			crtBuff := ESC:"]4;10;#eee8d5":BEL
+			crtBuff := ESC:"]4;11;#93a1a1":BEL
+			crtBuff := ESC:"]4;8;#839496":BEL
+			crtBuff := ESC:"]4;12;#657b83":BEL
+			crtBuff := ESC:"]4;7;#586e75":BEL
+			crtBuff := ESC:"]4;13;#073642":BEL
+			crtBuff := ESC:"]4;15;#002b36":BEL
 			
 			crtBuff := ESC:"]4;3;#b58900":BEL
 			crtBuff := ESC:"]4;9;#cb4b16":BEL
 			crtBuff := ESC:"]4;1;#dc322f":BEL
-			crtBuff := ESC:"]4;5;#d33682":BEL
-			crtBuff := ESC:"]4;13;#6c71c4":BEL
+			crtBuff := ESC:"]4;14;#d33682":BEL
+			crtBuff := ESC:"]4;5;#6c71c4":BEL
 			crtBuff := ESC:"]4;4;#268bd2":BEL
 			crtBuff := ESC:"]4;6;#2aa198":BEL
 			crtBuff := ESC:"]4;2;#859900":BEL
@@ -7782,7 +7883,8 @@ Set.Theme:
 			crtBuff := ESC:"]11;#fdf6e3":BEL
 			crtBuff := ESC:"]4;260;#ffffff":BEL
 			crtBuff := ESC:"]12;#000000":BEL
-		
+			
+	
 	End Case
 
 	If noThemePopup Then
@@ -7864,8 +7966,7 @@ GetIndentCnt:
 		indentLen += 1
 		indentCnt += (If ch = Char(9) Then STDTAB Else 1) 
 	Repeat
-	
-  indentCnt -= indentCnt / STDTAB
+	If indentCnt > 0 Then indentCnt -= indentCnt / STDTAB
 	
 	Return
 End
