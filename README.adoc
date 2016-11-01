@@ -55,7 +55,7 @@ Windows版DBへ接続するときはCygwinからtelnet接続してください�
 
 Windows10 では Bash on Windows の利用がおすすめです。link:https://github.com/goreliu/wsl-terminal[wsl-terminal]
 
-また、他にも以下の端末で最低限の動作を確認しています。
+また、他にも以下の端末で動作はしますが、細かい箇所が未確認です。
 
 - link:http://ice.hotmint.com/putty/[putty GDI] (Windows)
   * 同梱のlink:putty.ini[putty.ini]をputty.exeと同階層に配置する事でデフォルト設定にて動作します。
@@ -134,7 +134,7 @@ http://ethanschoonover.com/solarized
 
 ==== クリップボード ====
 
-コピー時にローカル端末のクリップボードに内容を送信します。(OSC52に対応している端末)
+コピー時にローカル端末のクリップボードに内容を送信します。(OSC52に対応している端末) +
 エディタでは Bracketed Paste Mode に対応しています。
 
 ==== SISH特殊コマンド一覧 ====
