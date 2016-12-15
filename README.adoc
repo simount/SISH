@@ -46,7 +46,7 @@ image:resources/Shell.png[Overview]
 動作確認環境として link:https://mintty.github.io/[mintty] で正しく動作する事を確認しています。
 設定は同梱のlink:minttyrc[minttyrc]を利用して下さい。
 
-minttyは link:https://cygwin.com/index.html[Cygwin]やlink:https://msys2.github.io/[NSYS2]をダウンロードすると利用する事が出来ます。
+minttyは link:https://cygwin.com/index.html[Cygwin]やlink:https://msys2.github.io/[MSYS2]をダウンロードすると利用する事が出来ます。
 
 ----
 Windows版DBへ接続するときはCygwinから `telnet -E localhost 4242` で接続
@@ -446,7 +446,7 @@ image:resources/Consolas.png[]
 
 == 更新履歴 ==
 
-=== 2016/12/01 - 0.12.0 ===
+=== 2016/12/15 - 0.12.0 ===
 
 .エディタ
 - `[NEW]` エディタ内単語の入力補完機能
