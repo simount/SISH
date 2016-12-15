@@ -59,8 +59,8 @@ Windows10 では Bash on Windows(WSL) の利用がおすすめです。link:http
 
 - link:http://ice.hotmint.com/putty/[putty GDI] (Windows)
   * 同梱のlink:putty.ini[putty.ini]をputty.exeと同階層に配置する事でデフォルト設定にて動作します。
-- Gnome-terminal(Linux)
-- iTurm2(Mac)
+- link:https://help.gnome.org/users/gnome-terminal/stable/[GNOME Terminal](Linux)
+- link:https://www.iterm2.com/[iTurm2](Mac)
   * プロファイル設定のKeysのプリセットを `xterm Defaults` に変更
   * プロファイル設定のColorsのプリセットを `Solarized light` に変更
 
