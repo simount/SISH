@@ -42,7 +42,7 @@ Program SISH
 **    
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.11.0 ]"
+Equ SISH.VERSION To "[ SISH v0.12.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -231,8 +231,9 @@ Equ OS.GATES To SYSTEM(91)
 	Equ A.DIVE To 77
 	Equ A.CASEINVERT To 78
 	Equ A.FIT.TERM To 79
+	Equ A.WORD_HOKAN To 80
 * ↑ここに追加していく
-  Equ ACTION.ENUM.LAST To 80
+  Equ ACTION.ENUM.LAST To 81
 
 !! 外部設定の読み込み
 $INCLUDE SISH.SETTING.H
@@ -2611,7 +2612,7 @@ BookMenu:
 * CodeMenu
 *--------------------------------------------------------------------------
 CodeMenu: 
-	MenuLine = "Build Catalog Format Mode Indent Help :"
+	MenuLine = "Build Catalog Format Words Mode Indent Help :"
 	GoSub MenuLine
 	C = UpCase(C)
 	Begin Case
@@ -2621,6 +2622,8 @@ CodeMenu:
 			GoSub Catalog
 		Case C = "F"
 			GoSub Format
+		Case C = "W"
+			GoSub Act.ShowWordHokan
 		Case C = "M"
 			GoSub ChangeModeMenu
 		Case C = "I"
@@ -2950,25 +2953,6 @@ DoEditCmd:
 Return
 
 *--------------------------------------------------------------------------
-* StackJumpHistory
-*--------------------------------------------------------------------------
-StackJumpHistory: ;** Jump履歴の蓄積
-	
-!! 	If jumpHistoryPos > 1 Then
-!!     jumpHistory = jumpHistory[@FM,jumpHistoryPos+1,HUGE]
-		jumpHistoryPos = 0
-!! 	End
-	
-	!! 重複は排除してスタックに積む
-	GoSub GetJumpData
-	If jumpData >< "" And jumpData >< jumpHistory<1> Then
-		Ins jumpData Before jumpHistory<1>
-		Del jumpHistory<31> ;** Jump履歴は30個までとする
-	End
-
-Return
-
-*--------------------------------------------------------------------------
 * GetJumpData
 *--------------------------------------------------------------------------
 GetJumpData:
@@ -2989,6 +2973,21 @@ GetJumpData:
 	If jumpData<1,2> = "" And jumpData<1,3> = "" Then jumpData = ""
 Return
 
+*--------------------------------------------------------------------------
+* StackJumpHistory
+*--------------------------------------------------------------------------
+StackJumpHistory: ;** Jump履歴の蓄積
+	
+	jumpHistoryPos = 0
+	
+	!! 重複は排除してスタックに積む
+	GoSub GetJumpData
+	If jumpData >< "" And jumpData >< jumpHistory<1> Then
+		Ins jumpData Before jumpHistory<1>
+		Del jumpHistory<31> ;** Jump履歴は30個までとする
+	End
+
+Return
 
 *--------------------------------------------------------------------------
 * RestoreFromJumpData
@@ -3399,7 +3398,6 @@ DoOpen:
 	If ItemName = "" then Return
 	GoSub DoRead
 	Return
-	
 
 
 *-------------------------------------------------------------------------
@@ -3473,6 +3471,7 @@ $ELSE
 $ENDIF
 	Next
 	choiceOutList = choiceList
+	choiceOutList.org = choiceList
 	choiceOutList.length = choiceList.length
 	winX += 1
 	filter = ""
@@ -3533,12 +3532,14 @@ ProcChoiceList:
 	!! フィルター処理
 	If filter >< filterPrev Then
 		choiceOutList = ""
+		choiceOutList.org = ""
 		filter.len = Len(filter)
 		filterUpper = UpCase(filter)
 		For i = 1 To choiceList.length
 			line = choiceList<i>
 			p = Index(UpCase(line<1,1>),filterUpper,1)
 			If p Then
+				choiceOutList.org<-1> = line
 				line<1,1> = line<1,1>[1,p-1]:@SVM:line<1,1>[p,filter.len]:@SVM:line<1,1>[p+filter.len,9999]
 				choiceOutList<-1> = line
 			End
@@ -3561,7 +3562,7 @@ ProcChoiceList:
 	End
 	
 	crtBuff = SGR.ALL.OFF
-	listLen = choiceOutList.length-winTop
+	listLen = choiceOutList.length - winTop
 	If listLen > winHeight Then listLen = winHeight
 	i = 1
 	Loop While i <= listLen
@@ -3591,7 +3592,7 @@ ProcChoiceList:
 	crtBuff := @(winX,1):SGR.ALL.OFF:@(-4):filter
 	Crt CRT.BUFF.FLUSH:
 	
-	choiceSelection = choiceOutList<choiceNo>
+	choiceSelection = choiceOutList.org<choiceNo>
 	
 Return
 
@@ -4414,7 +4415,7 @@ ParseLine:
 			End
 			Begin Case   
 				!! Comment & Directive
-				Case Word[1,1] Matches "*":@vm:"!"
+				Case Count("*!",Word[1,1])
 					If Count(Line,'@@') Then
 						Mask := Str(SI.DOC, L)
 					End Else
@@ -4430,7 +4431,7 @@ ParseLine:
 						FoundComment = False
 						For Z = 1 To Dc Until FoundComment
 							Word = TrimF(Line[";",Z+1,1])
-							If Word[1,1]= "*" Or Word[1,1] = "!" Then
+							If Count("*!",Word[1,1]) Then
 								FoundComment = Z
 							End
 						Next
@@ -4454,15 +4455,7 @@ ParseLine:
 				End
 				Begin Case
 					Case Word[1,1] = ''
-					Case Index("'":'"\',Word[1,1],1)
-						Ix = Index(Lin[St+1,HUGE],Word[1,1],1)
-						If Ix Then
-							If Mask[St,1] = " " Then
-								Q = DCount(Lin[1, Ix+St],@fm)
-								Mask[St, Ix+1] = Str(SI.STRING, Ix+1)
-							End
-						End
-					Case Word[1,1] = '"'
+					Case Index(STRQTS,Word[1,1],1)
 						Ix = Index(Lin[St+1,HUGE],Word[1,1],1)
 						If Ix Then
 							If Mask[St,1] = " " Then
@@ -4479,7 +4472,7 @@ ParseLine:
 							If Mask[St,1] = " " Then
 								Mask[St, Len(Word)] = Str(SI.KEY, Len(Word))
 							End
-							End Else
+						End Else
 							Locate Word In FUNCS by "AL" Setting Pos Then
 								If Mask[St,1] = " " then
 									Mask[St,Len(Word)] = Str(SI.FUNCTION, Len(Word))
@@ -5255,7 +5248,9 @@ LoadKeyBindings:
 			
 			!! エスケープ戻す
 			For i = 1 To n
-				If z[i,1] = '@' Then
+				If z = '@@' Then
+					z = Char(0)
+				End Else If z[i,1] = '@' Then
 					j = index('ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_',z[i+1,1],1)
 					If j Then
 						z = z[1,i-1] : char(j) : z[i+2,999]
@@ -5296,14 +5291,17 @@ SetupTokens:
 	AddKeyWord "ABORT"
 	AddKeyWord "AND"
 	AddKeyWord "BEGIN"
+	AddKeyWord "BY"
 	AddKeyWord "CALL"
 	AddKeyWord "CASE"
 	AddKeyWord "CATCH"
 	AddKeyWord "CLEAR"
 	AddKeyWord "CLEARFILE"
 	AddKeyWord "CLEARSELECT"
+	AddKeyWord "COMMIT"
 	AddKeyWord "CONVERT"
 	AddKeyWord "CREATE"
+	AddKeyWord "CREATING.SEQKEY"
 	AddKeyWord "CRT"
 	AddKeyWord "DEL"
 	AddKeyWord "DELETE"
@@ -5332,6 +5330,7 @@ SetupTokens:
 	AddKeyWord "INPUT"
 	AddKeyWord "INS"
 	AddKeyWord "LIKE"
+	AddKeyWord "LOCAL"
 	AddKeyWord "LOCATE"
 	AddKeyWord "LOCKED"
 	AddKeyWord "LOOP"
@@ -5346,6 +5345,7 @@ SetupTokens:
 	AddKeyWord "PERFORM"
 	AddKeyWord "PRINT"
 	AddKeyWord "PRINTER"
+	AddKeyWord "PRIVATE"
 	AddKeyWord "PROGRAM"
 	AddKeyWord "READ"
 	AddKeyWord "READBLK"
@@ -5355,8 +5355,12 @@ SetupTokens:
 	AddKeyWord "READU"
 	AddKeyWord "READV"
 	AddKeyWord "READVU"
+	AddKeyWord "RECORDLOCKL"
+	AddKeyWord "RECORDLOCKU"
+	AddKeyWord "RELEASE"
 	AddKeyWord "REPEAT"
 	AddKeyWord "RETURN"
+	AddKeyWord "ROLLBACK"
 	AddKeyWord "SELECT"
 	AddKeyWord "SETTING"
 	AddKeyWord "SSELECT"
@@ -5366,6 +5370,7 @@ SetupTokens:
 	AddKeyWord "THEN"
 	AddKeyWord "THROW"
 	AddKeyWord "TO"
+	AddKeyWord "TRANSACTION"
 	AddKeyWord "TRY"
 	AddKeyWord "UNTIL"
 	AddKeyWord "WHILE"
@@ -5378,6 +5383,7 @@ SetupTokens:
 	FUNCS = ""
 
 	PUNCS = ", []()<>{}=+-/*:;^#!":Char(9)
+	STRQTS = "'\":'"'
 	Return
 *-----------------------------------------------------------------------
 *  ShowText
@@ -5487,7 +5493,7 @@ ChangeBuf:
 	End
 	CurBuf = Found
 	
-	If Not(IsNew) Then
+	If Not(IsNew) And @PATH = BufInfo<BI.ACCOUNT> Then
 		FileName = BufInfo<BI.FILE>
 		ItemName = BufInfo<BI.ITEM>
 
@@ -5601,9 +5607,11 @@ $ENDIF
 		For i = 1 To z
 			c = C[i,1]
 			n = Seq(c)
+			Print n:" ":
 			If n < 32 Then strKey := '@' : Char(n + 64)
 			Else strKey := c
 		Next
+		Print @(-4)
 		
 		!! キーシーケンスからアクションを取得
 		Locate C in keys By 'AL' Setting i Then
@@ -5801,7 +5809,8 @@ Switch.Actions:
 								Act.CloseBuff,
 								Act.GoDive,
 								Act.ToggleCaseInvert,
-								Act.Fit.Term
+								Act.Fit.Term,
+								Act.ShowWordHokan
 								
 NULL.Action:
 	Return
@@ -6754,8 +6763,24 @@ Act.ShowOutline:
 		If word Matches "1n0n":@VM:"1A0X':'" Then
 			choiceList<-1> = " ":Line:@VM:I
 		End
+		
 		!! PROGRAM or SUBROUTINE
-		If UpCase(word) Matches "PROGRAM":@VM:"SUBROUTINE" Then
+		lists = ""
+		lists<-1> = "PROGRAM"
+		lists<-1> = "SUBROUTINE"
+		lists<-1> = "FUNCTION"
+		lists<-1> = "CLASS"
+		Convert @FM To @VM In lists
+		a = CatS(lists,Reuse("..."))
+		
+		!! 修飾子を削る
+		b = UpCase(Line)
+		b = Change(b,"LOCAL","")
+		b = Change(b,"PUBLIC","")
+		b = Change(b,"PRIVATE","")
+		b = Change(b,"SHARE","")
+		b = Trimf(b)
+		If b Matches a Then
 			choiceList<-1> = Line:@VM:I
 		End
 	Next
@@ -6776,7 +6801,7 @@ Act.ShowOutline:
 		GoSub GetKey
 		Begin Case
 			!! Cancel
-			Case actNo = A.CANCEL
+			Case actNo = A.CANCEL Or actNo = A.OUTLINE
 				actNo = 0
 				Exit
 			!!決定
@@ -6790,6 +6815,185 @@ Act.ShowOutline:
 					keepDP_X = X
 					XOffSet = 1
 					Redraw = REDRAW.ALL
+				End
+				Exit
+		End Case
+		
+	Repeat
+
+	Redraw = REDRAW.ALL
+	
+	Return
+
+* **************************************************************************
+* Act.ShowWordHokan - Word Auto Complete
+*-----------------------------------------------------------------------
+Act.ShowWordHokan:
+	
+	Line = Rec<Y>
+	inX = X-1
+		
+	!! 単語の先頭まで進む
+	Loop
+		ch = Line[inX,1]
+	While ch <> "" And ch Matches "1A":@VM:"1N" Or Count("._$",ch)
+		inX -= 1
+	Repeat
+	
+	!! フィルターを設定
+	stX = inX+1
+	filter = Line[stX,X-stX]
+	
+	!!
+	!! 単語を集める
+	!!
+	choiceList = ""
+	
+	i.puncs = PUNCS
+	o.puncs = Str(@FM,Len(i.puncs))
+	
+	!! 全行ループ
+	lineList = Rec
+	lineList.len = DCount(lineList,@FM)
+	For y = 1 To lineList.len
+		line = lineList<y> ;** 1行
+		line = Trim(Convert(Char(9)," ",line)) ;** Remove Tab Space
+		
+		If line And Not(Count("*!",line[1,1])) Then
+			!! 空行とComment行でない
+			
+			If Count(Upcase(line),"INCLUDE") Then
+				temp = Convert(" ",@FM,Trim(line))
+				FindStr "INCLUDE" In Upcase(temp) Setting Ps Then
+					ROL = temp[@FM,Ps+1,9]
+					If ROL<2> = "" Then
+						FileName = BufInfo<BI.FILE>
+						ItemName = ROL<1>
+					End Else
+						FileName = ROL<1>
+						ItemName = ROL<2>
+					End
+					incRec = Trans(FileName,ItemName,-1,"X")
+					If incRec Then
+						!! インクルードレコードを後ろに追加
+						lineList<-1> = incRec
+						lineList.len += DCount(incRec,@FM)
+					End
+				End
+			End
+			
+			!! 文字列リテラルの除去
+			mline = ""
+			line.len = Len(line)
+			For i = 1 To line.len
+				a = line[i,1]
+				If Count(STRQTS,a) Then
+					!! クォート文字が見つかったら次の対応文字まで進む
+					b = Index(line[i+1,HUGE],a)
+					i += If b Then b Else HUGE
+				End Else
+					mline := a
+				End
+			Next i
+			
+			!! マルチラインループ
+			Convert ";" To @FM In mline
+			Loop
+				line = Trim(Remove(mline,s2))
+				
+				If line And Not(Count("*!",line[1,1])) Then
+				
+					!! 単語のループ
+					words = Convert(i.puncs,o.puncs,line)
+					Loop
+						word = Remove(words,s3)
+						If word Then
+							ch = word[1,1]
+							s = Seq(ch)
+							If 65 <= s And s <= 122 And filter >< word Then
+								!! Alphabetで始まりフィルタと完全一致しないもの
+								Locate word In choiceList By "AL" Setting f Else
+									Ins word Before choiceList<f>
+								End
+							End
+						End
+					While s3
+					Repeat
+					
+				End
+				
+			While s2
+			Repeat
+			
+		End
+		
+	Next y
+	
+	If filter <> "" Then
+		
+		!! 単語置き換え範囲を
+		BufInfo<BI.BLOCKSTART,1> = Y
+		BufInfo<BI.BLOCKSTART,2> = stX
+		BufInfo<BI.BLOCKEND,1> = Y
+		BufInfo<BI.BLOCKEND,2> = X
+		
+		!! Auto Complete
+		hitWord = ""
+		choiceList.length = DCount(choiceList,@FM)
+		filterUpper = UpCase(filter)
+		For i = 1 To choiceList.length
+			line = choiceList<i>
+			If Index(UpCase(line),filterUpper,1) Then
+				If hitWord Then
+					!! 1つ以上見つかったので終了
+					hitWord = ""
+					Exit
+				End
+				!! 初めて見つかった
+				hitWord = line
+			End
+		Next i
+		If hitWord Then
+			!! 1つだけ見つかった場合はその単語に自動補完
+			GoSub GetWord
+			If Word <> hitWord Then
+				InsBuffer = hitWord
+				GoSub InsertLines
+				Return
+			End
+		End
+		
+	End
+
+	!! 置換範囲を描画
+	GoSub ParseLine
+	GoSub PrintLine
+	Crt crtBuff:
+	
+	!! 選択リストボックス初期化
+	choiceNo = 1
+	title = ESC:"[1;":FG.BASE3:";":BG.YELLOW:"m Words"
+	GoSub InitChoiceList
+	
+	filter = Line[stX,X-stX] ;** フィルター初期値
+	
+	Loop
+		
+		!! 選択リストボックス処理共通
+		GoSub ProcChoiceList
+		
+		!! キー入力待ち
+		GoSub GetKey
+		Begin Case
+			!! Cancel
+			Case actNo = A.CANCEL Or actNo = A.WORD_HOKAN
+				actNo = 0
+				Exit
+			!! 決定
+			Case actNo = A.NEWLINE
+				If choiceSelection Then
+					InsBuffer = choiceSelection
+					GoSub InsertLines
 				End
 				Exit
 		End Case
@@ -6929,35 +7133,57 @@ Act.GoDeclaration:
 	Line = Rec<Y>
 	
 	!!
-	!! Item Jump
+	!! INCLUE 行全体
 	!!
-	Begin Case
-		Case Count(Upcase(Line),"INCLUDE")
-			Temp = Convert(" ",@fm, Trim(Line))
-			FindStr "INCLUDE" In Upcase(Temp) Setting Ps Then
-				ROL = Temp[@fm, Ps+1,9]
-				If ROL<2> = "" Then
-					FileName = BufInfo<BI.FILE>
-					ItemName = ROL<1>
-				End Else
-					FileName = ROL<1>
-					ItemName = ROL<2>
-				End
-				Open FileName To TFL Then
-					Read Temp From TFL, ItemName Then
-						GoSub DoRead
-						If Found Then Return
+	If Count(Upcase(Line),"INCLUDE") Then
+		temp = Convert(" ",@FM,Trim(Line))
+		FindStr "INCLUDE" In Upcase(temp) Setting Ps Then
+			ROL = temp[@FM,Ps+1,9]
+			If ROL<2> = "" Then
+				FileName = BufInfo<BI.FILE>
+				ItemName = ROL<1>
+			End Else
+				FileName = ROL<1>
+				ItemName = ROL<2>
+			End
+			flg = Trans(FileName,ItemName,0,"X")
+			If flg Then
+				GoSub DoRead
+				If Found Then Return
+			End
+		End
+	End
+	
+	GoSub GetWord
+	If Word Then
+		!!
+		!! CALL
+		!!
+		If Count(Upcase(Line),"CALL") Then
+			temp = Convert(" ",@FM,Trim(Line))
+			FindStr "CALL" In Upcase(temp) Setting Ps Then
+				len = Len(Word)
+				ItemName = temp<Ps+1>[1,len]
+				If ItemName = Word Then
+					If Word[1,1] = "@" Then
+						!! InDirect Call なので変数へジャンプ
+						Word = Word[2,999]
+					End Else
+						!! Direct Call
+						FileName = BufInfo<BI.FILE> ;** 同一ファイルから検索
+						flg = Trans(FileName,ItemName,0,"X")
+						If flg Then
+							GoSub DoRead
+							If Found Then Return
+						End Else
+							!! TODO Buff内からも検索する
+							!! かなりあいまいなのではじめに見つかったものでよい
+							
+						End
 					End
 				End
 			End
-		Case Count(Upcase(Line),"CALL")
-			FindStr "CALL" In Upcase(Convert(" ",@fm, Trim(Line))) Setting Ps Then
-				!! TODO
-			End
-	End Case
-
-	GoSub GetWord
-	If Word Then
+		End
 		
 		!!
 		!! ラベルJump
@@ -6973,36 +7199,106 @@ Act.GoDeclaration:
 					Return
 				End
 			End
+			FindStr "SUBROUTINE ":Word In UpCase(Rec) Setting Pos Then
+				!! ローカルサブルーチンの可能性
+				GoSub StackJumpHistory
+				Y = Pos
+				Top = Pos - 3
+				X = 1
+				Redraw = REDRAW.ALL
+				Return
+			End
 		End
 		
 		!!
-		!! 変数宣言元へJump
-		!!   TODO:インクルード内も走査
-		iPos = 1
-		Loop
-			ip = Index(Rec[iPos,HUGE],Word,1)
-		While ip 
-			!! 初めの単語が見つかった
-			iPos += ip
-			iY = DCount(Rec[1,iPos],@FM)
-			Line = Rec<iY>
-			
-			!! 変数として代入
-			isVar = Index(Convert(" ","",Line),Word:"=",1)
-			
-			Lin = Convert(PUNCS,Str(@fm,Len(PUNCS)), UpCase(Line))
-			Find UpCase(Word) In Lin Setting f Then
-				If isVar Or (Lin<f-1> Matches "EQU...":@vm:"DIM...":@vm:"...DEFINE") Then
-					GoSub StackJumpHistory
-					Y = iY
-					X = Index(Line,Word,1)
-					Redraw = REDRAW.ALL
-					Exit
-				End
+		!! 変数定数宣言元へJump
+		!!
+		Dim iRec(10),iRec.Cnt(10),iRec.Y(10)
+		result = "" ;** 結果データ 1:File 2:X 3:Y
+		sp = 1 ;** スタック位置
+		iRec(sp) = Rec ;** 現在ファイルから開始
+		GoSub Find.Definition
+		If result Then
+			GoSub StackJumpHistory
+			If result<1> Then
+				!! INCLUDE先のファイル
+				FileName = result<1,1>
+				ItemName = result<1,2>
+				GoSub DoRead
 			End
-		Repeat
+			Y = result<2>
+			X = result<3>
+			Redraw = REDRAW.ALL
+		End
+
 	End
 	Return
+
+* **************************************************************************
+* レコード内で対象変数の宣言位置を返す
+* Input:  iRec - 検索対象レコード
+*         iY   - Y位置
+*         Word - 対象単語
+* Output: result - Jump先結果 1:ファイル 2:Y位置 3:X位置
+*-----------------------------------------------------------------------------
+Find.Definition:
+	
+	iRec.Cnt(sp) = DCount(iRec(sp),@FM) ;** 最大行数
+	iX = 1
+	For iRec.Y(sp) = 1 To iRec.Cnt(sp)
+		Line = iRec(sp)<iRec.Y(sp)>[iX,HUGE]
+		
+		!! $INCLUDE の場合は再帰的に探す
+		If Count(Upcase(Line),"INCLUDE") Then
+			temp = Convert(" ",@FM,Trim(Line))
+			FindStr "INCLUDE" In Upcase(temp) Setting Ps Then
+				ROL = temp[@FM,Ps+1,9]
+				If ROL<2> = "" Then
+					FileName = BufInfo<BI.FILE>
+					ItemName = ROL<1>
+				End Else
+					FileName = ROL<1>
+					ItemName = ROL<2>
+				End
+				If sp < 10 Then
+					sp += 1 ;** next Stack
+					iRec(sp) = RTrans(FileName,ItemName,-1,"X")
+					GoSub Find.Definition
+					sp -= 1;** back Stack
+					If result Then
+						!! 見つかった場合
+						If Not(result<1>) Then
+							!! このファイルで初めて見つかったので対象ファイルを格納する
+							result<1> = FileName:@VM:ItemName
+						End
+						Return
+					End
+				End
+			End
+		End
+		
+		iX = Index(Line,Word)
+		If iX Then
+			!! 変数
+			isVar = Index(Convert(" ","",Line),Word:"=",1)
+			
+			!! 定義
+			Lin = Convert(PUNCS,Str(@fm,Len(PUNCS)), UpCase(Line))
+			Find UpCase(Word) In Lin Setting f Then
+				If isVar Or (Lin<f-1> Matches "EQU...":@vm:"DIM...":@vm:"...DEFINE":@vm:"PRIVATE...":@vm:"PUBLIC...") Then
+					result<2> = iRec.Y(sp)
+					result<3> = iX
+					Return
+				End
+			End
+			iX += 1
+			Continue
+		End
+		iX = 1
+	Next iRec.Y(sp)
+
+	Return
+
 
 * **************************************************************************
 * Act.GoPrevJumpHist - 前のJump履歴を復元
@@ -7124,6 +7420,7 @@ Act.Undo:
 		Changed = True
 		EditCmdPos += 1 ;** １つ前に戻る
 		Changed = If EditCmdStack<EditCmdPos> = "SAVED_POINT" Then False Else True
+		Redraw = REDRAW.ALL
 	End
 	
 	Redraw.StatusLine = @TRUE
@@ -7146,6 +7443,7 @@ Act.Redo:
 		If EditCmdStack<EditCmdPos-1> = "SAVED_POINT" Then
 			Changed = False
 			EditCmdPos -= 1 ;** １つ先に進む
+			Redraw = REDRAW.ALL
 		End
 	End
 	

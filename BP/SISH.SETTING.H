@@ -96,6 +96,7 @@ Equ K.BACKSPACE To        "@H"
 Equ K.C_A To              "@A"
 Equ K.C_B To              "@B"
 Equ K.C_C To              "@C"
+Equ K.C_D To              "@D"
 Equ K.C_E To              "@E"
 Equ K.C_F To              "@F"
 Equ K.C_G To              "@G"
@@ -115,6 +116,7 @@ Equ K.C_CARET To          "@^"
 Equ K.C_BACKSLASH To      "@\"
 Equ K.C_UNDERBAR To       "@_"
 Equ K.ESC To              "@["
+Equ K.C_SPACE To          "@@"
                           
 * Key To Action Mapping
 	keySeq = ""
@@ -163,7 +165,7 @@ Equ K.ESC To              "@["
 	keySeq<A.INSVMC>           = K.C_9
 	keySeq<A.INSSMC>           = K.C_8
 	keySeq<A.INSTMC>           = K.C_1
-	keySeq<A.DELETELINE>       = K.C_DEL
+	keySeq<A.DELETELINE>       = K.C_D
 	keySeq<A.BACKSPACE>        = K.BACKSPACE
 	keySeq<A.DELETECHAR>       = K.DEL:" ":Char(127)
 	keySeq<A.TEMPLATE>         = K.C_T
@@ -197,6 +199,7 @@ Equ K.ESC To              "@["
 	keySeq<A.THEME>            = K.F11:" ":KEY.FUNCTION.11
 	keySeq<A.CANCEL>           = K.ESC
 	keySeq<A.FIT.TERM>         = K.F8
+	keySeq<A.WORD_HOKAN>       = K.C_SPACE
 
 **
 ** Color Setting
