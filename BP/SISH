@@ -42,7 +42,7 @@ Program SISH
 **    
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.12.0 ]"
+Equ SISH.VERSION To "[ SISH v0.12.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -6831,13 +6831,14 @@ Act.ShowOutline:
 Act.ShowWordHokan:
 	
 	Line = Rec<Y>
-	inX = X-1
+	inX = If X > 1 Then X-1 Else 1
 		
 	!! 単語の先頭まで進む
 	Loop
 		ch = Line[inX,1]
 	While ch <> "" And ch Matches "1A":@VM:"1N" Or Count("._$",ch)
 		inX -= 1
+		If inX <= 0 Then Exit
 	Repeat
 	
 	!! フィルターを設定
