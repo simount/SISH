@@ -100,6 +100,7 @@ Equ K.C_D To              "@D"
 Equ K.C_E To              "@E"
 Equ K.C_F To              "@F"
 Equ K.C_G To              "@G"
+Equ K.C_K To              "@K"
 Equ K.C_L To              "@L"
 Equ K.C_N To              "@N"
 Equ K.C_O To              "@O"
@@ -135,8 +136,8 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.PREVWORD>         = K.C_LEFT
 	keySeq<A.NEXTSTMT>         = K.C_DOWN
 	keySeq<A.PREVSTMT>         = K.C_UP
-	keySeq<A.NEXTCHAR>         = K.C_GREATER:" ":K.C_BACKSLASH
-	keySeq<A.PREVCHAR>         = K.C_LESS:" ":K.C_UNDERBAR
+	keySeq<A.NEXTCHAR>         = K.C_GREATER
+	keySeq<A.PREVCHAR>         = K.C_LESS
 	keySeq<A.TOP>              = K.C_HOME
 	keySeq<A.BOTTOM>           = K.C_END
 	keySeq<A.SEL_LEFT>         = K.S_LEFT
@@ -165,11 +166,11 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.INSVMC>           = K.C_9
 	keySeq<A.INSSMC>           = K.C_8
 	keySeq<A.INSTMC>           = K.C_1
-	keySeq<A.DELETELINE>       = K.C_D
+	keySeq<A.DELETELINE>       = K.C_K
 	keySeq<A.BACKSPACE>        = K.BACKSPACE
 	keySeq<A.DELETECHAR>       = K.DEL:" ":Char(127)
 	keySeq<A.TEMPLATE>         = K.C_T
-	keySeq<A.COMMENT>          = K.C_S_1:" ":K.C_CARET
+	keySeq<A.COMMENT>          = K.C_UNDERBAR:" ":K.C_S_1
 	keySeq<A.CUT>              = K.C_X
 	keySeq<A.COPY>             = K.C_C
 	keySeq<A.SEND_PASTE>       = K.A_V:" ":K.C_F2
@@ -200,6 +201,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.CANCEL>           = K.ESC
 	keySeq<A.FIT.TERM>         = K.F8
 	keySeq<A.WORD_HOKAN>       = K.C_SPACE
+	keySeq<A.SEL_EXPAND>       = K.C_D
 
 **
 ** Color Setting
@@ -282,8 +284,8 @@ EQU BG.DEFAULT To "49"
 	HI.FUNC.OFF = ""
 	HI.DIR.ON = ESC:"[":BG.BASE2:";":FG.CYAN:"m" 
 	HI.DIR.OFF = SGR.ALL.OFF
-	HI.DOC.ON = ""
-	HI.DOC.OFF = ""
+	HI.DOC.ON = ESC:"[":FG.YELLOW:"m"
+	HI.DOC.OFF = SGR.ALL.OFF
 	HI.SEARCH.ON = ESC:"[":BG.YELLOW:";":FG.BASE3:"m"
 	HI.SEARCH.SEL = ESC:"[":BG.ORANGE:";":FG.BASE3:"m"
 	HI.SEARCH.OFF = SGR.ALL.OFF
