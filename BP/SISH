@@ -7,7 +7,7 @@ Program SISH
 **    
 **    Operate like UnixShell when edit commandline and Screen Editor
 **
-**    Please read the "README.mk" for more information
+**    Please read the "README.adoc" for more information
 **
 **  Support Platform
 **
@@ -16,7 +16,7 @@ Program SISH
 **
 **  DATE
 **
-**    2016/11/01
+**    2017/05/17
 **  
 **  AUTHOR
 **    
@@ -30,7 +30,7 @@ Program SISH
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.13.0 ]"
+Equ SISH.VERSION To "[ SISH v0.14.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -553,6 +553,7 @@ Shell.KeyLoop.Start:
 		Rec = Rec<1>
 		Line = Rec
 		
+AutocommanLoop.Start:
 		!!
 		!! 表示
 		!!
@@ -579,7 +580,7 @@ Shell.KeyLoop.Start:
 		If System(11) Then prmptStr := PROMPT.STR ;** アクティブな選択リストあり
 		
 		!! コマンド行表示 (Auto Wrap) 
-		cl = prmptStr : cmdline
+		cl = prmptStr : cmdline<1>
 		curIndex = Len(prmptStr) + curPos - 1
 		tmpX = 0
 		tmpY = 0
@@ -885,6 +886,12 @@ Run.Command:
 	End
 
 	cmdlines = "" ;** 複数コマンド
+	If Count(cmdline,@FM) Then
+		!! 複数コマンドなら先だしで１つ選ぶ
+		cmdlines = cmdline
+		cmdline = cmdline<1>
+		Del cmdlines<1>
+	End
 
 	verb = UPCASE(Trim(cmdline)[' ',1,1])
 	If verb="Q" or verb="QUIT" Then
@@ -910,9 +917,9 @@ Run.Command:
 				GoTo ACTION.CMDSTACK.SAVE
 			Case k = "X"
 				** コマンド実行
-				cmd = cmdline[3,9999]
-				n = cmd[' ',1,1]
-				m = cmd[' ',2,1]
+				cmd = Convert(' ','-',Trim(cmdline[3,9999]))
+				n = cmd['-',1,1]
+				m = cmd['-',2,1]
 				
 				If n = "" And m = "" Then n = 1
 				If m = "" Then m = n ;** 1行にする
@@ -923,7 +930,12 @@ Run.Command:
 						cmdlines<-1> = If cmdStackPage<i+1> <> "" Then cmdStackPage<i+1> Else cmdStack<i+1>
 					Next i
 				End
-				If cmdlines = "" Then cmdline = "" ;** 実行しない
+				
+				** 自動モードで初めからやり直し
+				cmdline = cmdlines
+				bAutoCommand = @TRUE
+				GoTo AutocommanLoop.Start
+				
 			Case k = "T"
 				bTimer = Not(bTimer)
 				Print ""
@@ -949,11 +961,6 @@ Run.Command:
 	If cmdline = "" Then
 		GoSub CLEAR.FOR.PERFORM
 		GoTo Run.Command.Ending
-	End
-
-	!! 複数コマンドがあれば展開
-	If cmdlines Then
-		cmdline = cmdlines
 	End
 
 	!! 先頭が空文字とピリオドでなければコマンドスタックの更新
@@ -1026,10 +1033,8 @@ $ELSE
 $ENDIF
 		retCode = (If @USER.RETURN.CODE = 999999999 Then @SYSTEM.RETURN.CODE Else @USER.RETURN.CODE)
 		Seek fpStack, 0, 2 Else Abort "Seek Stack Log Error"
-		For i = 1 To DCount(cmdline,@FM)
-			line = OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS"):" ":cmdline<i>:@VM:retCode
-			WriteSeq line To fpStack On Error Print "Cannot Write Stack Log -> ":STACK.FILE:"/":logFile Else ;
-		Next i
+		line = OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS"):" ":cmdline:@VM:retCode
+		WriteSeq line To fpStack On Error Print "Cannot Write Stack Log -> ":STACK.FILE:"/":logFile Else ;
 		CloseSeq fpStack
 	End
 	
@@ -1044,6 +1049,10 @@ $ENDIF
 	
 Run.Command.Ending:
 	If bAutoCommand Then
+		If cmdlines # "" Then
+			cmdline = cmdlines
+			GoTo AutocommanLoop.Start ;** まだ続く
+		End
 		bAutoCommand = @FALSE
 		If bAutoEditor Then
 			!! エディタに戻る前に停止
@@ -1212,6 +1221,7 @@ $ENDIF
 			End
 			If bDispCandidate Then
 			
+				candidateMode = startCandidateMode
 				dispType = "ACCOUNT ":tgtAccFile
 				GoSub DispCandidate.Common
 			
@@ -1519,7 +1529,7 @@ $IFNDEF U2__UNIVERSE
 								If line Matches "...**...==..." Then
 									If Not(bDoc) Then bDoc = @TRUE Else Exit
 								End Else
-									line = line[Index(line,"**",1)+2,999]
+									line = Change(line[Index(line,"**",1)+2,999],CHAR(9),"  ") ;** Tab -> sp2
 									If bDoc Then lines<-1> = "  ":line
 								End
 							Next i
