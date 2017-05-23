@@ -41,6 +41,17 @@ image:resources/Shell.png[Overview]
 
 == セットアップ ==
 
+=== ターミナルエミュレータ（クライアント環境）のダウンロード
+
+link:http://ice.hotmint.com/putty/[putty GDI] をダウンロードします。 +
+同梱のlink:putty.ini[putty.ini]をputty.exeと同階層に配置します。
+
+NOTE: xtermの制御シーケンスを利用していますので、Windows標準のコンソールでは動作しません。 +
+他のターミナルエミュレータでもxtermの制御シーケンスが送れれば、設定ファイルの修正で概ね動作可能です。 +
+詳しくは、<<sec_customize>>を参照。
+
+=== SISHのインストール 
+
 コンパイル済みオブジェクトをダウンロードしてグローバルカタログすることで
 いつでも利用できるようになります。
 
@@ -51,6 +62,10 @@ link:QM.BP.OUT/SISH[QM.BP.OUT/SISH] を 'gcat' フォルダに配置します。
     cd /usr/qmsys/gcat
     wget -N https://github.com/simount/SISH/raw/master/QM.BP.OUT/SISH
 
+ターミナルから以下のコマンドで起動します
+
+    :SISH
+
 ==== UniVerse
 
 link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置します。
@@ -58,19 +73,14 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
     cd /usr/u2/uv/BP.O
     wget -N https://github.com/simount/SISH/raw/master/UV.BP.O/SISH
 
-以下のコマンドでグローバルカタログします
+ターミナルから以下のコマンドでグローバルカタログします
 
     LOGTO UV
     CATALOG BP *SISH SISH
 
-==== ターミナルエミュレータ（クライアント環境）のダウンロード
+以下のコマンドで起動します
 
-link:http://ice.hotmint.com/putty/[putty GDI] をダウンロードします。 +
-同梱のlink:putty.ini[putty.ini]をputty.exeと同階層に配置します。
-
-NOTE: xtermの制御シーケンスを利用していますので、Windows標準のコンソールでは動作しません。 +
-他のターミナルエミュレータでもxtermの制御シーケンスが送れれば、設定ファイルの修正で概ね動作可能です。 +
-詳しくは、<<sec_customize>>を参照。
+    >*SISH
 
 == 機能 ==
 
@@ -373,8 +383,8 @@ a|  前の単語に移動
 | kbd:[Ctrl+Y] | リドゥ
 | kbd:[Ctrl+X] | カット
 | kbd:[Ctrl+C] | コピー
-| kbd:[Ctrl+V] | SISH内のクリップボードからペースト
-| kbd:[Alt+V] | クライアント端末のクリップボードからペースト(OSC52)
+| kbd:[Ctrl+V] | クライアント端末のクリップボードからペースト(OSC52)
+| kbd:[Alt+V] | SISH内のクリップボードからペースト
 | kbd:[Ctrl+K] | 行削除
 | kbd:[Ctrl+A] | 全行選択
 | kbd:[Ctrl+D] | 選択領域の拡張（押すたびに以下を繰り返します） +
@@ -421,7 +431,7 @@ a|  前の単語に移動
 |===
 | キー| 機能
 
-| kbd:[Ctrl+N] | カーソル行が画面の中央になるようにスクロールします
+| kbd:[Ctrl+N] | カーソル行が画面の中央になるようにスクロールとあわせて現在のカーソル位置をジャンプ履歴に記録します
 | kbd:[TAB] | `TAB` の挿入。選択中ならインデントを増やす
 | kbd:[Shift+TAB] | 選択中ならインデントを減らす
 | kbd:[Ctrl+SP] | 単語補完
@@ -528,6 +538,7 @@ https://myrica.estable.jp/
 - `[Imp]` 右側ポップアップウィンドウの選択色が見づらい問題を修正
 - `[Imp]` `PATH:` 拡張構文でファイル指定したときになるべく文字化けしないで開けるように `ENCODING "UTF8.A"` を指定するようにした
 - `[Imp]` UVのコンパイル済みバイナリも配布するようにした。
+- `[Imp]` ペーストのキーバインド変更
 
 === 2017/05/17 - 0.14.0 ===
 

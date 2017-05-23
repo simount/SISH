@@ -173,8 +173,8 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.COMMENT>          = K.C_UNDERBAR:" ":K.C_S_1
 	keySeq<A.CUT>              = K.C_X
 	keySeq<A.COPY>             = K.C_C
-	keySeq<A.SEND_PASTE>       = K.A_V:" ":K.C_F2
-	keySeq<A.PASTE_LOCAL>      = K.C_V:" ":K.S_F2
+	keySeq<A.SEND_PASTE>       = K.C_V:" ":K.C_F2
+	keySeq<A.PASTE_LOCAL>      = K.A_V:" ":K.S_F2
 	keySeq<A.UNDO>             = K.C_Z
 	keySeq<A.REDO>             = K.C_Y
 	keySeq<A.SEL_ALL>          = K.C_A

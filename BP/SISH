@@ -30,7 +30,7 @@ Program SISH
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.15.0 ]"
+Equ SISH.VERSION To "[ SISH v0.15.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -3117,6 +3117,9 @@ RestoreFromJumpData: ;** jumpDataからカーソル位置を復元
 	keepDP_X = X
 	Top = jumpData<8>
 	XOffSet = jumpData<9>
+	
+	Top = Y - Int(Depth / 2) ;** センタリング
+	If Top < 1 Then Top = 1
 	
 	jumpData = "" ;** JumpできたらjumpDataをクリアする
 
@@ -6656,7 +6659,9 @@ Act.Cancel:
 * Act.ScrollMid
 
 Act.ScrollMid:
+	GoSub StackJumpHistory ;** ジャンプ位置も記録しておく
 	Top = Y - Int(Depth / 2)
+	If Top < 1 Then Top = 1
 	Redraw = REDRAW.ALL
 	Return
 
