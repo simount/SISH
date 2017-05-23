@@ -65,13 +65,11 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
 
 ==== ターミナルエミュレータ（クライアント環境）のダウンロード
 
-link:http://ice.hotmint.com/putty/[putty GDI] をダウンロードします。
-
+link:http://ice.hotmint.com/putty/[putty GDI] をダウンロードします。 +
 同梱のlink:putty.ini[putty.ini]をputty.exeと同階層に配置します。
 
 NOTE: xtermの制御シーケンスを利用していますので、Windows標準のコンソールでは動作しません。 +
-他のターミナルエミュレータでもxtermの制御シーケンスが遅れれば、SISHの設定ファイルのシーケンスと
-合わせることで動作可能です。 +
+他のターミナルエミュレータでもxtermの制御シーケンスが送れれば、設定ファイルの修正で概ね動作可能です。 +
 詳しくは、<<sec_customize>>を参照。
 
 == 機能 ==
