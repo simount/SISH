@@ -16,7 +16,7 @@ Program SISH
 **
 **  DATE
 **
-**    2017/05/17
+**    2017/05/23
 **  
 **  AUTHOR
 **    
@@ -30,7 +30,7 @@ Program SISH
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.14.0 ]"
+Equ SISH.VERSION To "[ SISH v0.15.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -274,7 +274,7 @@ Shell.Main:
 	EQU BI.PBUFNO To 18
 	EQU BI.INDENTTYPE To 19
 	EQU BI.INDENTSIZE To 20
-	6~
+	
 	EQU BufInfo To BufInfos(CurBuf)
 	EQU Changed To BufInfo<BI.CHANGED>
 	EQU IsNew To BufInfo<BI.NEW>
@@ -510,13 +510,15 @@ $ENDIF
 					cmdline = stack<stack.cnt,1>[21,999999]
 					retCode = stack<stack.cnt,2>
 $IFDEF U2__UNIVERSE
-					If cmdline And cmdline[1,1] <> ' ' Then
+					cond = (cmdline And cmdline[1,1] <> ' ')
 $ELSE
 					!! OpenQM版は取り込むコマンドの精度を上げる
-					If cmdline And cmdline[1,1] <> ' ' And (retCode >= 0 Or retCode = -15 Or retCode = -7) Then
+					cond = (cmdline And cmdline[1,1] <> ' ' cmdline And cmdline[1,1] <> ' ' And (retCode >= 0 Or retCode = -15 Or retCode = -7))
 $ENDIF
+					If cond Then
 						cmdline = Trim(cmdline)
-						Find cmdline In cmdStack Else
+						Find cmdline In cmdStack Setting pos Then
+						End Else
 							cmdStack<-1> = cmdline ;** 重複を省いて追加
 						End
 					End
@@ -574,7 +576,7 @@ AutocommanLoop.Start:
 		!! コマンドスタック位置表示
 		If cmdStackPos > 1 Then
 			no = cmdStackPos-1
-			prmptStr := " ":Fmt(no,"R%":Max(Len(no),2))
+			prmptStr := " ":Fmt(no,"R%":Maximum(Len(no):@FM:2))
 		End
 		prmptStr := PROMPT.STR
 		If System(11) Then prmptStr := PROMPT.STR ;** アクティブな選択リストあり
@@ -924,8 +926,8 @@ Run.Command:
 				If n = "" And m = "" Then n = 1
 				If m = "" Then m = n ;** 1行にする
 				If Num(n) And Num(m) Then
-					min_no = Min(n,m)
-					max_no = Max(n,m)
+					min_no = Minimum(n:@FM:m)
+					max_no = Maximum(n:@FM:m)
 					For i = max_no To min_no Step -1
 						cmdlines<-1> = If cmdStackPage<i+1> <> "" Then cmdStackPage<i+1> Else cmdStack<i+1>
 					Next i
@@ -1094,7 +1096,7 @@ $IFNDEF U2__UNIVERSE
 			dlist = ""
 			For Each line In list Delimiter @FM
 				If UpCase(line[1,filter.len]) = filter Then
-					id = line<1,1>:(If line<1,2>="D" Then "/" Else "")
+					id = line<1,1>:(If line<1,2>="D" Then "/" Else " ")
 					slist<-1> = id
 					slistU<-1> = UpCase(id)
 					dlist<-1> = FMT(OConv(line<1,4>,"E-YMDTS"),"20L"):" ":FMT(line<1,5>,"L,")
@@ -1464,6 +1466,10 @@ DispCandidate.Common:
 		If commonWord And nowWord <> commonWord Then
 			GoSub Setting.WordInfo
 			GoSub Prev.Match.Filter
+			If dispType = "OS Path" Then
+				bDispCandidate = @TRUE
+				GoTo TAB.HOKAN ;** 連続で候補表示する
+			End
 		End
 	End
 
@@ -1504,13 +1510,11 @@ $IFNDEF U2__UNIVERSE
 			!! Verb決定済み
 			dispType = "Help"
 			lines = ""
-			lines<1> = "  ":@ID:" - ":iType(descIType)
 			type = @RECORD[1,1]
 			If type Matches "P":@VM:"S" Then
 				!! PH PQ S
 				maxCnt = DCount(@RECORD,@FM)
 				maxLen = Len(maxCnt)
-				lines<-1> = ""
 				For i = 2 To maxCnt
  					lines<-1> = "  ":Fmt(i,"R%":maxLen):": ":@RECORD<i>
 				Next i
@@ -1526,10 +1530,16 @@ $IFNDEF U2__UNIVERSE
 							bDoc = @FALSE
 							For i = 1 To maxCnt
 								line = rec<i>
-								If line Matches "...**...==..." Then
+								If line Matches "...**...==..." Then ;** "** ==========" ~ "** ==========" まで
+									lines<-1> = "  ":line[Index(line,"**",1)+2,999] ;** 先頭の"**"を省く
 									If Not(bDoc) Then bDoc = @TRUE Else Exit
 								End Else
-									line = Change(line[Index(line,"**",1)+2,999],CHAR(9),"  ") ;** Tab -> sp2
+									line = line[Index(line,"**",1)+2,999] ;** 先頭の"**"を省く
+									xpos = Index(line,"**",1)
+									If xpos Then
+										line = line[1,xpos-1] ;** 次の"**"移行はコメントとして省く
+									End
+									line = Change(line,CHAR(9),Space(DEFAULT.INDENT)) ;** Tab -> space
 									If bDoc Then lines<-1> = "  ":line
 								End
 							Next i
@@ -1537,24 +1547,26 @@ $IFNDEF U2__UNIVERSE
 						Close fp
 					End
 				End Else
-					lines<3> = "  コマンドの詳細は以下を参照"
-					lines<4> = "  http://downloads.openqm.com/help/":DownCase(Convert('.','_',@ID)):".htm"
+					lines<1> = "  コマンドの詳細は以下を参照"
+					lines<2> = "  http://downloads.openqm.com/help/":DownCase(Convert('.','_',@ID)):".htm"
 				End
 			End
 			
+			!! VOCの説明を表示
+			crtBuff := @(0,2):"  ":@ID:" : ":iType(descIType)
+			
 			!! ページング
 			allNum = DCOUNT(lines,@FM)
-			allPageNum = INT(allNum / dispRowNum)
+			allPageNum = INT(allNum / (dispRowNum-4))
 			If allPageNum < pageNum Then pageNum = 0
 			If pageNum < 0 Then pageNum = allPageNum
-			st = pageNum * dispRowNum
-			off = dispRowNum - 1
+			st = pageNum * (dispRowNum-4)
+			off = (dispRowNum-3) - 1
 			lines = lines[@FM,st,off]
 			
 			!! 画面表示(縦センタリング)
-			crtBuff := @(0,1+cmdlineRows)
 			lines.len = DCount(lines,@FM)
-			startY = Int(dispRowNum / 2) - Int(lines.len / 2) + 1
+			startY = 3
 			For i = 1 To lines.len
 				crtBuff := @(0,startY+i+cmdlineRows):lines<i>
 			Next i
@@ -1774,7 +1786,7 @@ Match.CancidateFilter:
 		id = Remove(slist.old,sep)
 		idU = Remove(slistU.old,s)
 		desc = Remove(dlist.old,s)
-		If Index(Trim(idU):@FM:UpCase(desc),filterU) Or Trim(id) Matches candidateFilter Or desc Matches candidateFilter Then
+		If Index(Trim(idU):@FM:UpCase(desc),filterU,1) Or Trim(id) Matches candidateFilter Or desc Matches candidateFilter Then
 			slist<-1> = id
 			slistU<-1> = idU
 			dlist<-1> = desc
@@ -1970,21 +1982,22 @@ Get.SList.FLATFILE:
 	slistU = ""
 	dlist = ""
 	If flatFile Then
-		showDesc = Not(flatFile[4] = ".OUT")
+!! 		showDesc = Not(flatFile[4] = ".OUT")
 		SelectV fpFlat To sp
 		Loop
 			ReadNext @ID From sp Else Exit
 			idU = UpCase(@ID)
 			Locate idU In slistU By "AL" Setting no Else
 				Ins idU Before slistU<no>
-				Ins @ID Before slist<no>
-				If showDesc Then
-					ReadV f1 From fpFlat,@ID,1 Then
-						Ins f1 Before dlist<no>
-					End Else
-						Ins "-" Before dlist<no>
-					End
-				End
+				Ins @ID:" " Before slist<no>
+!! 重くなる時があるのでやめる
+!! 				If showDesc Then
+!! 					ReadV f1 From fpFlat,@ID,1 Then
+!! 						Ins f1 Before dlist<no>
+!! 					End Else
+!! 						Ins "-" Before dlist<no>
+!! 					End
+!! 				End
 			End
 		Repeat
 	End
@@ -2116,13 +2129,13 @@ ACTION.CMDSTACK.LIST:
 		End
 		If cmd = "" Then Exit
 		If filterWord >< "" Then
-			If Not(Index(UpCase(cmd),filterWordU) Or cmd Matches filterWord) Then Continue
+			If Not(Index(UpCase(cmd),filterWordU,1) Or cmd Matches filterWord) Then Continue
 		End
 		result<-1> = (i-1):@VM:cmd:@VM:modify
 		cnt += 1
 		If cmdStackList.DispCnt<2> < cnt Then Exit
 	Next
-	w = Max(Len(i),2)
+	w = Maximum(Len(i):@FM:2)
 	
 	!! 画面出力
 	Print ""
@@ -2239,7 +2252,7 @@ ACTION.CMDSTACK.SAVE:
 			If UpCase(Trim(ans)) = "Y" Else GoTo Shell.KeyLoop.End
 			rec = rec<1> ;** 1行目を残す
 		End Else
-			rec = "PA Created at ":OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS"):" by ":@USER:"@":@ACCOUNT
+			rec = "PA Created at ":OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS"):" by ":@LOGNAME:"@":@ACCOUNT
 		End
 		For i = startNo To endNo Step -1
 			rec<-1> = If cmdStackPage<i> = "" Then cmdStack<i> Else cmdStackPage<i>
@@ -2280,8 +2293,8 @@ ACTION.CMDSTACK.READ:
 		!! Stackからリード Case
 		If m = "" Then m = n ;** 1行にする
 		If Num(n) And Num(m) Then
-			min_no = Min(n,m)
-			max_no = Max(n,m)
+			min_no = Minimum(n:@FM:m)
+			max_no = Maximum(n:@FM:m)
 			For i = max_no To min_no Step -1
 				cmd = cmdStack<i+1>
 				If cmdStackPage<i+1> <> "" Then
@@ -2337,8 +2350,8 @@ ACTION.CMDSTACK.DELETE:
 		If n = "" Then n = 1 ;** デフォルトはトップ位置
 		If m = "" Then m = n ;** 1行にする
 		If Num(n) And Num(m) Then
-			min_no = Min(n,m)
-			max_no = Max(n,m)
+			min_no = Minimum(n:@FM:m)
+			max_no = Maximum(n:@FM:m)
 			For i = max_no To min_no Step -1
 				Del cmdStack<i+1>
 				Del cmdStackPage<i+1>
@@ -2548,7 +2561,7 @@ ParseCommandLine:
 			Repeat
 			
 			Convert @FM To " " In FldInfo
-			
+		
 	End Case
 
 	If FileName = "" And ItemList = "" Then
@@ -3173,15 +3186,6 @@ DoRead.Without.Jump:
 		Return
 	End
 	
-	!!
-	!! レコードの読み取り
-	!! 更新ロックが取れるか一度試して取れなければReadOnlyにする
-	!!
-	Open FileName To FL Else
-		StatusMessage = "Cannot Open ":FileName
-		Return
-	End
-	
 	!! 空きBuffer取得
 	GoSub GetFreeBuf
 	If Not(Found) Then
@@ -3195,8 +3199,34 @@ DoRead.Without.Jump:
 	!! バッファ番号を直近リストの先頭に設定
 	Ins CurBuf Before lruBuffList<1>
 	
+	GoSub Common.OpenFile
 	GoSub ReadItem
 	
+Return
+
+** ファイルを開くの共通化
+Common.OpenFile:
+	
+$IFDEF U2__UNIVERSE
+	Open FileName To FL Else
+		StatusMessage = "Cannot Open ":FileName
+		Return
+	End
+$ELSE
+	If FileName[1,5] = "PATH:" Then
+		!! PATH:なら READ:自動認識 WRITE:UTF8
+		Open FileName ENCODING "UTF8.A" To FL Else
+			StatusMessage = "Cannot Open ":FileName
+			Return
+		End
+	End Else
+		Open FileName To FL Else
+			StatusMessage = "Cannot Open ":FileName
+			Return
+		End
+	End
+$ENDIF
+
 Return
 
 *-----------------------------------------------------------------------
@@ -3213,6 +3243,10 @@ ReadItem:
 			Rec = ""
 			IsNew = True
 		End
+		!!
+		!! レコードの読み取り
+		!! 更新ロックが取れるか一度試して取れなければReadOnlyにする
+		!!
 		RecordLockU FL,ItemName Locked
 			StatusMessage = "Record previously Locked by ":Status():", Open as Read Only mode"
 			ReadOnly = True 
@@ -3640,15 +3674,15 @@ ProcChoiceList:
 	Loop While i <= listLen
 		selected = (choiceNo = winTop+i) ;** 選択行か？
 		line = Raise(Raise(choiceOutList<winTop+i,1>))
-		crtBuff := @(winX,i+1):CSI:BG.BASE2:"m"
-		crtBuff := If selected Then HI.SELECT1 Else CSI:FG.DEFAULT:";":BG.BASE2:"m"
+		crtBuff := @(winX,i+1)
+		crtBuff := If selected Then HI.SELECT1 Else CSI:FG.BASE01:";":BG.BASE2:";22m"
 		crtBuff := line<1>
 		If line<2> Then
 			crtBuff := CSI:FG.RED:"m"
 			crtBuff := line<2>
 		End
 		If line<3> Then
-			crtBuff := If selected Then HI.SELECT1 Else CSI:FG.DEFAULT:";":BG.BASE2:"m"
+			crtBuff := If selected Then HI.SELECT1 Else CSI:FG.BASE01:";":BG.BASE2:";22m"
 			crtBuff := line<3>
 		End
 		crtBuff := @(-4):SGR.ALL.OFF
@@ -4135,10 +4169,7 @@ FileMenu:
 Format: 
 	FileName = BufInfo<BI.FILE>
 	If FileName = "" Then FileName = "BP"
-	Open FileName To FL Else
-		StatusMessage = "Cannot Open ":FileName
-		Return
-	End
+	GoSub Common.OpenFile
 	Write Rec On FL, "%%format_temp%%"
 	cmd = "FORMAT ":FileName:" %%format_temp%%"
 	
@@ -4312,7 +4343,7 @@ Is.Unicode.Char:
 	Return
 	
 Is.Mark.Char:
-	flg = Count("=#:<>()[]/*+-,!;'\":'"', ch)
+	flg = Count("=#:<>()[]{}/*+-,!;'\":'"', ch)
 	Return
 	
 Is.Space.Char:
@@ -4344,7 +4375,7 @@ $IFDEF U2__UNIVERSE
 	IF OS.GATES Then
 		** WIN
 		IF Len(@(IT$CUD))=0 Then
-			Perform "SET.TERM.TYPE uviterm-w" ;** 制御文字が送れる端末に変更する
+			Perform "SET.TERM.TYPE uviterm-w MAP UTF8" ;** 制御文字が送れる端末に変更する
 		End
 	End
 	
@@ -4753,7 +4784,7 @@ ParseLine:
 	End
 
 	HI.OFF = CSI:FG.BASE01:";":BG.BASE3:";22m"
-	repTabCh = FMT("»",STDTAB:"L")
+	repTabCh = "»":Space(STDTAB-1)
 	PLine = ""
 	Old = ""
 	L = Len(Line)
@@ -5121,10 +5152,6 @@ SaveItem:
 			GoSub GetFile
 			If FileName = "" Then Return
 		End
-		Open FileName To FL Else
-			StatusMessage = "Cannot Open ":FileName
-			Return
-		End
 		ItemName = BufInfo<BI.ITEM>
 		If ItemName = "" Then
 			PromptLine = "Item Name From '":FileName:"' ->" ; GoSub PromptLine
@@ -5136,7 +5163,7 @@ SaveItem:
 		
 		!! アカウント違いの警告
 		If BufInfo<BI.ACCOUNT> >< "" Then
-			If Not(BufInfo<BI.ACCOUNT> Matches QuoteS(@ACCOUNT:@VM:@PATH)) Then 
+			If Not(BufInfo<BI.ACCOUNT> Matches Quote(@ACCOUNT):@VM:Quote(@PATH)) Then 
 				PromptLine = "This Item Read from Different Account! - Save in This Account (Y) :":@(-4) ; GoSub PromptLine 
 				GoSub GetKey
 				If TrimF(UpCase(C))[1,1] = "Y" Else Return
@@ -5150,6 +5177,7 @@ SaveItem:
 		!!   更新ロックがかかっていたらエラー
 		!!   編集前時と比較して違っていれば他のセッションで変更があったとみなす(楽観的ロック)
 		!!
+		GoSub Common.OpenFile
 		Crt @(0, PY):
 		ReadU prevRec From FL, ItemName On Error Return Locked
 			StatusMessage = "Record previously Locked by ":Status():", Do Not Saved"
@@ -5275,11 +5303,11 @@ SaveItem:
 		!! ファイルに保存
 		If prevRec >< saveRec Then
 			!! 現在のレコード内容と違いがある場合だけ更新する
-			If prevRec >< StartRec Then
-				StatusMessage = "Record previously Changed by Another, Cannot Save This Modify"
-				ReadOnly = True
-				Return
-			End
+!!			If prevRec >< StartRec Then
+!!				StatusMessage = "Record previously Changed by Another, Cannot Save This Modify"
+!!				ReadOnly = True
+!!				Return
+!!			End
 			If BufInfo<BI.LOCKED> Then
 				WriteU saveRec On FL, ItemName On Error Return
 			End Else
@@ -5323,10 +5351,7 @@ Delete:
 	If FileName = "" Then Return
 	If ItemName = "" Then Return
 	
-	Open FileName To FL Else
-		StatusMessage = "Cannot Open ":FileName
-		Return
-	End
+	GoSub Common.OpenFile
 	Crt @(0, PY):
 	ReadU prevRec From FL, ItemName On Error Return Locked
 		StatusMessage = "Record previously Locked by ":Status():", Cannot Save"
@@ -7263,13 +7288,12 @@ Get.WordList:
 						FileName = ROL<1>
 						ItemName = ROL<2>
 					End
-					incRec = RTrans(FileName,ItemName,-1,"X")
+					incRec = Raise(Trans(FileName,ItemName,-1,"X"))
 					If incRec Then
 						!! インクルードレコードを後ろに追加
 						lineList<-1> = incRec
 						lineList.len += DCount(incRec,@FM)
 					End
-					SL$ACTIVE
 				End
 			End
 			
@@ -7280,7 +7304,7 @@ Get.WordList:
 				a = line[i,1]
 				If Count(STRQTS,a) Then
 					!! クォート文字が見つかったら次の対応文字まで進む
-					b = Index(line[i+1,HUGE],a)
+					b = Index(line[i+1,HUGE],a,1)
 					i += If b Then b Else HUGE
 				End Else
 					mline := a
@@ -7601,7 +7625,7 @@ Find.Definition:
 				End
 				If sp < 10 Then
 					sp += 1 ;** next Stack
-					iRec(sp) = RTrans(FileName,ItemName,-1,"X")
+					iRec(sp) = Raise(Trans(FileName,ItemName,-1,"X"))
 					GoSub Find.Definition
 					sp -= 1;** back Stack
 					If result Then
@@ -7617,12 +7641,12 @@ Find.Definition:
 		End
 		
 		!! 完全一致する単語を見つける
-		iX = Index(Line,Word)
+		iX = Index(Line,Word,1)
 		If iX Then
 			lineList = Line
 			currentWord = ""
 			GoSub Get.WordList
-			Find Word In wordList Then
+			Find Word In wordList Setting pos Then
 				result<2> = iRec.Y(sp)
 				result<3> = iX
 				Return
@@ -8298,10 +8322,7 @@ Act.Reload:
 	ItemName = BufInfo<BI.ITEM>
 	
 	!! レコード格納先ファイルのオープン  
-	Open FileName To FL Else
-		StatusMessage = "Cannot Open ":FileName
-		Return
-	End
+	GoSub Common.OpenFile
 	
 	Read TempRec From FL, ItemName Else TempRec = ""
 	
@@ -8566,7 +8587,7 @@ Move.NextWord:
 				X += 1
 				ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 			Until ch = ""
-			Until Count("._$%@ =:<>()[]/*+-,'\":'"',ch)
+			Until Count("._$%@ =:<>()[]{}/*+-,'\":'"',ch)
 			Until ch = UpCase(ch) And prev.ch # UpCase(prev.ch)
 				prev.ch = ch
 			Repeat
@@ -8576,7 +8597,7 @@ Move.NextWord:
 			X += 1
 			ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 		Until ch = ""
-		Until Count(" =:<>()[]/*+-,'\":'"',ch)
+		Until Count(" =:<>()[]{}/*+-,'\":'"',ch)
 		Repeat
 	End Else
 		ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
@@ -8586,11 +8607,11 @@ Move.NextWord:
 	If Line[X,1] = "" Then Return
 	X += 1
 	If Line[X,1] = "" Then Return
-	prevKwd = Count("=:<>()[]/*+-,'\":'"',ch)
+	prevKwd = Count("=:<>()[]{}/*+-,'\":'"',ch)
 	Loop
 		ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 		If ch = "" Then X-=1; Exit
-		kwd = Count("=:<>()[]/*+-,", ch)
+		kwd = Count("=:<>()[]{}/*+-,", ch)
 		If prevKwd And kwd Else
 			If ch <> " " Then Exit
 		End
@@ -8608,11 +8629,13 @@ Move.NextWord:
 Move.PrevWord:
 	GoSub GetWord
 	Line = Rec<Y>
-	If Word = "" Or type <> 1 Or X = SOW Then
+	Line.len = Len(Line)
+	If Word = "" Or type <> 1 Or X = SOW Or X = Line.len+1 Then
 		!! カーソルが単語の開始位置または行の最終にある場合は
 		!! 前の単語の先頭位置に移動する（高速移動）
 		Line = Line[1,X]
 		finX = X
+		If X = Line.len+1 Then finX -= 1
 		X = 0
 		tmpX = 1
 		Loop
@@ -8630,7 +8653,7 @@ Move.PrevWord:
 			X -= 1
 			ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 		Until ch = ""
-		Until Count("._$%@ =:<>()[]/*+-,'\":'"',ch)
+		Until Count("._$%@ =:<>()[]{}/*+-,'\":'"',ch)
 			If ch = UpCase(ch) And prev.ch # UpCase(prev.ch) Then
 				X -= 1
 				Exit

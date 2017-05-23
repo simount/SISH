@@ -1,2 +1,0 @@
-ch = "1"
-Print (ch Matches "1A":@VM:"1N" OR Count("._$%@",ch))
