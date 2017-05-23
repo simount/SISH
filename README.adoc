@@ -12,7 +12,7 @@ image:resources/Shell.png[Overview]
 
 == 特徴 ==
 
-.コマンドライン
+==== コマンドライン
 * VOCに登録されている単語の入力補完機能によりミスが少なく迅速な入力が可能となります。 +
 (VOCと入力補完の相性はとても良いです)
 * 一度入力したコマンドはコマンド履歴から検索する事が出来ます。 kbd:[Ctrl+R]
@@ -20,7 +20,7 @@ image:resources/Shell.png[Overview]
 * 大文字小文字反転入力のON/OFF切り替え。 kbd:[F9]
 * 実行時間計測モード `.T`
 
-.エディタ
+==== エディタ
 * BASICソースもデータレコードも同じ操作感で編集できます。
 * BASICソースの構文ハイライト表示により入力ミスが軽減されます。
 * カーソル移動の効率を高めるジャンプ機能
@@ -30,7 +30,7 @@ image:resources/Shell.png[Overview]
 * マルチバリューを改行区切りで編集出来ます。
 * マルチバッファ機能により複数ファイルの編集状態を維持できます。
 
-.その他
+==== その他
 * コマンドラインとエディタ共にカーソル移動やコピー＆ペーストはWindowsのキーバインドで操作できます。
 （設定ファイルにより自分好みにキーバインドに変更可能）
 
@@ -44,14 +44,14 @@ image:resources/Shell.png[Overview]
 コンパイル済みオブジェクトをダウンロードしてグローバルカタログすることで
 いつでも利用できるようになります。
 
-.OpenQM
+==== OpenQM
 
 link:QM.BP.OUT/SISH[QM.BP.OUT/SISH] を 'gcat' フォルダに配置します。
 
     cd /usr/qmsys/gcat
     wget -N https://github.com/simount/SISH/raw/master/QM.BP.OUT/SISH
 
-.UniVerse
+==== UniVerse
 
 link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置します。
 
@@ -63,7 +63,7 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
     LOGTO UV
     CATALOG BP *SISH SISH
 
-.ターミナルエミュレータ（クライアント環境）のダウンロード
+==== ターミナルエミュレータ（クライアント環境）のダウンロード
 
 link:http://ice.hotmint.com/putty/[putty GDI] をダウンロードします。
 
@@ -175,6 +175,7 @@ kbd:[Ctrl+E] or `.E` コマンド
 ファイルを指定して開く場合
 
 ****
+[.lead]
 READ.BUFFER [__File__ [__Item__ __FieldId...__]]
 ****
 
