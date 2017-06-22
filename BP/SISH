@@ -1025,7 +1025,7 @@ $ENDIF
 	End
 	
 	!! PA なら プロンプトをクリアする
-	ReadV type From @VOC,verb,1 Then
+	ReadV type From VOC,verb,1 Then
 		If type[1,2] = "PA" Then
 $IFDEF U2__UNIVERSE
 			Perform "CLEARPROMPTS"
