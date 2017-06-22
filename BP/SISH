@@ -30,7 +30,7 @@ Program SISH
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.15.1 ]"
+Equ SISH.VERSION To "[ SISH v0.16.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -440,18 +440,18 @@ $ENDIF
 
 Shell.Input.Begin:
 
-	** Ctrl+C のIntruputを無効化
+	** Ctrl+C のIntruputを @28(Ctrl+\ or Break) に変更
 	** 自動ページングをON
 $IFDEF U2__UNIVERSE
 	Perform "PTERM INTR ^Q"
 	assign 0 to system(1005)
 	PROMPT.STR = ">"
 $ELSE
-	x = PTERM(1,@FALSE)
+	x = PTERM(3,28)
 	x = PTERM(4,@FALSE)
 	PROMPT.STR = ":"
 $ENDIF
-	
+
 	bDispCandidate = @FALSE
 	candidateMode = ""
 	candidateFilter = ""
@@ -989,7 +989,7 @@ $IFDEF U2__UNIVERSE
 	Perform "PTERM INTR ^C"
 	assign 1 to system(1005)
 $ELSE
-	x = PTERM(1,@TRUE)
+	x = PTERM(3,3)
 	x = PTERM(4,@TRUE)
 $ENDIF
 
@@ -1022,6 +1022,17 @@ $ENDIF
 	
 	IF prevCrt <> @CRTHIGH:@CRTWIDE Then
 		Crt CSI:"8;":@CRTHIGH:";":@CRTWIDE:"t":
+	End
+	
+	!! PA なら プロンプトをクリアする
+	ReadV type From @VOC,verb,1 Then
+		If type[1,2] = "PA" Then
+$IFDEF U2__UNIVERSE
+			Perform "CLEARPROMPTS"
+$ELSE
+			Execute "CLEARPROMPTS" STACKLIST
+$ENDIF
+		End
 	End
 	
 After.Perform.Cmd:
@@ -1094,9 +1105,14 @@ $IFNDEF U2__UNIVERSE
 			slist = ""
 			slistU = ""
 			dlist = ""
+			a = Index(nowWord,'/')
+			If a = 0 Then a = 9999
+			b = Index(nowWord,'\')
+			If b = 0 Then b = 9999
+			pdelim = If a < b Then '/' Else '\'
 			For Each line In list Delimiter @FM
 				If UpCase(line[1,filter.len]) = filter Then
-					id = line<1,1>:(If line<1,2>="D" Then "/" Else " ")
+					id = line<1,1>:(If line<1,2>="D" Then pdelim Else " ")
 					slist<-1> = id
 					slistU<-1> = UpCase(id)
 					dlist<-1> = FMT(OConv(line<1,4>,"E-YMDTS"),"20L"):" ":FMT(line<1,5>,"L,")
@@ -2018,7 +2034,7 @@ $IFDEF U2__UNIVERSE
 		End
 	End
 $ELSE
-	x = PTERM(1,@TRUE)
+	x = PTERM(3,3)
 	x = PTERM(2,@TRUE)
 $ENDIF
 
@@ -3259,6 +3275,9 @@ ReadItem:
 
 	GoSub StartBuf
 
+	!! 改行コードが残っていたら自動除外
+	Convert CHAR(10):CHAR(13) To '' In Rec
+
 	TgtFld = "" ;** フィールドのリスト 
 	If FldInfo Then
 		!! フィールド指定モード
@@ -3343,11 +3362,8 @@ DoLock:
 	FileName = BufInfo<BI.FILE>
 	ItemName = BufInfo<BI.ITEM>
 	
-	!! レコード格納先ファイルのオープン  
-	Open FileName To FL Else
-		StatusMessage = "Cannot Open ":FileName
-		Return
-	End
+	!! レコード格納先ファイルのオープン
+	GoSub Common.OpenFile
 	
 	If BufInfo<BI.LOCKED> Then    
 		** ロック中ならロックを外す
@@ -3830,7 +3846,7 @@ AfterKeyWait:
 		End
 		
 		If C = ESC Then
-			Nap 200 ;** ESCのみなら誤入力防止のために200ミリ秒待つ
+			Nap 100 ;** ESCのみなら誤入力防止のために100ミリ秒待つ
 			!! たまっているキーキューをクリア
 $IFDEF U2__UNIVERSE
 			Input test,-1
@@ -3839,10 +3855,19 @@ $ElSE
 $ENDIF
 			If test Then
 				!! １秒以内に次のキーが来た
-				GoTo Get.Key.Err
+				C := KeyIn()
+				Loop
+$IFDEF U2__UNIVERSE
+					Input test,-1
+$ElSE
+					test = KeyReady()
+$ENDIF
+				While test Do
+					C := KeyIn()
+				Repeat
 			End
 		End
-		
+
 		!! キーシーケンスからアクションを取得
 		Locate C in keys By 'AL' Setting i Then
 			actNo = keysToAction<i,1>
@@ -3896,29 +3921,18 @@ $ENDIF
 		
 Get.Key.Err:
 		
-		!! 残りのキーを待ってみる
-		Loop
-$IFDEF U2__UNIVERSE
-			Input test,-1
-$ElSE
-			test = KeyReady()
-$ENDIF
-		While test Do
-			C := KeyIn()
-		Repeat
-			
-		!! キーシーケンスからアクションを取得
-		len = DCount(keys,@FM)
-		For i = 1 To len
-			key = keys<i>
-			If key = ESC Then Continue
-			key.len = Len(key)
-			If C[1,key.len] = key Then
-				actNo = keysToAction<i,1>
-				keyQueue = C[key.len+1,99999]
-				Return
-			End
-		Next i
+!! 		!! キーシーケンスからアクションを取得
+!! 		len = DCount(keys,@FM)
+!! 		For i = 1 To len
+!! 			key = keys<i>
+!! 			If key = ESC Then Continue
+!! 			key.len = Len(key)
+!! 			If C[1,key.len] = key Then
+!! 				actNo = keysToAction<i,1>
+!! 				keyQueue = C[key.len+1,99999]
+!! 				Return
+!! 			End
+!! 		Next i
 		
 		Crt @SYS.BELL:
 		
@@ -5185,6 +5199,8 @@ SaveItem:
 		ReadU prevRec From FL, ItemName On Error Return Locked
 			StatusMessage = "Record previously Locked by ":Status():", Do Not Saved"
 			Return
+		End Then
+			Convert CHAR(10):CHAR(13) To '' In Rec ;** 改行コードが残っていたら自動除外
 		End Else
 			prevRec = ""
 		End
@@ -5359,6 +5375,8 @@ Delete:
 	ReadU prevRec From FL, ItemName On Error Return Locked
 		StatusMessage = "Record previously Locked by ":Status():", Cannot Save"
 		Return
+	End Then
+		Convert CHAR(10):CHAR(13) To '' In Rec ;** 改行コードが残っていたら自動除外
 	End Else
 		prevRec = ""
 	End
@@ -8330,6 +8348,7 @@ Act.Reload:
 	GoSub Common.OpenFile
 	
 	Read TempRec From FL, ItemName Else TempRec = ""
+	Convert CHAR(10):CHAR(13) To '' In TempRec ;** 改行コードが残っていたら自動除外
 	
 	If TempRec >< StartRec Then
 		!! 初めのレコードと違いがある
@@ -8340,10 +8359,7 @@ Act.Reload:
 			GoSub GetKey
 			If UpCase(C) = "Y" Else Return
 		End
-		Open FileName To FL Else
-			StatusMessage = "Cannot Open ":FileName
-			Return
-		End
+		GoSub Common.OpenFile
 		GoSub ReadItem
 	End
 
@@ -8656,6 +8672,7 @@ Move.PrevWord:
 		prev.ch = ""
 		Loop
 			X -= 1
+		Until X = 0
 			ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 		Until ch = ""
 		Until Count("._$%@ =:<>()[]{}/*+-,'\":'"',ch)
