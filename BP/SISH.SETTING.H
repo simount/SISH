@@ -198,7 +198,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.DIVE>             = K.F4:" ":KEY.FUNCTION.4
 	keySeq<A.CASEINVERT>       = K.F9
 	keySeq<A.THEME>            = K.F11:" ":KEY.FUNCTION.11
-	keySeq<A.CANCEL>           = K.ESC
+	keySeq<A.CANCEL>           = K.ESC:" ":K.ESC:K.ESC
 	keySeq<A.FIT.TERM>         = K.F8
 	keySeq<A.WORD_HOKAN>       = K.C_SPACE
 	keySeq<A.SEL_EXPAND>       = K.C_D

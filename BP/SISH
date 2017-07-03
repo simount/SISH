@@ -30,7 +30,7 @@ Program SISH
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.16.0 ]"
+Equ SISH.VERSION To "[ SISH v0.17.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -356,7 +356,8 @@ Shell.Main:
 	pendingCh = ""
 	bPrevEsc = @FALSE ;** 前回のキー入力が制御シーケンスだったかどうか
 	bOverlay = @FALSE ;** Insert/Overlay Mode
-	
+	editerCmd = ""
+		
 	crtBuff = ""
 	
 	EQU REDRAW.ALL To -1
@@ -390,9 +391,9 @@ Shell.Main:
 	prevPath = "" ;** 前回のアカウントパスは一度クリアする
 	
 	** DICT.DESCの取得
-	Open 'DICT', 'VOC' To fpD.VOC Else Abort
-	Read descIType From fpD.VOC,'DESC' Else Abort
-	Read typeIType From fpD.VOC,'TYPE' Else Abort
+	Open 'DICT', 'VOC' To fpD.VOC Else Stop "Cannot Open 'DICT.VOC'"
+	Read descIType From fpD.VOC,'DESC' Else Stop "Cannot Read 'DESC' in 'DICT.VOC'"
+	Read typeIType From fpD.VOC,'TYPE' Else Stop "Cannot Read 'TYPE' in 'DICT.VOC'"
 	Close fpD.VOC
 	
 	** VOCファイルを開く
@@ -1088,55 +1089,59 @@ TAB.HOKAN:
 	tgtAccFile = ACCOUNT.FILE
 	
 $IFNDEF U2__UNIVERSE
-	!! OSディレクトリ補完
-	path = Convert('\','/',nowWord)
-	If (Count(path,'/') AND Count(path,":")=0) Or nowWord[1,5] = "PATH:" Then
-		If path[1,5] = "PATH:" Then
-			path = path[6,99]
-			nowWord = nowWord[6,99]
-		End
-		filter = UpCase(Last(path,'/'))
-		filter.len = Len(filter)
-		parent = path[1,Len(path)-filter.len]
-		dirPath = parent
-		If dirPath = "" Then dirPath = "./"
-		list = Dir(dirPath)
-		If list Then
-			slist = ""
-			slistU = ""
-			dlist = ""
-			a = Index(nowWord,'/')
-			If a = 0 Then a = 9999
-			b = Index(nowWord,'\')
-			If b = 0 Then b = 9999
-			pdelim = If a < b Then '/' Else '\'
-			For Each line In list Delimiter @FM
-				If UpCase(line[1,filter.len]) = filter Then
-					id = line<1,1>:(If line<1,2>="D" Then pdelim Else " ")
-					slist<-1> = id
-					slistU<-1> = UpCase(id)
-					dlist<-1> = FMT(OConv(line<1,4>,"E-YMDTS"),"20L"):" ":FMT(line<1,5>,"L,")
-				End
-			Next line
-			
-			nowWord = nowWord[Len(parent)+1,99]
-			GoSub Setting.WordInfo2
-			
-			dispType = "OS Path"
-			
-			If bDispCandidate Then
-				!! 候補表示モード
-				candidateMode = startCandidateMode
-				GoSub DispCandidate.Common
-			End Else
-				If actNo = A.TAB Then
-					!! タブキーによりオートコンプリートする
-					GoSub Prev.Match.Filter
-					GoSub AUTO.COMPLATE
-				End
+	If bDispCandidate Or actNo = A.TAB Then
+		!! OSディレクトリ補完
+		path = Convert('\','/',nowWord)
+		If (Count(path,'/') AND Count(path,":")=0) Or nowWord[1,5] = "PATH:" Then
+			If path[1,5] = "PATH:" Then
+				path = path[6,99]
+				nowWord = nowWord[6,99]
 			End
+			filter = UpCase(Last(path,'/'))
+			filter.len = Len(filter)
+			parent = path[1,Len(path)-filter.len]
+			dirPath = parent
+			If dirPath = "" Then dirPath = "./"
+	
+			GoSub GetDirList
 			
-			Return
+			If list Then
+				slist = ""
+				slistU = ""
+				dlist = ""
+				a = Index(nowWord,'/')
+				If a = 0 Then a = 9999
+				b = Index(nowWord,'\')
+				If b = 0 Then b = 9999
+				pdelim = If a < b Then '/' Else '\'
+				For Each line In list Delimiter @FM
+					If UpCase(line[1,filter.len]) = filter Then
+						id = line<1,1>:(If line<1,2>="D" Then pdelim Else " ")
+						slist<-1> = id
+						slistU<-1> = UpCase(id)
+						dlist<-1> = ""
+					End
+				Next line
+				
+				nowWord = nowWord[Len(parent)+1,99]
+				GoSub Setting.WordInfo2
+				
+				dispType = "OS Path"
+				
+				If bDispCandidate Then
+					!! 候補表示モード
+					candidateMode = startCandidateMode
+					GoSub DispCandidate.Common
+				End Else
+					If actNo = A.TAB Then
+						!! タブキーによりオートコンプリートする
+						GoSub Prev.Match.Filter
+						GoSub AUTO.COMPLATE
+					End
+				End
+				
+				Return
+			End
 		End
 	End
 $ENDIF
@@ -1679,7 +1684,7 @@ $ENDIF
 		descInfos = descInfos[@FM,st,off]
 		
 		sp = 2
-		col1 = Maximum(Lens(keyInfos))
+		col1 = Maximum(LenSDP(keyInfos))
 		col2 = @CRTWIDE - col1
 		col2W = (col2 - sp):"T"
 		
@@ -2455,6 +2460,7 @@ AUTO.COMPLATE:
 		commonWord = slist : separator ;* 候補は１つなので確定
 		bDispCandidate = @FALSE
 		slist = ""
+		
 	End Else
 		If nowWord = slist<1> Then
 			commonWord = slist<1>
@@ -2484,6 +2490,21 @@ AUTO.COMPLATE:
 	BufInfo<BI.BLOCKEND, 2> = X
 	InsBuffer = commonWord
 	GoSub InsertLines
+
+	!! 誤操作が多いので溜まっているキーキューをクリアする
+!! 	Loop
+!! $IFDEF U2__UNIVERSE
+!! 		Input test,-1
+!! $ElSE
+!! 		test = KeyReady()
+!! $ENDIF
+!! 	While test Do
+!! 		k = KeyIn()
+!! 	Repeat
+	Loop
+		GoSub GetCh.Timeout
+		While ch <> ""
+	Repeat
 
 Return
 
@@ -3779,121 +3800,91 @@ GetKey:
 	actNo = 0
 	Loop
 		
-		If keyQueue <> "" Then
-			C = keyQueue
-			keyQueue = ""
-		End Else
-			** キー入力待ち
-			C = KeyIn()
-			
-			!! 連続で取得する
-			Loop
-$IFDEF U2__UNIVERSE
-				Input test,-1
-$ElSE
-				test = KeyReady()
-$ENDIF
-			While test Do
-				C := KeyIn()
-			Repeat
-		End
+		** キー入力待ち
+		C = KeyIn()
+		
 AfterKeyWait:
 		
 		n = UniSeq(C) ;** １文字目の文字列数値表記
 		If n > 31 Then
-			If Len(C) > 1 Then
-				keyQueue = C[2,99999]
-				C = C[1,1]
-			End
 			actNo = A.INSCHAR
 			Return
 		End
 		
-		!! Toggle Overlay Mode
-		If C = ESC:"[2~" Or C = KEY.INSERT.LINE Then
-			bOverlay = Not(bOverlay)
-			If bOverlay Then
-				Crt OVERLAY.MODE.SEQ:
-			End Else
-				Crt INS.MODE.SEQ:
-			End
-			Return
-		End
-		
-		!! Bracketed Paste
-		If C Matches "'":ESC:"[200~'..." Then
-			end.pos = Index(C,ESC:"[201~",1)
-			If end.pos > 0 Then
-				C = C[7,end.pos-7]
-			End Else
-				C = ""
-				Loop
-					k = KeyIn()
-				While k <> ESC
-					C := k
-				Repeat
-				
-				k = KeyIn() ;** [
-				k = KeyIn() ;** 2
-				k = KeyIn() ;** 0
-				k = KeyIn() ;** 1
-				k = KeyIn() ;** ~
-				
-			End
-			
-			actNo = A.INSCHAR
-			Return
-		End
-		
-		If C = ESC Then
-			Nap 100 ;** ESCのみなら誤入力防止のために100ミリ秒待つ
-			!! たまっているキーキューをクリア
-$IFDEF U2__UNIVERSE
-			Input test,-1
-$ElSE
-			test = KeyReady()
-$ENDIF
-			If test Then
-				!! １秒以内に次のキーが来た
-				C := KeyIn()
-				Loop
-$IFDEF U2__UNIVERSE
-					Input test,-1
-$ElSE
-					test = KeyReady()
-$ENDIF
-				While test Do
-					C := KeyIn()
-				Repeat
-			End
-		End
-
-		!! キーシーケンスからアクションを取得
-		Locate C in keys By 'AL' Setting i Then
-			actNo = keysToAction<i,1>
-			Return
-		End
-		
-		!! 端末サイズの取得
-		If C Matches "'":ESC:"[8'...'t'" Then
-			** DECSLPP -> CSI Ps1 ; Ps2 ; Ps3 t
-			Return
-		End
-		
-		!! Mause Tracking (SGR)
+		!! 特殊なエスケープシーケンスを拾う
+		If n = 27 Then
+			GoSub GetCh.Timeout ; C := ch
+			If ch = "" Then
+				!! 単独ESC
+				Locate C in keys By 'AL' Setting i Then
+					actNo = keysToAction<i,1>
+					Return
+				End
+			End Else If ch = "[" Then
+				!! CSIシーケンス開始
+				GoSub GetCh.Timeout ; C := ch
+				If ch = "2" Then
+					GoSub GetCh.Timeout ; C := ch
+					If ch = "~" Then
+						!! Toggle Overlay Mode
+						bOverlay = Not(bOverlay)
+						If bOverlay Then
+							Crt OVERLAY.MODE.SEQ:
+						End Else
+							Crt INS.MODE.SEQ:
+						End
+						Return
+					End Else If ch = "0" Then
+						GoSub GetCh.Timeout ; C := ch
+						If ch = "0" Then
+							GoSub GetCh.Timeout ; C := ch
+							If ch = "~" Then
+								!! Bracketed Paste
+								C = ""
+								Loop
+									GoSub GetCh.Timeout
+								While ch <> ESC And ch <> ""
+									C:= ch
+								Repeat
+								
+								GoSub GetCh.Timeout ;** [
+								GoSub GetCh.Timeout ;** 2
+								GoSub GetCh.Timeout ;** 0
+								GoSub GetCh.Timeout ;** 1
+								GoSub GetCh.Timeout ;** ~
+								
+								actNo = A.INSCHAR
+								Return
+							End
+						End
+					End
+				End Else If ch = "8" Then
+					!! [TBD] 端末サイズの取得
+					If C Matches "'":ESC:"[8'...'t'" Then
+						** DECSLPP -> CSI Ps1 ; Ps2 ; Ps3 t
+						Return
+					End
+				End
+!! Mause Tracking (SGR)
 !! 		If C[1,3] = CSI:"<" Then
 !! 			
 !! 		End
-		
-		If C[1,2] = ESC:"]" Then
-			** OSCを処理する
-			no = C[3,2]
-			If no = "52" Then
-				** クリップボード貼り付け
-				cdata = C
-				Loop
-					last = Len(cdata)
-					If cdata[last,1] = BEL Or cdata[last-1,2] = ESC:"\" Then
+
+			End Else If ch = "]" Then
+				!! OSC
+				GoSub GetCh.Timeout ; C := ch
+				If ch = "5" Then
+					GoSub GetCh.Timeout ; C := ch
+					If ch = "2" Then
+						!! OS Clipboard Paste
+						C = ""
+						Loop
+							GoSub GetCh.Timeout ; C := ch
+						While ch <> BEL And ch <> ESC And ch <> ""
+						Repeat
+						If ch = ESC Then GoSub GetCh.Timeout ; ** ESC+\ を読み取る
+						cdata = C
+						last = Len(cdata)
 						data = cdata[1,last-1][';',3,1]
 $IFDEF U2__UNIVERSE
 						retCode = ENCODE("Base64A", "2", data, "1", InsBuffer, "1")
@@ -3903,36 +3894,23 @@ $ENDIF
 						actNo = A.PASTE ;** 挿入処理
 						Return
 					End
-					Loop
-$IFDEF U2__UNIVERSE
-						Input test,-1
-$ElSE
-						test = KeyReady()
-$ENDIF
-					While test Do
-						C := KeyIn()
-					Repeat
-					If Len(C) = 1 Or C[1,1] = ESC Then GoTo AfterKeyWait ;** 1文字だけになったら抜ける
-					cdata = C
-				Repeat
+				End
 			End
-			Return
 		End
 		
-Get.Key.Err:
+		Loop
+			!! キーシーケンスからアクションを取得
+			Locate C in keys By 'AL' Setting i Then
+				actNo = keysToAction<i,1>
+				Return
+			End
+		While keys<i>[1,Len(C)] = C
+			GoSub GetCh.Timeout
+		While ch <> ""
+			C := ch
+		Repeat
 		
-!! 		!! キーシーケンスからアクションを取得
-!! 		len = DCount(keys,@FM)
-!! 		For i = 1 To len
-!! 			key = keys<i>
-!! 			If key = ESC Then Continue
-!! 			key.len = Len(key)
-!! 			If C[1,key.len] = key Then
-!! 				actNo = keysToAction<i,1>
-!! 				keyQueue = C[key.len+1,99999]
-!! 				Return
-!! 			End
-!! 		Next i
+Get.Key.Err:
 		
 		Crt @SYS.BELL:
 		
@@ -3950,6 +3928,22 @@ $IFDEF DEBUG
 $ENDIF
 		
 	Repeat
+	Return
+
+GetCh.Timeout:
+$IFDEF U2__UNIVERSE
+	For xxx = 1 To 4
+		Input test,-1
+		If test Then
+			ch = KeyIn()
+			Return
+		End
+		Nap 50 ;** 50ms * 4 = 200ms
+	Next xxx
+	ch = ""
+$ElSE
+	ch = KeyIn(0.2)
+$ENDIF
 	Return
 
 *--------------------------------------------------------------------------
@@ -4402,7 +4396,7 @@ $ELSE
 		!! ECS Mode
 		x = PTERM(7,1) ;** UTF8固定
 	End
-	IF Len(@(IT$CUD))=0 Then Execute "$ECHO":@FM:"TERM XTERM"
+	Execute "TERM XTERM-EEEPC"
 	x = PTERM(8,8) ;** Backspace ^H
 $ENDIF
 	
@@ -5802,13 +5796,9 @@ Keys:
 		
 		C = KeyIn()
 		Loop
-$IFDEF U2__UNIVERSE
-			Input test,-1
-$ElSE
-			test = KeyReady()
-$ENDIF
-		While test Do
-			C := KeyIn()
+			GoSub GetCh.Timeout
+		While ch <> ""
+			C := ch
 		Repeat
 
 		If C = ESC Then Exit
@@ -8713,6 +8703,59 @@ GetIndentCnt:
 	If indentCnt > 0 Then indentCnt -= indentCnt / STDTAB
 	
 	Return
+
+*-----------------------------------------------------------------------------
+* 指定の行文字列のインデント数を返す
+* Input:  dirPath - パス
+* Output:    list - @FM区切り
+*-----------------------------------------------------------------------------
+GetDirList:
+$IFNDEF U2__UNIVERSE
+  TEMP.PATH = SYSTEM(38):(If OS.GATES Then "\" Else "/"):"SISH.DIR.":@USERNO
+	TEMP.PATH.CMD = TEMP.PATH:".cmd"
+	TEMP.PATH.OUT = TEMP.PATH:".out"
+
+	OpenSeq TEMP.PATH.CMD Encoding "UTF8" To fp Else Create fp Else Abort "Cannot create temp file -> ":TEMP.PATH
+	
+	batch = ""
+	If OS.GATES Then
+		d = Convert("/","\",dirPath)
+		batch<-1> = "chcp 65001"
+		batch<-1> = "dir /b /a:d ":d:" > ":TEMP.PATH.OUT
+		batch<-1> = "echo : >> ":TEMP.PATH.OUT
+		batch<-1> = "dir /b /a:-d ":d:" >> ":TEMP.PATH.OUT
+		batch = Change(batch,@FM,CHAR(13):CHAR(10))
+	End Else
+		d = dirPath
+		batch<-1> = "ls -F ":d:" 2> /dev/null | grep / > ":TEMP.PATH.OUT
+		batch<-1> = "echo : >> ":TEMP.PATH.OUT
+		batch<-1> = "ls -F ":d:" 2> /dev/null | grep -v / >> ":TEMP.PATH.OUT
+		batch = Change(batch,@FM,CHAR(10))
+		!! 実行権限を付与
+		TEMP.PATH.CMD = "chmod 744 ":TEMP.PATH.CMD:" && ":TEMP.PATH.CMD
+	End
+
+	WriteSeq batch To fp Else Abort "Cannot Write"
+	
+	WEOFSeq fp
+	CloseSeq fp
+	
+	OS.Execute TEMP.PATH.CMD Silent
+	
+	list = ""
+	OpenSeq TEMP.PATH.OUT Encoding "UTF8" To fp Then
+		d = "D"
+		Loop
+			ReadSeq line From fp Else Exit
+			If line[1,1] = ":" Then d = "" Else
+				list<-1> = Convert("*/","",line):@VM:d
+			End
+		Repeat
+		CloseSeq fp
+	End
+$ENDIF
+Return
+
 End
 *
 * Local variables:
