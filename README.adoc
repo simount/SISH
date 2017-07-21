@@ -46,12 +46,12 @@ image:resources/Shell.png[Overview]
 
 QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタマイズを行うとより使いやすくなります。
 
-色の設定は下記のURLのものをインポートします。
+色の設定は下記のURLのものをインポートします。 +
 https://github.com/neilpa/cmd-colors-solarized/blob/master/solarized-dark.reg
 
 kbd:[Ctrl+カーソル] で単語単位の移動、kbd:[Shift+カーソル]で範囲選択を利用する場合。
 
-link:https://autohotkey.com/[AutoHotKey]をダウンロードします。+
+link:https://autohotkey.com/[AutoHotKey]をダウンロードします。 +
 link:AutoHotKey.ahk[AutoHotKey.ahk]を読み込ませます。
 
 === For Linux or Windows
