@@ -42,13 +42,26 @@ image:resources/Shell.png[Overview]
 
 == セットアップ ==
 
-=== ターミナルエミュレータ（クライアント環境）のダウンロード
+=== For Windows
+
+QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタマイズを行うとより使いやすくなります。
+
+色の設定は下記のURLのものをインポートします。
+https://github.com/neilpa/cmd-colors-solarized/blob/master/solarized-dark.reg
+
+kbd:[Ctrl+カーソル] で単語単位の移動、kbd:[Shift+カーソル]で範囲選択を利用する場合。
+
+link:https://autohotkey.com/[AutoHotKey]をダウンロードします。+
+link:AutoHotKey.ahk[AutoHotKey.ahk]を読み込ませます。
+
+=== For Linux or Windows
+
+.ターミナルエミュレータ（クライアント環境）のダウンロード
 
 link:http://ice.hotmint.com/putty/[putty GDI] をダウンロードします。 +
 同梱のlink:putty.ini[putty.ini]をputty.exeと同階層に配置します。
 
-NOTE: xtermの制御シーケンスを利用していますので、Windows標準のコンソールでは動作しません。 +
-他のターミナルエミュレータでもxtermの制御シーケンスが送れれば、設定ファイルの修正で概ね動作可能です。 +
+NOTE: 他のターミナルエミュレータでもxtermの制御シーケンスが送れれば、設定ファイルの修正で概ね動作可能です。 +
 詳しくは、<<sec_customize>>を参照。
 
 === SISHのインストール 
@@ -382,14 +395,15 @@ a|  前の単語に移動
 
 | kbd:[Ctrl+Z] | アンドゥ
 | kbd:[Ctrl+Y] | リドゥ
-| kbd:[Ctrl+X] | カット
-| kbd:[Ctrl+C] | コピー
+| kbd:[Ctrl+X] | カット (選択範囲がない場合は行全体をカット)
+| kbd:[Ctrl+C] | コピー (選択範囲がない場合は行全体をコピー)
 | kbd:[Ctrl+V] | クライアント端末のクリップボードからペースト(OSC52)
 | kbd:[Alt+V] | SISH内のクリップボードからペースト
 | kbd:[Ctrl+K] | 行削除
-| kbd:[Ctrl+A] | 全行選択
-| kbd:[Ctrl+D] | 選択領域の拡張（押すたびに以下を繰り返します） +
-`選択なし` -> `単語選択` -> `空白文字まで選択` -> `1行選択` -> `同一インデント行を選択` -> `選択なし`
+| kbd:[Ctrl+A] | 全行選択　(選択範囲がある場合は以下の選択領域の拡張処理になります) +
+-> `単語選択` -> `空白文字まで選択` -> `1行選択` -> `同一インデント行を選択` -> `選択なし`
+| kbd:[Ctrl+D] | 単語選択　(選択範囲がある場合は以下の選択領域の拡張処理になります) +
+`単語選択` -> `空白文字まで選択` -> `1行選択` -> `同一インデント行を選択` -> `選択なし`
 |===
 
 ==== その他 ====
@@ -532,6 +546,11 @@ https://myrica.estable.jp/
 
 
 == 更新履歴 ==
+
+=== 2017/07/21 - 0.18.0 ===
+
+- `[Imp]` Windowsコンソールである程度動作するように調整
+- `[Bug]` Shift+Homeのバグを修正
 
 === 2017/07/03 - 0.17.0 ===
 

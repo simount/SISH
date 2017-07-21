@@ -130,34 +130,34 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.END>              = K.END:" ":char(210):" ":KEY.MOVE.CURSOR.TO.LAST.LINE
 	keySeq<A.NEXTPAGE>         = K.PGDOWN:" ":char(208)
 	keySeq<A.PREVPAGE>         = K.PGUP:" ":char(207)
-	keySeq<A.NEXTHALF>         = K.C_PGDOWN
-	keySeq<A.PREVHALF>         = K.C_PGUP
-	keySeq<A.NEXTWORD>         = K.C_RIGHT
-	keySeq<A.PREVWORD>         = K.C_LEFT
-	keySeq<A.NEXTSTMT>         = K.C_DOWN
-	keySeq<A.PREVSTMT>         = K.C_UP
+	keySeq<A.NEXTHALF>         = K.C_PGDOWN:" ":char(214)
+	keySeq<A.PREVHALF>         = K.C_PGUP:" ":char(215)
+	keySeq<A.NEXTWORD>         = K.C_RIGHT:" ":char(152)
+	keySeq<A.PREVWORD>         = K.C_LEFT:" ":char(153)
+	keySeq<A.NEXTSTMT>         = K.C_DOWN:" ":char(154)
+	keySeq<A.PREVSTMT>         = K.C_UP:" ":char(155)
 	keySeq<A.NEXTCHAR>         = K.C_GREATER
 	keySeq<A.PREVCHAR>         = K.C_LESS
-	keySeq<A.TOP>              = K.C_HOME
-	keySeq<A.BOTTOM>           = K.C_END
-	keySeq<A.SEL_LEFT>         = K.S_LEFT
-	keySeq<A.SEL_RIGHT>        = K.S_RIGHT
-	keySeq<A.SEL_UP>           = K.S_UP
-	keySeq<A.SEL_DOWN>         = K.S_DOWN
-	keySeq<A.SEL_HOME>         = K.S_HOME
-	keySeq<A.SEL_END>          = K.S_END
-	keySeq<A.SEL_NEXTWORD>     = K.C_S_RIGHT
-	keySeq<A.SEL_PREVWORD>     = K.C_S_LEFT
-	keySeq<A.SEL_NEXTSTMT>     = K.C_S_DOWN
-	keySeq<A.SEL_PREVSTMT>     = K.C_S_UP
-	keySeq<A.SEL_NEXTPAGE>     = K.S_PGDOWN
-	keySeq<A.SEL_PREVPAGE>     = K.S_PGUP
-	keySeq<A.SEL_NEXTHALF>     = K.C_S_PGDOWN
-	keySeq<A.SEL_PREVHALF>     = K.C_S_PGUP
+	keySeq<A.TOP>              = K.C_HOME:" ":char(216)
+	keySeq<A.BOTTOM>           = K.C_END:" ":char(217)
+	keySeq<A.SEL_LEFT>         = K.S_LEFT:" ":char(156)
+	keySeq<A.SEL_RIGHT>        = K.S_RIGHT:" ":char(157)
+	keySeq<A.SEL_UP>           = K.S_UP:" ":char(158)
+	keySeq<A.SEL_DOWN>         = K.S_DOWN:" ":char(159)
+	keySeq<A.SEL_HOME>         = K.S_HOME:" ":char(160)
+	keySeq<A.SEL_END>          = K.S_END:" ":char(161)
+	keySeq<A.SEL_NEXTWORD>     = K.C_S_RIGHT:" ":char(162)
+	keySeq<A.SEL_PREVWORD>     = K.C_S_LEFT:" ":char(163)
+	keySeq<A.SEL_NEXTSTMT>     = K.C_S_DOWN:" ":char(164)
+	keySeq<A.SEL_PREVSTMT>     = K.C_S_UP:" ":char(165)
+	keySeq<A.SEL_NEXTPAGE>     = K.S_PGDOWN:" ":char(166)
+	keySeq<A.SEL_PREVPAGE>     = K.S_PGUP:" ":char(167)
+	keySeq<A.SEL_NEXTHALF>     = K.C_S_PGDOWN:" ":char(168)
+	keySeq<A.SEL_PREVHALF>     = K.C_S_PGUP:" ":char(169)
 	keySeq<A.SEL_NEXTCHAR>     = K.C_S_GREATER
 	keySeq<A.SEL_PREVCHAR>     = K.C_S_LESS
-	keySeq<A.SEL_TOP>          = K.C_S_HOME
-	keySeq<A.SEL_BOTTOM>       = K.C_S_END
+	keySeq<A.SEL_TOP>          = K.C_S_HOME:" ":char(170)
+	keySeq<A.SEL_BOTTOM>       = K.C_S_END:" ":char(171)
 	keySeq<A.SCROLL_MID>       = K.C_N
 !! Editor Input
 	keySeq<A.NEWLINE>          = K.ENTER
@@ -168,7 +168,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.INSTMC>           = K.C_1
 	keySeq<A.DELETELINE>       = K.C_K
 	keySeq<A.BACKSPACE>        = K.BACKSPACE
-	keySeq<A.DELETECHAR>       = K.DEL:" ":Char(127)
+	keySeq<A.DELETECHAR>       = K.DEL:" ":Char(127):" ":Char(212)
 	keySeq<A.TEMPLATE>         = K.C_T
 	keySeq<A.COMMENT>          = K.C_UNDERBAR:" ":K.C_S_1
 	keySeq<A.CUT>              = K.C_X
@@ -179,27 +179,27 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.REDO>             = K.C_Y
 	keySeq<A.SEL_ALL>          = K.C_A
 	keySeq<A.SEARCH>           = K.C_F
-	keySeq<A.REPEAT>           = K.F3
+	keySeq<A.REPEAT>           = K.F3:" ":Char(130)
 	keySeq<A.REVERSE>          = K.S_F3
 	keySeq<A.REPLACE>          = K.C_R
 	keySeq<A.BUFFER>           = K.C_B
 	keySeq<A.OUTLINE>          = K.C_O
 	keySeq<A.GOLINE>           = K.C_L
-	keySeq<A.GO_DECLARATION>   = K.C_G:" ":K.F12:" ":KEY.FUNCTION.12
-	keySeq<A.NEXTJUMP>         = K.A_RIGHT
-	keySeq<A.PREVJUMP>         = K.A_LEFT
+	keySeq<A.GO_DECLARATION>   = K.C_G:" ":K.F12:" ":KEY.FUNCTION.12:" ":Char(139)
+	keySeq<A.NEXTJUMP>         = K.A_RIGHT:" ":char(173)
+	keySeq<A.PREVJUMP>         = K.A_LEFT:" ":char(172)
 	keySeq<A.SAVE>             = K.C_S
-	keySeq<A.HELP>             = K.F1:KEY.FUNCTION.1
-	keySeq<A.COMPILE>          = K.F7
-	keySeq<A.RELOAD>           = K.F5
-	keySeq<A.ACTION>           = K.F10
+	keySeq<A.HELP>             = K.F1:KEY.FUNCTION.1:" ":Char(128)
+	keySeq<A.COMPILE>          = K.F7:" ":Char(134)
+	keySeq<A.RELOAD>           = K.F5:" ":Char(132)
+	keySeq<A.ACTION>           = K.F10:" ":Char(137)
 	keySeq<A.EXIT>             = K.C_E
 	keySeq<A.CLOSEBUF>         = K.C_W:" ":K.C_F4
-	keySeq<A.DIVE>             = K.F4:" ":KEY.FUNCTION.4
+	keySeq<A.DIVE>             = K.F4:" ":KEY.FUNCTION.4:" ":Char(131)
 	keySeq<A.CASEINVERT>       = K.F9
-	keySeq<A.THEME>            = K.F11:" ":KEY.FUNCTION.11
+	keySeq<A.THEME>            = K.F11:" ":KEY.FUNCTION.11:" ":Char(138)
 	keySeq<A.CANCEL>           = K.ESC:" ":K.ESC:K.ESC
-	keySeq<A.FIT.TERM>         = K.F8
+	keySeq<A.FIT.TERM>         = K.F8:" ":Char(135)
 	keySeq<A.WORD_HOKAN>       = K.C_SPACE
 	keySeq<A.SEL_EXPAND>       = K.C_D
 
@@ -213,91 +213,139 @@ Equ K.C_SPACE To          "@@"
 !! Color Palette Mapping
 EQU C.BASE03 To "8"
 EQU C.BASE02 To "0"
-EQU C.BASE01 To "10"
-EQU C.BASE00 To "11"
-EQU C.BASE0 To "12"
-EQU C.BASE1 To "14"
+EQU C.BASE01 To "2"
+EQU C.BASE00 To "1"
+EQU C.BASE0 To "6"
+EQU C.BASE1 To "3"
 EQU C.BASE2 To "7"
 EQU C.BASE3 To "15"
-EQU C.YELLOW To "3"
-EQU C.ORANGE To "9"
-EQU C.RED To "1"
+EQU C.YELLOW To "14"
+EQU C.ORANGE To "4"
+EQU C.RED To "12"
 EQU C.MAGENTA To "5"
 EQU C.VIOLET To "13"
-EQU C.BLUE To "4"
-EQU C.CYAN To "6"
-EQU C.GREEN To "2"
+EQU C.BLUE To "9"
+EQU C.CYAN To "11"
+EQU C.GREEN To "10"
 
-EQU FG.BASE3 To "30"
-EQU FG.BASE2 To "92"
-EQU FG.BASE1 To "93"
-EQU FG.BASE0 To "37"
-EQU FG.BASE00 To "90"
-EQU FG.BASE01 To "94"
-EQU FG.BASE02 To "95"
-EQU FG.BASE03 To "97"
-EQU FG.YELLOW To "33"
-EQU FG.ORANGE To "91"
-EQU FG.RED To "31"
-EQU FG.MAGENTA To "35"  
-EQU FG.VIOLET To "96"
-EQU FG.BLUE To "34"
-EQU FG.CYAN To "36"
-EQU FG.GREEN To "32"
-EQU FG.DEFAULT To "39"
+If IS.CONSOLE Then
+	FG.BASE3   = @(-37,C.BASE03)
+	FG.BASE2   = @(-37,C.BASE02)
+	FG.BASE1   = @(-37,C.BASE01)
+	FG.BASE0   = @(-37,C.BASE00)
+	FG.BASE00  = @(-37,C.BASE0)
+	FG.BASE01  = @(-37,C.BASE1)
+	FG.BASE02  = @(-37,C.BASE2)
+	FG.BASE03  = @(-37,C.BASE3)
+	FG.YELLOW  = @(-37,C.YELLOW)
+	FG.ORANGE  = @(-37,C.ORANGE)
+	FG.RED     = @(-37,C.RED)
+	FG.MAGENTA = @(-37,C.MAGENTA)
+	FG.VIOLET  = @(-37,C.VIOLET)
+	FG.BLUE    = @(-37,C.BLUE)
+	FG.CYAN    = @(-37,C.CYAN)
+	FG.GREEN   = @(-37,C.GREEN)
+	FG.DEFAULT = FG.BASE02
 
-EQU BG.BASE3 To "40"
-EQU BG.BASE2 To "102"
-EQU BG.BASE1 To "103"
-EQU BG.BASE0 To "47"
-EQU BG.BASE00 To "100"
-EQU BG.BASE01 To "104"
-EQU BG.BASE02 To "105"
-EQU BG.BASE03 To "107"
-EQU BG.YELLOW To "43"
-EQU BG.ORANGE To "101"
-EQU BG.RED To "41"
-EQU BG.MAGENTA To "45"  
-EQU BG.VIOLET To "106"
-EQU BG.BLUE To "44"
-EQU BG.CYAN To "46"
-EQU BG.GREEN To "42"
-EQU BG.DEFAULT To "49"
+	BG.BASE3   = @(-38,C.BASE03)
+	BG.BASE2   = @(-38,C.BASE02)
+	BG.BASE1   = @(-38,C.BASE01)
+	BG.BASE0   = @(-38,C.BASE00)
+	BG.BASE00  = @(-38,C.BASE0)
+	BG.BASE01  = @(-38,C.BASE1)
+	BG.BASE02  = @(-38,C.BASE2)
+	BG.BASE03  = @(-38,C.BASE3)
+	BG.YELLOW  = @(-38,C.YELLOW)
+	BG.ORANGE  = @(-38,C.ORANGE)
+	BG.RED     = @(-38,C.RED)
+	BG.MAGENTA = @(-38,C.MAGENTA)
+	BG.VIOLET  = @(-38,C.VIOLET)
+	BG.BLUE    = @(-38,C.BLUE)
+	BG.CYAN    = @(-38,C.CYAN)
+	BG.GREEN   = @(-38,C.GREEN)
+	BG.DEFAULT = BG.BASE2
+
+	SUL   = @(-15)
+	EUL   = @(-16)
+	SBOLD = @(-58)
+	EBOLD = @(-59)
+End Else
+	FG.BASE3 = CSI:"30m"
+	FG.BASE2 = CSI:"92m"
+	FG.BASE1 = CSI:"93m"
+	FG.BASE0 = CSI:"37m"
+	FG.BASE00 = CSI:"90m"
+	FG.BASE01 = CSI:"94m"
+	FG.BASE02 = CSI:"95m"
+	FG.BASE03 = CSI:"97m"
+	FG.YELLOW = CSI:"33m"
+	FG.ORANGE = CSI:"91m"
+	FG.RED = CSI:"31m"
+	FG.MAGENTA = CSI:"35m"
+	FG.VIOLET = CSI:"96m"
+	FG.BLUE = CSI:"34m"
+	FG.CYAN = CSI:"36m"
+	FG.GREEN = CSI:"32m"
+	FG.DEFAULT = FG.BASE02
+
+	BG.BASE3 = CSI:"40m"
+	BG.BASE2 = CSI:"102m"
+	BG.BASE1 = CSI:"103m"
+	BG.BASE0 = CSI:"47m"
+	BG.BASE00 = CSI:"100m"
+	BG.BASE01 = CSI:"104m"
+	BG.BASE02 = CSI:"105m"
+	BG.BASE03 = CSI:"107m"
+	BG.YELLOW = CSI:"43m"
+	BG.ORANGE = CSI:"101m"
+	BG.RED = CSI:"41m"
+	BG.MAGENTA = CSI:"45m"
+	BG.VIOLET = CSI:"106m"
+	BG.BLUE = CSI:"44m"
+	BG.CYAN = CSI:"46m"
+	BG.GREEN = CSI:"42m"
+	BG.DEFAULT = BG.BASE2
+	
+	SUL   = CSI:"4m"
+	EUL   = CSI:"24m"
+	SBOLD = CSI:"1m"
+	EBOLD = CSI:"22m"
+End
 
 !! Highlights Mapping
-	SGR.ALL.OFF = ESC:"[0m"
-	HI.COMMENT.ON = ESC:"[":FG.BLUE:"m"
-	HI.COMMENT.OFF = ESC:"[":FG.DEFAULT:"m"
-	HI.LABEL.ON = ESC:"[":FG.GREEN:"m"
-	HI.LABEL.OFF = ESC:"[":FG.DEFAULT:"m"
-	HI.SELECT.ON = ESC:"[":BG.BASE01:";":FG.BASE2:"m"
-	HI.SELECT.OFF = SGR.ALL.OFF
-	HI.STRING.ON = ESC:"[":FG.VIOLET:"m"  
-	HI.STRING.OFF = ESC:"[":FG.DEFAULT:"m"
-	HI.KEY.ON = ESC:"[1m"
-	HI.KEY.OFF = ESC:"[22m"
-	HI.NUMBER.ON = ESC:"[":FG.RED:"m"
-	HI.NUMBER.OFF = ESC:"[":FG.DEFAULT:"m"
-	HI.OP.ON = ESC:"[":FG.MAGENTA:"m"
-	HI.OP.OFF = ESC:"[":FG.DEFAULT:"m"
-	HI.FUNC.ON = ""
-	HI.FUNC.OFF = ""
-	HI.DIR.ON = ESC:"[":BG.BASE2:";":FG.CYAN:"m" 
-	HI.DIR.OFF = SGR.ALL.OFF
-	HI.DOC.ON = ESC:"[":FG.YELLOW:"m"
-	HI.DOC.OFF = SGR.ALL.OFF
-	HI.SEARCH.ON = ESC:"[":BG.YELLOW:";":FG.BASE3:"m"
-	HI.SEARCH.SEL = ESC:"[":BG.ORANGE:";":FG.BASE3:"m"
-	HI.SEARCH.OFF = SGR.ALL.OFF
-	HI.VMK.ON = ESC:"[":BG.YELLOW:";":FG.ORANGE:"m"
-	HI.VMK.OFF = SGR.ALL.OFF
-	HI.SMK.ON = ESC:"[":BG.GREEN:";":FG.ORANGE:"m"
-	HI.SMK.OFF = SGR.ALL.OFF
-	HI.STATUS.ON = ESC:"[":BG.BASE0:";":FG.BASE2:"m"
-	HI.STATUS.OFF = SGR.ALL.OFF
-	HI.SHELL.ON = ESC:"[":FG.GREEN:"m"
-	HI.SHELL.OFF = SGR.ALL.OFF
-	HI.KAKKO.ON = ESC:"[1;":BG.BASE2:";":FG.BASE02:"m"
-	HI.KAKKO.OFF = SGR.ALL.OFF
+SGR.ALL.OFF = FG.DEFAULT:BG.DEFAULT:EBOLD
+HI.COMMENT.ON = FG.BLUE
+HI.COMMENT.OFF = FG.DEFAULT
+HI.LABEL.ON = FG.GREEN
+HI.LABEL.OFF = FG.DEFAULT
+HI.SELECT.ON = BG.BASE01:FG.BASE2
+HI.SELECT.OFF = SGR.ALL.OFF
+HI.STRING.ON = FG.VIOLET
+HI.STRING.OFF = FG.DEFAULT
+HI.KEY.ON = SBOLD:FG.BASE03
+HI.KEY.OFF = EBOLD:FG.BASE03
+HI.NUMBER.ON = FG.RED
+HI.NUMBER.OFF = FG.DEFAULT
+HI.OP.ON = FG.MAGENTA
+HI.OP.OFF = FG.DEFAULT
+HI.FUNC.ON = ""
+HI.FUNC.OFF = ""
+HI.DIR.ON = BG.BASE1:FG.CYAN 
+HI.DIR.OFF = SGR.ALL.OFF
+HI.DOC.ON = FG.YELLOW
+HI.DOC.OFF = SGR.ALL.OFF
+HI.SEARCH.ON = BG.YELLOW:FG.BASE3
+HI.SEARCH.SEL = BG.ORANGE:FG.BASE3
+HI.SEARCH.OFF = SGR.ALL.OFF
+HI.VMK.ON = BG.YELLOW:FG.ORANGE
+HI.VMK.OFF = SGR.ALL.OFF
+HI.SMK.ON = BG.GREEN:FG.ORANGE
+HI.SMK.OFF = SGR.ALL.OFF
+HI.STATUS.ON = BG.BASE0:FG.BASE2
+HI.STATUS.OFF = SGR.ALL.OFF
+HI.SHELL.ON = FG.GREEN
+HI.SHELL.OFF = SGR.ALL.OFF
+HI.KAKKO.ON = SBOLD:BG.BASE1:FG.BASE03
+HI.KAKKO.OFF = SGR.ALL.OFF
 
-EQU HI.SELECT1 Lit 'ESC:"[":BG.BASE01:";":FG.BASE3:"m"'
+HI.SELECT1 = BG.BASE01:FG.BASE3

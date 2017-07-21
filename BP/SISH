@@ -1,4 +1,3 @@
-Program SISH
 **========================================================================================
 **
 **  FUNCTION
@@ -30,7 +29,7 @@ Program SISH
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.17.0 ]"
+Equ SISH.VERSION To "[ SISH v0.18.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -40,6 +39,8 @@ $IFDEF U2__UNIVERSE
 	EQU ACCOUNT.FILE To "UV.ACCOUNT"
 	EQU SAVEDLISTS.FILE To "&SAVEDLISTS&"
 	EQU STACK.FILE To "stacks"
+	
+	EQU IS.CONSOLE Lit "@TTY = 'console'"
 $ELSE
 	!! For OpenQM compatibility
 	
@@ -79,6 +80,8 @@ $ELSE
 	EQU ACCOUNT.FILE To "QM.ACCOUNTS"
 	EQU SAVEDLISTS.FILE To "$SAVEDLISTS"
 	EQU STACK.FILE To "stacks"
+	
+	EQU IS.CONSOLE Lit "@TTY = 'console'"
 $ENDIF
 
 *
@@ -129,7 +132,6 @@ EQU CRLF To CR:LF
 Equ CSI To ESC:'['
 Equ ESC.CUR.TOP To CSI:"1;2H" ;** カーソルを画面のトップに持ってくる制御
 Equ ESC.CRT.MOVE_NEXT_LINE To CRLF
-Equ ESC.CRT.CLEAR To CSI:"1;2H":CHAR(8):CSI:"0J"
 
 !! OS Switch
 Equ OS.GATES To SYSTEM(91)
@@ -315,10 +317,6 @@ Shell.Main:
 		Mat TgtFlds = ""
 	End
 	
-	
-  EQU CRT.BUFF.FLUSH Lit "ESC:'[?12l':ESC:'[?25l':crtBuff:ESC:'[?25h'" ;** <--- カーソル消すと処理が遅くなってしまう
-!! 	EQU CRT.BUFF.FLUSH Lit "crtBuff" 
-
 	Equ Depth Lit "(@CRTHIGH - 2)"
 	Equ Width Lit "(@CRTWIDE - biInfoWide)"
 	
@@ -487,7 +485,9 @@ $IFNDEF U2__UNIVERSE
 		logname = @HOSTNAME:"\":logname
 $ENDIF
 		title = account['/',DCount(account,'/'),1]:" @ ":logname:" (":System(18):")"
-		Crt CHAR(27):"]2;":title:CHAR(7):
+		If NOT(IS.CONSOLE) Then
+			Crt CHAR(27):"]2;":title:CHAR(7):
+		End
 		
 		** VOCファイルを開きなおす
 		Close VOC
@@ -620,14 +620,22 @@ AutocommanLoop.Start:
 		cmdlineRows = tmpY ;** 行数を格納
 		
 		* カーソル表示
-		crtBuff := CSI:"G":CSI:curX:"C"
-		If cmdlineRows - curY > 0 Then
-			* @(IT$CUU)が正しいエスケープシーケンスを出力しないので、VT100のシーケンス直書き
-			crtBuff := CSI:(cmdlineRows - curY):'A'
+		If IS.CONSOLE Then
+			If cmdlineRows - curY > 0 Then
+				crtBuff := @(curX,cmdlineRows - curY)
+			End Else
+				crtBuff := @(curX)
+			End
+		End Else
+			crtBuff := CSI:"G":CSI:curX:"C"
+			If cmdlineRows - curY > 0 Then
+				* @(IT$CUU)が正しいエスケープシーケンスを出力しないので、VT100のシーケンス直書き
+				crtBuff := CSI:(cmdlineRows - curY):'A'
+			End
 		End
 		
 		** CRTフラッシュ処理
-		Crt CRT.BUFF.FLUSH:
+		GoSub CRT.BUFF.FLUSH
 		
 		!! 自動的にコマンドを実行するモード
 		If bAutoCommand Then GoTo Run.Command
@@ -864,17 +872,29 @@ AutoTermSize:
 * コマンドラインクリア
 *---------------------
 Clear.Cmdline.Crt:
-	For i=1 To curY
-		crtBuff := CSI:'1A'
-	Next
-	crtBuff := CSI:'G':CSI:'2K'
-	For i=1 To cmdlineRows
-		crtBuff := CSI:'1B'
-		crtBuff := CSI:'2K'
-	Next
-	For i=1 To cmdlineRows
-		crtBuff := CSI:'1A'
-	Next
+	If IS.CONSOLE Then
+		For i=1 To curY
+			crtBuff := @(-10) ;** CUU
+		Next
+		crtBuff := @(0):@(-4)
+		For i=1 To cmdlineRows
+			crtBuff := @(-33):@(-4)
+		Next
+		For i=1 To cmdlineRows
+			crtBuff := @(-10) ;** CUU
+		Next
+	End Else
+		For i=1 To curY
+			crtBuff := CSI:'1A'
+		Next
+		crtBuff := CSI:'G':CSI:'2K'
+		For i=1 To cmdlineRows
+			crtBuff := CSI:'1B':CSI:'2K'
+		Next
+		For i=1 To cmdlineRows
+			crtBuff := CSI:'1A'
+		Next		
+	End
 Return
 
 *---------------------
@@ -1699,12 +1719,12 @@ $ENDIF
 			!! id
 			crtBuff := @(0,1+i+cmdlineRows)
 			crtBuff := id[1,nowWord.len]
-			crtBuff := ESC:"[1m"
+			crtBuff := SBOLD:FG.BASE03
 			
 			ch = id[grpCh,1]
 			If prevCh <> ch Then
 				!! アルファベット強調表示
-				crtBuff := ESC:"[":FG.ORANGE:"m":ch:ESC:"[":FG.DEFAULT:"m"
+				crtBuff := FG.RED:ch:FG.BASE03
 			End Else
 				crtBuff := ch
 			End
@@ -2043,13 +2063,15 @@ $ELSE
 	x = PTERM(2,@TRUE)
 $ENDIF
 
-	If Not(bFirstCurTop) Then
-		** 代替画面バッファ開いてる場合は閉じる
-		Crt ESC:"[?1049l"
+	If Not(IS.CONSOLE) Then
+		If Not(bFirstCurTop) Then
+			** 代替画面バッファ開いてる場合は閉じる
+			Crt ESC:"[?1049l"
+		End
+		
+		** テーマをリセット
+		Crt ESC:"]R":ESC:"[?69l"
 	End
-	
-	** テーマをリセット
-	Crt ESC:"]R":ESC:"[?69l"
 	
 	** Shellを抜ける
 	Print ""
@@ -2529,7 +2551,11 @@ CUR.TOP.OF.SCREEN:
 		Crt crtBuff:
 		bFirstCurTop = @FALSE
 	End Else
-		Crt CSI:"J":ESC.CUR.TOP:@(-3):
+		If IS.CONSOLE Then
+			Crt @(-1):
+		End Else
+			Crt CSI:"J":ESC.CUR.TOP:@(-3):
+		End
 	End
 	
 Return
@@ -2669,21 +2695,30 @@ ParseCommandLine:
 	Return
 	
 GoAltScreenBuf:
-	crtBuff := ESC:"[?1049h"
-	crtBuff := ESC:"[?1h"
-	crtBuff := ESC:"[?6h"
-	crtBuff := ESC:"[?69h"
-	crtBuff := ESC:"="
-	crtBuff := ESC:"[1;":@CRTHIGH:"r"
+	If IS.CONSOLE Then
+		crtBuff := @(-1)
+	End Else
+		crtBuff := ESC:"[?1049h"
+		crtBuff := ESC:"[?1h"
+		crtBuff := ESC:"[?6h"
+		crtBuff := ESC:"[?69h"
+		crtBuff := ESC:"="
+		crtBuff := ESC:"[1;":@CRTHIGH:"r"
+	End
 	Return
 
 BackAltScreenBuf:
-	crtBuff = ESC:"[?1l"
-	crtBuff := ESC:"[?1l"
-	crtBuff := ESC:">"
-	crtBuff := ESC:"[?12l"
-	crtBuff := ESC:"[?25h"
-	crtBuff := ESC:"[?1049l"
+	If IS.CONSOLE Then
+		Crt CSI:"2"
+		crtBuff := @(-1)
+	End Else
+		crtBuff = ESC:"[?1l"
+		crtBuff := ESC:"[?1l"
+		crtBuff := ESC:">"
+		crtBuff := ESC:"[?12l"
+		crtBuff := ESC:"[?25h"
+		crtBuff := ESC:"[?1049l"
+	End
 	Return
 
 *--------------------------------------------------------------------------
@@ -3715,20 +3750,20 @@ ProcChoiceList:
 		selected = (choiceNo = winTop+i) ;** 選択行か？
 		line = Raise(Raise(choiceOutList<winTop+i,1>))
 		crtBuff := @(winX,i+1)
-		crtBuff := If selected Then HI.SELECT1 Else CSI:FG.BASE01:";":BG.BASE2:";22m"
+		crtBuff := If selected Then HI.SELECT1 Else FG.BASE02:BG.BASE3:EBOLD
 		crtBuff := line<1>
 		If line<2> Then
-			crtBuff := CSI:FG.RED:"m"
+			crtBuff := FG.RED
 			crtBuff := line<2>
 		End
 		If line<3> Then
-			crtBuff := If selected Then HI.SELECT1 Else CSI:FG.BASE01:";":BG.BASE2:";22m"
+			crtBuff := If selected Then HI.SELECT1 Else FG.BASE02:BG.BASE3:EBOLD
 			crtBuff := line<3>
 		End
 		crtBuff := @(-4):SGR.ALL.OFF
 		i += 1
 	Repeat
-	crtBuff := ESC:"[":BG.BASE2:"m"
+	crtBuff := BG.BASE3
 	Loop While i <= winHeight
 		crtBuff := @(winX,i+1):@(-4)
 		i += 1
@@ -3736,7 +3771,7 @@ ProcChoiceList:
 	
 	!! フィルター入力欄表示
 	crtBuff := @(winX,1):SGR.ALL.OFF:@(-4):filter
-	Crt CRT.BUFF.FLUSH:
+	GoSub CRT.BUFF.FLUSH
 	
 	choiceSelection = choiceOutList.org<choiceNo>
 	
@@ -3806,7 +3841,7 @@ GetKey:
 AfterKeyWait:
 		
 		n = UniSeq(C) ;** １文字目の文字列数値表記
-		If n > 31 Then
+		If (n >= 31 And n <= 127) OR (n > 255 And n < 63616) Then
 			actNo = A.INSCHAR
 			Return
 		End
@@ -3955,7 +3990,7 @@ Enters:
 	GoSub PrintCursor
 	
 	** CRTフラッシュ処理
-	Crt CRT.BUFF.FLUSH:
+	GoSub CRT.BUFF.FLUSH
 	
 	GoSub GetKey
 	
@@ -4375,6 +4410,8 @@ InitTerminal:
 	
 !! 	prompt ''
 	
+	If IS.CONSOLE Then Return
+	
 $IFDEF U2__UNIVERSE
 	Ttyget ttys Then
 		If ttys<1,1> = 3 Then; * EMULATE mode
@@ -4396,7 +4433,7 @@ $ELSE
 		!! ECS Mode
 		x = PTERM(7,1) ;** UTF8固定
 	End
-	Execute "TERM XTERM-EEEPC"
+	Execute "TERM xterm-eeepc"
 	x = PTERM(8,8) ;** Backspace ^H
 $ENDIF
 	
@@ -4794,7 +4831,7 @@ ParseLine:
 		selection<1> = iXOffSet
 	End
 
-	HI.OFF = CSI:FG.BASE01:";":BG.BASE3:";22m"
+	HI.OFF = FG.BASE02:BG.BASE2:EBOLD
 	repTabCh = "»":Space(STDTAB-1)
 	PLine = ""
 	Old = ""
@@ -4805,13 +4842,13 @@ ParseLine:
 		If K = 1 Or K = selection<2> - iXOffSet + 1 Then
 			!! 選択終了
 			HI.Default = HI.OFF
-			HI.Light = ESC:"[":FG.BASE2:"m"
+			HI.Light = FG.BASE1
 			HI.Search = HI.SEARCH.ON
-			PLine := ESC:"[49m"
+			PLine := BG.DEFAULT
 			Old = ""
 			!! 行全体のハイライト
 			If Mask[1,1] = SI.DIRECTIVE Then
-				HI.Light = ESC:"[":FG.BASE3:"m"
+				HI.Light = FG.BASE3
 				HI.Default = HI.DIR.ON
 				PLine := HI.DIR.ON
 				Old = SI.DIRECTIVE
@@ -4820,7 +4857,7 @@ ParseLine:
 			If K = selection<1> - iXOffSet + 1 And selection<1> <> selection<2> Then
 			!! 選択開始
 			HI.Default = HI.SELECT.ON
-			HI.Light = ESC:"[":FG.BASE00:"m"
+			HI.Light = FG.BASE00
 			HI.Search = HI.SEARCH.SEL
 			PLine := HI.Default
 			Old = ""
@@ -4890,7 +4927,7 @@ ParseLine:
 			If selection<2> = BIG Then
 				PLine := HI.Light
 			End Else
-				PLine := HI.OFF:ESC:"[":FG.BASE2:"m"
+				PLine := HI.OFF:FG.BASE2
 			End
 			PLine := "↲"
 		End Else
@@ -4929,7 +4966,7 @@ PrintPage:
 PrintTextArea:
 	For I = 1 To Depth
 		Row = Top + I - 1
-		If Row > Lines Then crtBuff := ESC:"[0J"; Exit
+		If Row > Lines Then crtBuff := @(-3); Exit
 		Line = Rec<Row>
 		GoSub ParseLine
 		GoSub PrintLine
@@ -4944,9 +4981,9 @@ PrintLine:
 	!! 行情報部の色指定
 	If Row = Y Then
 		!! 現在行
-		crtBuff := CSI:FG.YELLOW:";":BG.BASE2:'m'
+		crtBuff := FG.YELLOW:BG.BASE3
 	End Else
-		crtBuff := CSI:FG.BASE1:';':BG.BASE2:'m'
+		crtBuff := FG.BASE1:BG.BASE3
 	End
 	If TgtFld Then
 		!! フィールド指定モード
@@ -4955,7 +4992,7 @@ PrintLine:
 		bShowUnderline = fldCnt > 1 And fIdx = fldCnt
 		If bShowUnderline Then
 			!! 複数フィールドの最終行に下線を入れる
-			crtBuff := ESC:'[4m'
+			crtBuff := SUL
 		End
 		If BufInfo<BI.VALUEFIX> Then
 			str = "<":fPos:",":BufInfo<BI.VALUEFIX>:",":vPos:"> "
@@ -4972,7 +5009,7 @@ PrintLine:
 		End
 		If bShowUnderline Then
 			!! 下線を消す
-			crtBuff := ESC:'[4m'
+			crtBuff := EUL
 		End
 	End Else
 		biInfoWide.lineNo = 5
@@ -5060,7 +5097,7 @@ PrintStatus:
 	
 	!! ステータスメッセージ
 	If StatusMessage >< "" Then
-		crtBuff := @(0, PY+1):ESC:"[":BG.RED:";":FG.BASE3:"m":StatusMessage:SGR.ALL.OFF:@(-4)
+		crtBuff := @(0, PY+1):BG.RED:FG.BASE3:StatusMessage:SGR.ALL.OFF:@(-4)
 		StatusMessage = ""
 	End Else
 		crtBuff := @(0, PY+1):@(-4)
@@ -5086,11 +5123,11 @@ MenuLine:
 		If ch = '' Then Exit
 		If f Then
 			If ch = 'E' And MenuLine[i,3] = "ESC" Then
-				crtBuff := ESC:"[1;":FG.BASE2:"mESC":ESC:"[22m":HI.STATUS.ON
+				crtBuff := SBOLD:FG.BASE2:"ESC":EBOLD:HI.STATUS.ON
 				f = @FALSE
 				i += 2
 			End Else If ((ch >= 'A' And ch <= 'Z') or ch = '!') Then
-				crtBuff := ESC:"[1;":FG.BASE2:"m":ch:ESC:"[22m":HI.STATUS.ON
+				crtBuff := SBOLD:FG.BASE2:ch:EBOLD:HI.STATUS.ON
 				f = @FALSE
 			End Else 
 				crtBuff := ch
@@ -5110,7 +5147,7 @@ MenuLine:
 *  PromptLine
 *-----------------------------------------------------------------------
 PromptLine: 
-	Crt @(0,PY+1):ESC:"[":BG.BASE2:"m":PromptLine:SGR.ALL.OFF:@(-4):
+	Crt @(0,PY+1):BG.BASE3:PromptLine:SGR.ALL.OFF:@(-4):
 	Redraw.StatusLine = @TRUE
 	Return
 *-----------------------------------------------------------------------
@@ -5918,7 +5955,7 @@ InputBox:
 					!! エディタモードなら再描画
 					CurBuf = prevCurBuf
 					GoSub PrintTextArea
-					Crt CRT.BUFF.FLUSH:
+					GoSub CRT.BUFF.FLUSH
 					CurBuf = MAXWINDOWS + 1
 				End
 				
@@ -5961,7 +5998,7 @@ Draw.InputBox:
 	If Len(Rec) >= X Then crtBuff := @(-9,LenDP(Rec[X,HUGE])) ;** 実際のカーソル位置に戻す
 	 
 	** CRTフラッシュ処理
-	Crt CRT.BUFF.FLUSH:
+	GoSub CRT.BUFF.FLUSH
 	
 	Return
 
@@ -6127,7 +6164,12 @@ Act.Up:
 		If Y < Top + SCROLLMERGINE And Top > 1 Then
 			** 高速１行上スクロール
 			Top -= 1
-			crtBuff := ESC:"[1;":Depth:"r":ESC:"[T":ESC:"[1;":@CRTHIGH:"r"
+			If IS.CONSOLE Then
+				crtBuff := @(0,PY):@(-3):@(0,0):@(-17)
+				Redraw.StatusLine = @TRUE
+			End Else
+				crtBuff := ESC:"[1;":Depth:"r":ESC:"[T":ESC:"[1;":@CRTHIGH:"r"
+			End
 			Redraw<-1> = Top:@FM:prevY:@FM:Y
 		End
 		moveY = True
@@ -6152,7 +6194,12 @@ Act.Down:
 		If Y = bottomY - SCROLLMERGINE Then
 			** 高速１行下スクロール
 			Top += 1
-			crtBuff := ESC:"[1;":Depth:"r":ESC:"[S":ESC:"[1;":@CRTHIGH:"r"
+			If IS.CONSOLE Then
+				crtBuff := @(0,PY):@(-3):@(0,0):@(-18)
+				Redraw.StatusLine = @TRUE
+			End Else
+				crtBuff := ESC:"[1;":Depth:"r":ESC:"[S":ESC:"[1;":@CRTHIGH:"r"
+			End
 			Redraw<-1> = bottomY:@FM:prevY:@FM:Y
 		End
 		moveY = True
@@ -6401,7 +6448,19 @@ Act.End:
 Act.SelHome:
 	GoSub SelectionStart
 Act.Home:
-	GoSub GoToRangeStart
+	!! 選択継続中でカーソルと範囲選択終了の位置が違う場合は
+	!! カーソルを範囲先端に持っていく
+	If BufInfo<BI.BLOCKSTART> <> Y:@VM:X And keepSelection Then
+		!! Go To Range Start
+		GoSub GetSelBlock
+		Y = blockStart<1>
+		X = blockStart<2>
+		BufInfo<BI.BLOCKEND> = BufInfo<BI.BLOCKSTART>
+	End
+	If Not(keepSelection) Then
+		Redraw = REDRAW.ALL
+	End
+	BufInfo<BI.BLOCKEND> = ""
 	
 	** 論理行頭を探す
 	logicalX = 1
@@ -6499,7 +6558,19 @@ Act.PrevHalf:
 Act.SelTop:
 	GoSub SelectionStart
 Act.Top:
-	GoSub GoToRangeStart
+	!! 選択継続中でカーソルと範囲選択終了の位置が違う場合は
+	!! カーソルを範囲先端に持っていく
+	If BufInfo<BI.BLOCKSTART> <> Y:@VM:X And keepSelection Then
+		!! Go To Range Start
+		GoSub GetSelBlock
+		Y = blockStart<1>
+		X = blockStart<2>
+		BufInfo<BI.BLOCKEND> = BufInfo<BI.BLOCKSTART>
+	End
+	If Not(keepSelection) Then
+		Redraw = REDRAW.ALL
+	End
+	BufInfo<BI.BLOCKEND> = ""
 	
 	Y = 1
 	X = 1
@@ -7102,7 +7173,7 @@ Act.ShowOutline:
 		End
 	Next
 
-	title = ESC:"[1;":FG.BASE3:";":BG.YELLOW:"m Outline"
+	title = SBOLD:FG.BASE3:BG.YELLOW:" Outline"
 	tmpList = Fields(Convert(@VM,",",choiceList),",",2)
 	Locate Y In tmpList By "AR" Setting choiceNo Else choiceNo -= 1
 	
@@ -7162,7 +7233,7 @@ Act.ShowWordHokan:
 		GoSub ParseLine
 		GoSub PrintLine
 		GoSub PrintCursor
-		Crt CRT.BUFF.FLUSH:
+		GoSub CRT.BUFF.FLUSH
 		
 	End
 	
@@ -7240,7 +7311,7 @@ Core.ShowWordHokan:
 
 	!! 選択リストボックス初期化
 	choiceNo = 1
-	title = ESC:"[1;":FG.BASE3:";":BG.YELLOW:"m Words"
+	title = SBOLD:FG.BASE3:BG.YELLOW:" Words"
 	GoSub InitChoiceList
 	
 	filter = currentWord
@@ -7855,7 +7926,7 @@ Act.ShowBuffList:
 		End Case
 		choiceList<-1> = dispStr
 	Next
-	title = CSI:"1;":FG.BASE3:";":BG.BLUE:"m Choice Buffer"
+	title = SBOLD:FG.BASE3:BG.BLUE:" Choice Buffer"
 	choiceNo = If DCount(choiceList,@FM) < 2 Then 1 Else 2 ;**   !! 初期値は１つ前のものにする
 	
 	!! 選択リストボックス初期化
@@ -8563,7 +8634,7 @@ Set.Theme:
 		!! テーマ名の表示
 		popupX = Int(@CRTWIDE/2)
 		popupY = Int(@CRTHIGH/2) - 3
-		crtBuff := ESC:"[":BG.BASE2:";":FG.BASE00:"m"
+		crtBuff := BG.BASE2:FG.BASE00
 		crtBuff := @(popupX-12,popupY)  :"--------- Theme ---------"
 		crtBuff := @(popupX-12,popupY+1):"|                       |"
 		crtBuff := @(popupX-12,popupY+2):"|                       |"
@@ -8756,6 +8827,14 @@ $IFNDEF U2__UNIVERSE
 $ENDIF
 Return
 
+** 画面更新 (in: crtBuff)
+CRT.BUFF.FLUSH:
+	If IS.CONSOLE Then
+		Crt @(-32):crtBuff:@(-31):
+	End Else
+		Crt CSI:'?12l':CSI:'?25l':crtBuff:CSI:'?25h':
+	End
+Return
 End
 *
 * Local variables:
