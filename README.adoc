@@ -42,7 +42,7 @@ image:resources/Shell.png[Overview]
 
 == セットアップ ==
 
-=== For Windows
+=== For Windows (ローカル)
 
 QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタマイズを行うとより使いやすくなります。
 
@@ -54,9 +54,9 @@ kbd:[Ctrl+カーソル] で単語単位の移動、kbd:[Shift+カーソル]で�
 link:https://autohotkey.com/[AutoHotKey]をダウンロードします。 +
 link:AutoHotKey.ahk[AutoHotKey.ahk]を読み込ませます。
 
-=== For Linux or Windows
+=== For Linux or Windows　(リモート接続)
 
-.ターミナルエミュレータ（クライアント環境）のダウンロード
+==== ターミナルエミュレータ（クライアント環境）のダウンロード
 
 link:http://ice.hotmint.com/putty/[putty GDI] をダウンロードします。 +
 同梱のlink:putty.ini[putty.ini]をputty.exeと同階層に配置します。
