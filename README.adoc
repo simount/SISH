@@ -16,7 +16,6 @@ image:resources/Shell.png[Overview]
 * VOCに登録されている単語の入力補完機能によりミスが少なく迅速な入力が可能となります。 +
 (VOCと入力補完の相性はとても良いです)
 * 一度入力したコマンドはコマンド履歴から検索する事が出来ます。 (kbd:[Ctrl+R])
-* ターミナルサイズを取得して自動的に `TERM` コマンドを実行する機能。 (kbd:[F8])　※ターミナルクライアント利用時のみ
 * 大文字小文字反転入力のON/OFF切り替え。 (kbd:[F9])
 * 実行時間計測モード `.T`
 
@@ -27,11 +26,10 @@ image:resources/Shell.png[Overview]
   ** アウトライン一覧を表示して指定ラベルにジャンプ (kbd:[Ctrl+O])
   ** 変数宣言元にジャンプ (kbd:[Ctrl+G])
   ** ジャンプ前のカーソル位置に戻る (kbd:[Alt+←] , kbd:[Alt+→])
-* マルチバリューを改行区切りで編集出来ます。
-* マルチバッファ機能により複数ファイルの編集状態を維持できます。
+* マルチバリューを改行区切りでエディタ編集出来ます。
 
 ==== その他
-* プロジェクタに移すときに kbd:[F12] １つで白背景モードに配色を切り替えます。
+* プロジェクタに移すときに kbd:[F12] １つで白背景モードに配色を切り替えます。(qm.exe非対応)
 * コマンドラインとエディタ共にカーソル移動や範囲選択によるコピー＆ペーストはWindowsのキーバインドで操作できます。
 （設定ファイルにより自分好みにキーバインドに変更可能）
 
@@ -42,32 +40,9 @@ image:resources/Shell.png[Overview]
 
 == セットアップ ==
 
-=== For Windows (ローカル)
-
-QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタマイズを行うとより使いやすくなります。
-
-色の設定 +
-link:base16-eighties.reg[base16-eighties.reg]をダブルクリックでインポート。
-(cmd.exeから起動した場合のみ適応されます)
-
-kbd:[Ctrl+カーソル] で単語単位の移動、kbd:[Shift+カーソル]で範囲選択を利用する場合。 +
-link:https://autohotkey.com/[AutoHotKey]をダウンロードします。 +
-link:AutoHotKey.ahk[AutoHotKey.ahk]を読み込ませます。
-
-=== For Linux or Windows　(リモート接続)
-
-==== ターミナルエミュレータ（クライアント環境）のダウンロード
-
-link:http://ice.hotmint.com/putty/[putty GDI] をダウンロードします。 +
-同梱のlink:putty.ini[putty.ini]をputty.exeと同階層に配置します。
-
-NOTE: 他のターミナルエミュレータでもxtermの制御シーケンスが送れれば、設定ファイルの修正で概ね動作可能です。 +
-詳しくは、<<sec_customize>>を参照。
-
 === SISHのインストール 
 
-コンパイル済みオブジェクトをダウンロードしてグローバルカタログすることで
-いつでも利用できるようになります。
+コンパイル済みオブジェクトをダウンロードしてグローバルカタログすることで利用できるようになります。
 
 ==== OpenQM
 
@@ -95,6 +70,31 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
 以下のコマンドで起動します
 
     >*SISH
+
+=== クライアント端末側の設定
+
+==== ローカル接続 For Windows
+
+QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタマイズを行うとより使いやすくなります。
+
+色の設定 +
+link:base16-eighties.reg[base16-eighties.reg]をダブルクリックでインポート。 +
+(cmd.exeのデフォルト設定を書き換えます。スタートメニューのQM Consoleに適応するにはqm.exeへのショートカットを再度作成する必要があります。）
+
+kbd:[Ctrl+カーソル] で単語単位の移動、kbd:[Shift+カーソル]で範囲選択を利用する場合。 +
+link:https://autohotkey.com/[AutoHotKey]をダウンロードします。 +
+link:AutoHotKey.ahk[AutoHotKey.ahk]を読み込ませます。
+
+==== リモート接続　For Windows
+
+.ターミナルエミュレータ（クライアント端末）のダウンロード
+
+link:http://ice.hotmint.com/putty/[putty GDI] をダウンロードします。 +
+同梱のlink:putty.ini[putty.ini]をputty.exeと同階層に配置します。
+
+NOTE: 他のターミナルエミュレータでもxtermの制御シーケンスが送れれば、設定ファイルの修正で概ね動作可能です。 +
+詳しくは、<<sec_customize>>を参照。
+
 
 == 機能 ==
 
@@ -127,7 +127,7 @@ SISHシェル起動時や `LOGTO` によるアカウント移動時にそのコ�
 
 kbd:[F9] キーでON/OFFを切り替えます
 
-==== カラーテーマの切替機能 ====
+==== カラーテーマの切替機能(xtermのみ) ====
 
 kbd:[F11] キーでカラーテーマを切り替える事ができます。(OSCによるカラーパレット変更に対応している端末のみ) +
 パレットは以下のサイトのSolarized-lightとdarkが利用できます。  +
@@ -138,7 +138,7 @@ http://ethanschoonover.com/solarized
 kbd:[F8] キーでターミナルクライアントのサイズを取得してサイズが違っていた場合に
 新しく取得したサイズで `TERM` コマンドを自動的に実行します。
 
-==== クリップボード ====
+==== クリップボード(xtermのみ) ====
 
 コピー時にローカル端末のクリップボードに内容を送信します。(OSC52に対応している端末) +
 link:https://cirw.in/blog/bracketed-paste[Bracketed Paste Mode] に対応しています。
@@ -498,7 +498,7 @@ kbd:[Ctrl+F4] | バッファを閉じる
 
 === ターミナルエミュレータ ===
 
-`SISH` はxterm系の制御シーケンスが理解できるターミナルエミュレータを利用する必要があります。
+`SISH` はxterm系の制御シーケンスが理解できるターミナルエミュレータの利用を推奨しています。
 
 - mintty
 minttyは link:https://cygwin.com/index.html[Cygwin]やlink:https://msys2.github.io/[MSYS2]から利用する事が出来ます。 +
@@ -508,7 +508,7 @@ Build 15063 からLinux版OpenQMが動作するようになりました。
 
 NOTE: Windows版DBへ接続するときはクライアントから `telnet -E localhost 4242` で接続(-Eを付ける必要あり)
 
-また、他にも以下の端末で動作はしますが、細かい箇所が未確認です。
+また、他にも以下の端末で動作はしますが、細かい箇所は未確認です。
 
 - link:https://help.gnome.org/users/gnome-terminal/stable/[GNOME Terminal](Linux)
 - link:https://www.iterm2.com/[iTurm2](Mac)
