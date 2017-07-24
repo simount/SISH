@@ -145,7 +145,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.SEL_UP>           = K.S_UP:" ":char(158)
 	keySeq<A.SEL_DOWN>         = K.S_DOWN:" ":char(159)
 	keySeq<A.SEL_HOME>         = K.S_HOME:" ":char(160)
-	keySeq<A.SEL_END>          = K.S_END:" ":char(161)
+	keySeq<A.SEL_END>          = K.S_END:" ":char(175)
 	keySeq<A.SEL_NEXTWORD>     = K.C_S_RIGHT:" ":char(162)
 	keySeq<A.SEL_PREVWORD>     = K.C_S_LEFT:" ":char(163)
 	keySeq<A.SEL_NEXTSTMT>     = K.C_S_DOWN:" ":char(164)
@@ -173,8 +173,8 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.COMMENT>          = K.C_UNDERBAR:" ":K.C_S_1
 	keySeq<A.CUT>              = K.C_X
 	keySeq<A.COPY>             = K.C_C
-	keySeq<A.SEND_PASTE>       = K.C_V:" ":K.C_F2
-	keySeq<A.PASTE_LOCAL>      = K.A_V:" ":K.S_F2
+	keySeq<A.SEND_PASTE>       = K.C_V
+	keySeq<A.PASTE_LOCAL>      = K.A_V:" ":K.C_F2:" ":Char(141)
 	keySeq<A.UNDO>             = K.C_Z
 	keySeq<A.REDO>             = K.C_Y
 	keySeq<A.SEL_ALL>          = K.C_A
@@ -196,11 +196,11 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.EXIT>             = K.C_E
 	keySeq<A.CLOSEBUF>         = K.C_W:" ":K.C_F4
 	keySeq<A.DIVE>             = K.F4:" ":KEY.FUNCTION.4:" ":Char(131)
-	keySeq<A.CASEINVERT>       = K.F9
+	keySeq<A.CASEINVERT>       = K.F9:" ":KEY.FUNCTION.9:" ":Char(136)
 	keySeq<A.THEME>            = K.F11:" ":KEY.FUNCTION.11:" ":Char(138)
 	keySeq<A.CANCEL>           = K.ESC:" ":K.ESC:K.ESC
 	keySeq<A.FIT.TERM>         = K.F8:" ":Char(135)
-	keySeq<A.WORD_HOKAN>       = K.C_SPACE
+	keySeq<A.WORD_HOKAN>       = K.C_SPACE:" ":Char(174)
 	keySeq<A.SEL_EXPAND>       = K.C_D
 
 **

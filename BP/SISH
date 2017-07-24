@@ -15,7 +15,7 @@
 **
 **  DATE
 **
-**    2017/05/23
+**    2017/07/24
 **  
 **  AUTHOR
 **    
@@ -29,7 +29,7 @@
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.18.0 ]"
+Equ SISH.VERSION To "[ SISH v0.18.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -5880,6 +5880,13 @@ Keys:
 *--------------------------------------------------------------------------
 InputBox:
 
+	If IS.CONSOLE Then
+		Prompt ""
+		Input out = inputBox
+		inputBox = out
+		Return
+	End
+
 	prevCurBuf = CurBuf
 	CurBuf = MAXWINDOWS + 1
 		
@@ -7798,10 +7805,15 @@ Act.Copy:
 	
 	GoSub GET.SELECTION.STRING
 	
-	If selString >< "" Then
-		clipboard = selString ;** ローカルクリップボードに格納
+	If selString = "" Then
+		!! 選択がなければ行選択にする
+		selString = Rec<Y>:@FM
+	End
+	
+	clipboard = selString ;** ローカルクリップボードに格納
 		
-		!! リモート端末に送信する
+	!! リモート端末に送信する
+	If Not(IS.CONSOLE) Then
 $IFDEF U2__UNIVERSE
 		result = ""
 		retCode = ENCODE("Base64A", "1", selString, "1", result, "1")
@@ -7809,7 +7821,6 @@ $ELSE
 		result = OCONV(OCONV(selString,"XUTF8"), "B64")
 $ENDIF
 		Crt ESC:"]52;;":result:CHAR(7):
-		
 	End
 	
 	Return
@@ -7823,6 +7834,8 @@ Act.Cut:
 	If BufInfo<BI.BLOCKSTART> Then
 		!! 選択中の物は削除する
 		GoSub Act.DelCh
+	End Else
+		GoSub Act.DelLine
 	End
 	
 	Return
