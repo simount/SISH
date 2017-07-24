@@ -85,14 +85,14 @@ kbd:[Ctrl+カーソル] で単語単位の移動、kbd:[Shift+カーソル]で�
 link:https://autohotkey.com/[AutoHotKey]をダウンロードします。 +
 link:AutoHotKey.ahk[AutoHotKey.ahk]を読み込ませます。
 
-==== リモート接続　For Windows
+==== リモート接続 For Windows
 
 .ターミナルエミュレータ（クライアント端末）のダウンロード
 
 link:http://ice.hotmint.com/putty/[putty GDI] をダウンロードします。 +
 同梱のlink:putty.ini[putty.ini]をputty.exeと同階層に配置します。
 
-NOTE: 他のターミナルエミュレータでもxtermの制御シーケンスが送れれば、設定ファイルの修正で概ね動作可能です。 +
+NOTE: Linuxや他のターミナルエミュレータでもxtermの制御シーケンスに対応していれば、設定ファイルの修正で概ね動作可能です。 +
 詳しくは、<<sec_customize>>を参照。
 
 
@@ -127,7 +127,7 @@ SISHシェル起動時や `LOGTO` によるアカウント移動時にそのコ�
 
 kbd:[F9] キーでON/OFFを切り替えます
 
-==== カラーテーマの切替機能(xtermのみ) ====
+==== カラーテーマの切替機能(リモート接続のみ) ====
 
 kbd:[F11] キーでカラーテーマを切り替える事ができます。(OSCによるカラーパレット変更に対応している端末のみ) +
 パレットは以下のサイトのSolarized-lightとdarkが利用できます。  +
@@ -138,7 +138,7 @@ http://ethanschoonover.com/solarized
 kbd:[F8] キーでターミナルクライアントのサイズを取得してサイズが違っていた場合に
 新しく取得したサイズで `TERM` コマンドを自動的に実行します。
 
-==== クリップボード(xtermのみ) ====
+==== クリップボード(リモート接続のみ) ====
 
 コピー時にローカル端末のクリップボードに内容を送信します。(OSC52に対応している端末) +
 link:https://cirw.in/blog/bracketed-paste[Bracketed Paste Mode] に対応しています。
@@ -209,7 +209,7 @@ __FieldId__:: 指定フィールドを辞書に基づいて編集するモード
 Conversion指定があれば保存時に自動的に変換されます。マルチバリューの場合はマルチバリュー編集モードになります。
 ****
 
-デフォルトのキー操作はWindowsの一般的なテキストエディタにできるだけ合わせています。
+デフォルトのキー操作はWindowsの一般的なテキストエディタ(厳密にはChrome Developer Tools)にできるだけ合わせています。
 
 ===== バッファ
 マルチバッファ機能にて同時に複数のItemの編集状態を保持できます。  +
