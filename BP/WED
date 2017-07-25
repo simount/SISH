@@ -1,0 +1,105 @@
+PROGRAM WED
+** Windowsで外部エディタを開いて編集するプログラム
+** エディタプロセスが終了した時に保存されているテンポラリファイルをテーブルに書き戻します。
+** よって、シングルプロセスで起動するエディタの利用を想定しています。
+** OpenQMのみ
+$CATALOGUE WED GLOBAL
+
+Equ EXT.EDITOR.CMD To 'notepad' ;** エディタとして起動するプログラム
+
+$INCLUDE SYSCOM KEYS.H
+
+Get(Arg.) file Then
+	Get(Arg.) item Then
+		!! 引数から
+		slist = item
+		Loop
+			Get(Arg.) item Else Exit
+			slist<-1> = item
+		Repeat
+	End Else
+		!! 選択リスト#0から
+		ReadList slist
+	End
+End Else
+	Print "Usage:"
+	Print "  WED file [item]"
+	Stop
+End
+
+For Each item In slist
+	GoSub ProcOneFile
+Next item
+
+Stop ;** 正常終了
+
+** 1ファイルの処理
+ProcOneFile:
+
+newMode = @FALSE ;** 新規フラグ
+
+Open file To fp Else Stop "Cannot Open -> ":file
+Read rec From fp,item Else
+	!! New File
+	newMode = @TRUE
+	rec = ""
+End
+
+!! 編集対象
+tempPath = SYSTEM(38):"\WED":@USERNO
+tempPath.item = tempPath:"\":file:" ":item
+
+!! mkdir
+a = OSPATH(tempPath,14)
+
+!! Write
+OpenSeq tempPath.item Encoding "UTF8" To fpTemp Else Create fpTemp Else Abort
+WriteSeq Change(rec,@FM,Char(13):Char(10)) To fpTemp Else Abort
+WEOFSeq fpTemp
+CloseSeq fpTemp
+
+!! オリジナルを保存
+orgRec = rec
+
+!! 外部エディタ起動
+cmd = EXT.EDITOR.CMD:" ":DQuote(tempPath.item)
+Print cmd
+OS.EXECUTE cmd
+
+!! 編集対象をリード
+OpenSeq tempPath.item Encoding "UTF8" To fpTemp Else Abort
+newRec = ""
+Loop
+	ReadSeq line From fpTemp Else Exit
+	newRec<-1> = line
+Repeat
+CloseSeq fpTemp
+
+If orgRec # newRec Then
+	!! すでに更新があれば同期モードとみなす
+	ReadU rec From fp,item Then
+		If orgRec # rec Then
+			Print "対象アイテムがすでに更新されています。変更を反映しますか (y/n) ":
+			Input a
+			If Not(a ~= "Y") Then Return
+		End
+	End Else
+		If Not(newMode) Then
+			Print "対象アイテムが削除されています。変更を反映しますか (y/n) ":
+			Input a
+			If Not(a ~= "Y") Then Return
+		End
+		newMode = @TRUE
+	End
+	
+	!! 更新
+	Write newRec To fp,item
+	Print OConv(EPOCH(),"E-YMDTS"):" ":(If newMode Then "Inserted" Else "Updated"):" ":file:" ":item
+End
+
+!! Directory毎削除
+OSDelete tempPath
+
+Return
+		
+End
