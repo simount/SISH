@@ -29,7 +29,7 @@
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.18.1 ]"
+Equ SISH.VERSION To "[ SISH v0.18.2 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -641,6 +641,8 @@ AutocommanLoop.Start:
 		If bAutoCommand Then GoTo Run.Command
 		If bAutoEditor Then bAutoEditor = @FALSE; GoTo Launch.Editor
 		
+Shell.KeyLoop.Bef.GetKey:
+		
 		prevC = C ;** 前回の入力文字を保持
 		
 		!! キー入力待ち
@@ -822,6 +824,12 @@ Launch.Editor:
 					If Not(bFirstCurTop) Then
 						!! 入力補完処理
 						GoSub TAB.HOKAN
+					End Else
+						If actNo = A.INSCHAR Then
+							!! 描画高速化
+							Crt @(-19):C:
+							GoTo Shell.KeyLoop.Bef.GetKey
+						End
 					End
 				End
 			
@@ -3973,11 +3981,11 @@ $IFDEF U2__UNIVERSE
 			ch = KeyIn()
 			Return
 		End
-		Nap 50 ;** 50ms * 4 = 200ms
+		Nap 25 ;** 50ms * 4 = 100ms
 	Next xxx
 	ch = ""
 $ElSE
-	ch = KeyIn(0.2)
+	ch = KeyIn(0.1)
 $ENDIF
 	Return
 
@@ -7813,7 +7821,9 @@ Act.Copy:
 	clipboard = selString ;** ローカルクリップボードに格納
 		
 	!! リモート端末に送信する
-	If Not(IS.CONSOLE) Then
+	If IS.CONSOLE Then
+		GoSub ToWinClip
+	End Else
 $IFDEF U2__UNIVERSE
 		result = ""
 		retCode = ENCODE("Base64A", "1", selString, "1", result, "1")
@@ -8576,6 +8586,8 @@ Act.SwitchTheme:
 
 Set.Theme:
 
+	If IS.CONSOLE Then Return
+
 	crtBuff = ""
 	
 	Begin Case
@@ -8837,6 +8849,25 @@ $IFNDEF U2__UNIVERSE
 		Repeat
 		CloseSeq fp
 	End
+$ENDIF
+Return
+
+** Windowsのクリップボード
+ToWinClip:
+$IFNDEF U2__UNIVERSE
+  TEMP.PATH = SYSTEM(38):"\SISH.CLIP.":@USERNO
+
+	OpenSeq TEMP.PATH Encoding "UTF8" To fp Else Create fp Else Abort "Cannot create temp file -> ":TEMP.PATH
+	
+	batch = Change(clipboard,@FM,CHAR(13):CHAR(10))
+	WriteBlk batch To fp Else Abort "Cannot Write"
+	WEOFSeq fp
+	CloseSeq fp
+	
+	OS.Execute "clip < ":TEMP.PATH Silent
+	
+	OSDelete TEMP.PATH
+	
 $ENDIF
 Return
 
