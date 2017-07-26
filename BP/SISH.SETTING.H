@@ -150,7 +150,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.SEL_PREVWORD>     = K.C_S_LEFT:" ":char(163)
 	keySeq<A.SEL_NEXTSTMT>     = K.C_S_DOWN:" ":char(164)
 	keySeq<A.SEL_PREVSTMT>     = K.C_S_UP:" ":char(165)
-	keySeq<A.SEL_NEXTPAGE>     = K.S_PGDOWN:" ":char(166)
+	keySeq<A.SEL_NEXTPAGE>     = K.S_PGDOWN:" ":char(151)
 	keySeq<A.SEL_PREVPAGE>     = K.S_PGUP:" ":char(167)
 	keySeq<A.SEL_NEXTHALF>     = K.C_S_PGDOWN:" ":char(168)
 	keySeq<A.SEL_PREVHALF>     = K.C_S_PGUP:" ":char(169)
@@ -162,7 +162,7 @@ Equ K.C_SPACE To          "@@"
 !! Editor Input
 	keySeq<A.NEWLINE>          = K.ENTER
 	keySeq<A.TAB>              = K.TAB
-	keySeq<A.SHIFT_TAB>        = K.SHIFT_TAB
+	keySeq<A.SHIFT_TAB>        = K.SHIFT_TAB:" ":Char(150)
 	keySeq<A.INSVMC>           = K.C_9
 	keySeq<A.INSSMC>           = K.C_8
 	keySeq<A.INSTMC>           = K.C_1
@@ -180,7 +180,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.SEL_ALL>          = K.C_A
 	keySeq<A.SEARCH>           = K.C_F
 	keySeq<A.REPEAT>           = K.F3:" ":Char(130)
-	keySeq<A.REVERSE>          = K.S_F3
+	keySeq<A.REVERSE>          = K.S_F3:" ":Char(166)
 	keySeq<A.REPLACE>          = K.C_R
 	keySeq<A.BUFFER>           = K.C_B
 	keySeq<A.OUTLINE>          = K.C_O

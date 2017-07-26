@@ -29,7 +29,7 @@
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.18.2 ]"
+Equ SISH.VERSION To "[ SISH v0.18.3 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -4454,13 +4454,13 @@ InsMenu:
 	GoSub MenuLine
 	C = UpCase(C)
 	Begin Case
-		Case Ok = "J"
+		Case C = "J"
 			GoSub Join
-		Case Ok = "C"
+		Case C = "C"
 			GoSub Act.InsCommentOut
-		Case Ok = "O"
+		Case C = "O"
 			GoSub DoOConv
-		Case Ok = "I"
+		Case C = "I"
 			GoSub DoIConv
 		Case C = "D"
 			InsBuffer = Date()
@@ -7854,8 +7854,13 @@ Act.Cut:
 * Act.SendRemotePasteCmd
 
 Act.SendRemotePasteCmd:
-	!! リモート端末のクリップボードから取得を要求
-	Crt ESC:"]52;0;?":CHAR(7):
+	If IS.CONSOLE Then
+		GoSub FromWinClip
+		GoTo Act.PasteLocal
+	End Else
+		!! リモート端末のクリップボードから取得を要求
+		Crt ESC:"]52;0;?":CHAR(7):
+	End
 	keepSelection = True
 	Return
 	
@@ -8855,7 +8860,7 @@ Return
 ** Windowsのクリップボード
 ToWinClip:
 $IFNDEF U2__UNIVERSE
-  TEMP.PATH = SYSTEM(38):"\SISH.CLIP.":@USERNO
+	TEMP.PATH = SYSTEM(38):"\SISH.CLIP.":@USERNO
 
 	OpenSeq TEMP.PATH Encoding "UTF8" To fp Else Create fp Else Abort "Cannot create temp file -> ":TEMP.PATH
 	
@@ -8864,8 +8869,29 @@ $IFNDEF U2__UNIVERSE
 	WEOFSeq fp
 	CloseSeq fp
 	
-	OS.Execute "clip < ":TEMP.PATH Silent
+	OS.Execute "chcp 65001 & clip < ":TEMP.PATH Silent
 	
+	OSDelete TEMP.PATH
+	
+$ENDIF
+Return
+
+FromWinClip:
+$IFNDEF U2__UNIVERSE
+  TEMP.PATH = SYSTEM(38):"\SISH.CLIP.":@USERNO
+	
+	OS.Execute 'mshta.exe "vbscript:Execute("str=window.clipboardData.getData(""text""):CreateObject(""Scripting.FileSystemObject"").GetStandardStream(1,true).Write(str^&""""):close")" > ':TEMP.PATH
+
+	clipboard = ""
+	OpenPath SYSTEM(38) To fp Then
+		Read clipboard Encoding "UTF16.L" From fp,"SISH.CLIP.":@USERNO Then
+			If Count(clipboard,@FM) >= 1 Then
+				!! Readで最後の改行が消えるQMのバグに対応(1行だけのコピーのみおかしい)
+				clipboard := @FM
+			End
+		End
+	End
+
 	OSDelete TEMP.PATH
 	
 $ENDIF

@@ -16,7 +16,6 @@ SendMode,Input
 ^+Left::Send,!{F12}
 ^+Down::Send,+{F1}
 ^+Up::Send,+{F2}
-+PgDn::Send,+{F3}
 +PgUp::Send,+{F4}
 ^+PgDn::Send,+{F5}
 ^+PgUp::Send,+{F6}
@@ -25,7 +24,8 @@ SendMode,Input
 !Left::Send,+{F9}
 !Right::Send,+{F10}
 ^Space::Send,+{F11}
-^v::Send,^{F2}
++Tab::Send,^{F11}
++PgDn::Send,^{F12}
 #IfWinActive
 
 ; minttyでペーストをリマップ Ctrl+v -> Ctrl+Shift+v
