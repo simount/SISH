@@ -104,6 +104,7 @@ Equ K.C_K To              "@K"
 Equ K.C_L To              "@L"
 Equ K.C_N To              "@N"
 Equ K.C_O To              "@O"
+Equ K.C_P To              "@P"
 Equ K.C_R To              "@R"
 Equ K.C_S To              "@S"
 Equ K.C_T To              "@T"
@@ -130,8 +131,8 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.END>              = K.END:" ":char(210):" ":KEY.MOVE.CURSOR.TO.LAST.LINE
 	keySeq<A.NEXTPAGE>         = K.PGDOWN:" ":char(208)
 	keySeq<A.PREVPAGE>         = K.PGUP:" ":char(207)
-	keySeq<A.NEXTHALF>         = K.C_PGDOWN:" ":char(214)
-	keySeq<A.PREVHALF>         = K.C_PGUP:" ":char(215)
+	keySeq<A.NEXTHALF>         = K.C_PGDOWN:" ":char(215)
+	keySeq<A.PREVHALF>         = K.C_PGUP:" ":char(214)
 	keySeq<A.NEXTWORD>         = K.C_RIGHT:" ":char(152)
 	keySeq<A.PREVWORD>         = K.C_LEFT:" ":char(153)
 	keySeq<A.NEXTSTMT>         = K.C_DOWN:" ":char(154)
@@ -158,7 +159,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.SEL_PREVCHAR>     = K.C_S_LESS
 	keySeq<A.SEL_TOP>          = K.C_S_HOME:" ":char(170)
 	keySeq<A.SEL_BOTTOM>       = K.C_S_END:" ":char(171)
-	keySeq<A.SCROLL_MID>       = K.C_N
+	keySeq<A.SCROLL_MID>       = K.C_B
 !! Editor Input
 	keySeq<A.NEWLINE>          = K.ENTER
 	keySeq<A.TAB>              = K.TAB
@@ -182,7 +183,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.REPEAT>           = K.F3:" ":Char(130)
 	keySeq<A.REVERSE>          = K.S_F3:" ":Char(166)
 	keySeq<A.REPLACE>          = K.C_R
-	keySeq<A.BUFFER>           = K.C_B
+	keySeq<A.BUFFER>           = K.C_P
 	keySeq<A.OUTLINE>          = K.C_O
 	keySeq<A.GOLINE>           = K.C_L
 	keySeq<A.GO_DECLARATION>   = K.C_G:" ":K.F12:" ":KEY.FUNCTION.12:" ":Char(139)
