@@ -187,7 +187,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.OUTLINE>          = K.C_O
 	keySeq<A.GOLINE>           = K.C_L
 	keySeq<A.GO_DECLARATION>   = K.C_G:" ":K.F12:" ":KEY.FUNCTION.12:" ":Char(139)
-	keySeq<A.NEXTJUMP>         = K.A_RIGHT:" ":char(173)
+	keySeq<A.NEXTJUMP>         = K.A_RIGHT:" ":char(148)
 	keySeq<A.PREVJUMP>         = K.A_LEFT:" ":char(172)
 	keySeq<A.SAVE>             = K.C_S
 	keySeq<A.HELP>             = K.F1:KEY.FUNCTION.1:" ":Char(128)

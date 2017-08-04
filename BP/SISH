@@ -29,7 +29,7 @@
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.18.3 ]"
+Equ SISH.VERSION To "[ SISH v0.19.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -385,7 +385,18 @@ Shell.Main:
 		Crt SISH.VERSION
 	End
 	
-	cmdStackList.DispCnt = @CRTWIDE ;** コマンドスタックリスト表示のデフォルト値
+	!! paste.exeを探す
+$IFNDEF U2__UNIVERSE
+	HAS.PASTE.EXE = @FALSE
+	If IS.CONSOLE Then
+		OS.Execute 'where /q paste.exe'
+		If OS.Error() = 0 Then
+			HAS.PASTE.EXE = @TRUE
+		End
+	End
+$ENDIF
+	
+	cmdStackList.DispCnt = "2":@FM:"19" ;** コマンドスタックリスト表示のデフォルト値
 	prevPath = "" ;** 前回のアカウントパスは一度クリアする
 	
 	** DICT.DESCの取得
@@ -742,8 +753,12 @@ Shell.KeyLoop.Bef.GetKey:
 				GoSub ACTION.CMDSTACK.INC.SEARCH
 				
 			Case C = CTRL.L
-				!! 前回の.Lを実行
-				cmdline = prevListStackCmd
+				If cmdStackPos = 1 Then
+					!! 前回の.Lを実行
+					cmdline = prevListStackCmd
+				End Else
+					cmdline = ".L"
+				End
 				bAutoCommand = @TRUE
 				bAutoEditor = @FALSE
 				
@@ -1186,25 +1201,25 @@ $ENDIF
 		id = ""
 		desc = ""
 		id<-1> = ".A"
-		desc<-1> = "コマンドの末尾にテキストを追記"
+		desc<-1> = ".An text | コマンドの末尾にテキストを追記"
 		id<-1> = ".C"
-		desc<-1> = "コマンドの文字列置換"
+		desc<-1> = ".Cn/old/new/G | コマンドの文字列置換"
 		id<-1> = ".E "
-		desc<-1> = "エディタ起動"
+		desc<-1> = ".E file item | エディタ起動"
 		id<-1> = ".G"
-		desc<-1> = "指定位置のコマンド履歴に移動"
+		desc<-1> = ".Gn | 指定位置のコマンド履歴に移動"
 		id<-1> = ".K"
-		desc<-1> = "キーシーケンス確認モード"
+		desc<-1> = ".K | キーシーケンス確認モード"
 		id<-1> = ".L"
-		desc<-1> = "コマンド履歴の一覧表示"
+		desc<-1> = ".Ln filter | コマンド履歴の一覧表示"
 		id<-1> = ".R"
-		desc<-1> = "コマンドを履歴の先頭に読み込む"
+		desc<-1> = ".Rs-e | コマンドを履歴の先頭に読み込む"
 		id<-1> = ".S "
-		desc<-1> = "コマンド履歴をVOCにPAとして保存"
+		desc<-1> = ".Ss-e name | コマンド履歴をVOCにPAとして保存"
 		id<-1> = ".T"
-		desc<-1> = "時間計測モードON/OFF"
+		desc<-1> = ".T | 時間計測モードON/OFF"
 		id<-1> = ".X"
-		desc<-1> = "コマンド履歴を実行"
+		desc<-1> = ".Xs-e | コマンド履歴を実行"
 		idU = UpCase(id)
 		
 		Locate idU<1> In slistU By "AL" Setting no Else
@@ -1573,6 +1588,7 @@ $IFNDEF U2__UNIVERSE
 					srcPath = Change(Convert("\","/",@RECORD<3>),".OUT/","/")
 					id = Last(srcPath,'/')
 					path = srcPath[1,Len(srcPath)-Len(id)]
+					rec = ""
 					OpenPath path Encoding "UTF8.A" To fp Then
 						Read rec From fp,id Then
 							maxCnt = DCount(rec,@FM)
@@ -1594,6 +1610,14 @@ $IFNDEF U2__UNIVERSE
 							Next i
 						End
 						Close fp
+					End
+					If @RECORD Matches "...SW_HANYO..." Then
+						!! SMVヘルプ
+						Open "SW_HANYO" To fp Then
+							Read rec From fp,id:".TXT" Then
+								lines = rec
+							End
+						End
 					End
 				End Else
 					lines<1> = "  コマンドの詳細は以下を参照"
@@ -2131,13 +2155,16 @@ ACTION.CMDSTACK.LIST:
 	f1 = MatchField(cmdline,"'.L'0N...",2)
 	f2 = MatchField(cmdline,"'.L'0N,0N...",4)
 	If f2 Then
-		cmdStackList.DispCnt<1> = f1 + 1
+		If f1 Then cmdStackList.DispCnt<1> = f1 + 1
 		cmdStackList.DispCnt<2> = f2 - 1
 	End Else If f1 Then
-		cmdStackList.DispCnt<1> = cmdStackPos + 1
+		cmdStackList.DispCnt<1> = If cmdStackPos = 1 Then 2 Else cmdStackPos
 		cmdStackList.DispCnt<2> = f1 - 1
 	End Else If Trim(cmdline) = ".L" Then
 		!! 前回のパラメータを利用
+		If cmdStackPos > 1 Then
+			cmdStackList.DispCnt<1> = cmdStackPos
+		End
 	End Else
 		!! List VOC
 		id = Trim(cmdline[' ',2,999])
@@ -3847,9 +3874,9 @@ GetKey:
 		C = KeyIn()
 		
 AfterKeyWait:
-		
+				
 		n = UniSeq(C) ;** １文字目の文字列数値表記
-		If (n >= 31 And n <= 127) OR (n > 255 And n < 63616) Then
+ 		If (n >= 31 And n <= 127) OR (n > 255) Then
 			actNo = A.INSCHAR
 			Return
 		End
@@ -5643,13 +5670,21 @@ ShowText:
 		MenuLine = "Up Down or Esc :" 
 		GoSub MenuLine
 		Begin Case
-			Case Upcase(C) = "U" Or actNo = A.UP
+			Case Upcase(C) = "U" Or actNo = A.PREVPAGE
 				If LTop >= LISTDEPTH Then
 					LTop -= LISTDEPTH
 					LRefresh = True
 				End
-			Case Upcase(C) = "D" Or actNo = A.DOWN
+			Case Upcase(C) = "D" Or actNo = A.NEXTPAGE
 				LTop += LISTDEPTH
+				LRefresh = True
+			Case actNo = A.UP
+				If LTop >= LISTDEPTH Then
+					LTop -= 1
+					LRefresh = True
+				End
+			Case actNo = A.DOWN
+				LTop += 1
 				LRefresh = True
 			Case actNo = A.CANCEL
 				LFin = True
@@ -5710,9 +5745,12 @@ $ENDIF
 			Close fpBP.O
 			ParseType = PARSE.BASIC
 		End Else
-			If FileName Matches "BP..." Or ItemName Matches "...'.H'" Then 
+			If FileName Matches "BP":@VM:"BP....":@VM:"....BP" Or ItemName Matches "...'.H'" Then 
 				ParseType = PARSE.BASIC
 			End
+		End
+		If UpCase(Rec<1>) Matches "PROGRAM...":@VM:"SUBROUTINE...":@VM:"FUNCTION...":@VM:"CLASS..." Then
+			ParseType = PARSE.BASIC			
 		End
 	End
 	** Paragraph
@@ -8280,7 +8318,6 @@ Act.InsTMC:
 Act.NewLine:
 	
 	editCmd = ""
-	
 	If BufInfo<BI.BLOCKSTART> Then
 		** 選択中
 		editCmd<1> = BufInfo<BI.BLOCKEND, 1>
@@ -8401,14 +8438,16 @@ Act.ShowHelp:
 $IFDEF U2__UNIVERSE
 	HelpFiles = "BASIC.HELP.JP|BASIC.HELP|SYS.HELP"
 $ELSE
-	HelpFiles = ""
+	HelpFiles = "SW_HANYO"
 $ENDIF
 	For HelpNo = 1 To Dcount(HelpFiles,"|")
 		Open Field(HelpFiles,"|",HelpNo,1) To HELPFL Then
 			Read helpRec From HELPFL, UpCase(Word) Else
 				Read helpRec From HELPFL, UpCase(Word):"()" Else
 					Read helpRec From HELPFL, Word Else
-						helpRec = ""
+						Read helpRec From HELPFL, Word:".TXT" Else
+							helpRec = ""
+						End
 					End
 				End
 			End
@@ -8878,13 +8917,19 @@ Return
 
 FromWinClip:
 $IFNDEF U2__UNIVERSE
-  TEMP.PATH = SYSTEM(38):"\SISH.CLIP.":@USERNO
+	TEMP.PATH = SYSTEM(38):"\SISH.CLIP.":@USERNO
 	
-	OS.Execute 'mshta.exe "vbscript:Execute("str=window.clipboardData.getData(""text""):CreateObject(""Scripting.FileSystemObject"").GetStandardStream(1,true).Write(str^&""""):close")" > ':TEMP.PATH
+	If HAS.PASTE.EXE Then
+		OS.Execute 'chcp 65001 > NUL & paste.exe > ':TEMP.PATH
+		enc = "UTF8"
+	End Else
+		OS.Execute 'mshta.exe "vbscript:Execute("str=window.clipboardData.getData(""text""):CreateObject(""Scripting.FileSystemObject"").GetStandardStream(1,true).Write(str^&""""):close")" > ':TEMP.PATH
+		enc = "UTF16.L"
+	End
 
 	clipboard = ""
 	OpenPath SYSTEM(38) To fp Then
-		Read clipboard Encoding "UTF16.L" From fp,"SISH.CLIP.":@USERNO Then
+		Read clipboard Encoding enc From fp,"SISH.CLIP.":@USERNO Then
 			If Count(clipboard,@FM) >= 1 Then
 				!! Readで最後の改行が消えるQMのバグに対応(1行だけのコピーのみおかしい)
 				clipboard := @FM
