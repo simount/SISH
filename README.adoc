@@ -34,7 +34,7 @@ image:resources/Shell.png[Overview]
 
 == 対象プラットフォーム ==
 
-* OpenQM 3.4系 or later (3.4-10で動作確認しています)
+* OpenQM 3.4系 or later (3.4-12Gで動作確認しています)
 * UniVerse 11.2系 or later (11.2.1で簡単な動作確認しています)
 
 == セットアップ ==
@@ -80,13 +80,12 @@ QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタ
 link:base16-eighties.reg[base16-eighties.reg]をダウンロードしてダブルクリックでインポート。 +
 (cmd.exeのデフォルト設定を書き換えます。スタートメニューのQM Consoleに適応するにはqm.exeへのショートカットを再度作成する必要があります。）
 
-kbd:[Ctrl+カーソル] で単語単位の移動、kbd:[Shift+カーソル]で範囲選択を利用する場合。 +
-link:https://autohotkey.com/[AutoHotKey]をダウンロードします。 +
-link:AutoHotKey.ahk[AutoHotKey.ahk]を読み込ませます。
-
 クリップボード貼り付け +
-以下の `paste.exe` を system32 に配置すれば、貼り付けで点滅する問題を回避できます。
+以下の `paste.exe` を system32 に配置すれば、貼り付けで画面が点滅する問題を回避できます。
 http://www.c3scripts.com/tutorials/msdos/paste.html
+
+NOTE: kbd:[Ctrl+カーソル] で単語単位の移動、kbd:[Shift+カーソル]で範囲選択を利用する場合は
+QM3.4-12以降でWindows10以降(Console Virtual Terminal Sequencesに対応)が必要
 
 ==== リモート接続 For Windows
 
@@ -190,7 +189,9 @@ filterは部分一致またはパターン一致させたい文字。
 
 |**.X**__s__-__e__ | _s_ ～ _e_ 行目のコマンド履歴を実行。 _s_ は省略すると `1` として扱う。 _e_ 省略で単一行。
 
-|**Q** | SISHシェルを抜ける
+|**Q** | SISHシェルを抜ける +
+SISH内でLOGTOでアカウントを移動している場合はLOGTO前のアカウントに戻る(QMのみ) +
+`LOGTO account RESET ALL` 全スタックを抜けてアカウントを移動する
 |===
 
 ==== スクリーンエディタ ====
@@ -558,6 +559,14 @@ https://myrica.estable.jp/
 
 == 更新履歴 ==
 
+=== 2017/10/30 - 0.20.0 ===
+
+- `[NEW]` OPENQM3.4-12からの `TERM MSVT` に対応したのでキー入力にてAutoHotKeyを利用しないでもよくなった
+- `[NEW]` COMO中の場合にコマンド入力中は出力されないようにした
+- `[NEW]` LOGTOコマンドがスタックされるようになり `Q` で抜けるとLOGTO前のアカウントに戻るようにした
+- `[Bug]` CPU時間ミリ秒表記に修正
+- `[Bug]` パス補完でドライブ指定ができない
+
 === 2017/08/04 - 0.19.1 ===
 
 - `[NEW]` SW_HANYOのヘルプを表示できるようにした。(SMV)
@@ -724,14 +733,9 @@ https://myrica.estable.jp/
 
 - TAB補完候補をカーソルで選択できるようにする
 - フルパス指定でファイルを開く(OPENPATH対応)
-- wordsの表示エリアをクリアしたい
 - コマンドスタックをエディタで編集
   - コマンド履歴もバッファの１つにしたい
-- LOGTOをスタックできないものか検討
-- 候補表示でのヘルプ表示を `F1` でON/OFF切り替えれるようにする
-- `Ctrl` + `G` でコマンド履歴の指定行へジャンプするインクリメンタルサーチを実行
 - 履歴の候補表示に対応する
-- 候補表示時のヘルプ表示でヘルプファイルがあればそちらを優先的に表示する
 
 == License ==
 

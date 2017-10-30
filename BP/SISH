@@ -29,7 +29,7 @@
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.19.1 ]"
+Equ SISH.VERSION To "[ SISH v0.20.a ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -81,7 +81,7 @@ $ELSE
 	EQU SAVEDLISTS.FILE To "$SAVEDLISTS"
 	EQU STACK.FILE To "stacks"
 	
-	EQU IS.CONSOLE Lit "@TTY = 'console'"
+	EQU IS.CONSOLE Lit "@TTY = 'console' AND @TERM.TYPE # 'msvt'"
 $ENDIF
 
 *
@@ -227,9 +227,6 @@ Equ OS.GATES To SYSTEM(91)
 * ↑ここに追加していく
   Equ ACTION.ENUM.LAST To 82
 
-!! 外部設定の読み込み
-$INCLUDE SISH.SETTING.H
-
 ** ================================================================================
 ** Shell Main
 ** ================================================================================
@@ -315,8 +312,12 @@ Shell.Main:
 		Mat StartRecs = ""
 		Mat DIRecs = ""
 		Mat TgtFlds = ""
+		GoSub InitTerminal
 	End
-	
+
+!! 外部設定の読み込み
+$INCLUDE SISH.SETTING.H
+
 	Equ Depth Lit "(@CRTHIGH - 2)"
 	Equ Width Lit "(@CRTWIDE - biInfoWide)"
 	
@@ -361,7 +362,6 @@ Shell.Main:
 	EQU REDRAW.ALL To -1
 	Redraw = 0
 	
-	GoSub InitTerminal
 	GoSub Initialise  
 	
 	EQU PY Lit "@CRTHIGH - 2"
@@ -388,7 +388,7 @@ Shell.Main:
 	!! paste.exeを探す
 $IFNDEF U2__UNIVERSE
 	HAS.PASTE.EXE = @FALSE
-	If IS.CONSOLE Then
+	If @TTY = 'console' Then
 		OS.Execute 'where /q paste.exe'
 		If OS.Error() = 0 Then
 			HAS.PASTE.EXE = @TRUE
@@ -460,6 +460,14 @@ $ELSE
 	x = PTERM(3,28)
 	x = PTERM(4,@FALSE)
 	PROMPT.STR = ":"
+	
+	!! COMO中ならコマンド入力中はサスペンドにする
+	IF SYSTEM(1033) AND NOT(SYSTEM(1034)) THEN
+		EXECUTE "COMO SUSPEND" SILENT
+		isComoActive = @TRUE
+	END ELSE
+		isComoActive = @FALSE
+	END
 $ENDIF
 
 	bDispCandidate = @FALSE
@@ -602,7 +610,7 @@ AutocommanLoop.Start:
 		For i = 1 To clLen 
 			c = cl[i,1]
 			dispLen = LenDP(c)
-			nextX = tmpX + dispLen;
+			nextX = tmpX + dispLen
 			If nextX > @CRTWIDE-1 Then
 				* 改行
 				tmpY += 1
@@ -619,13 +627,17 @@ AutocommanLoop.Start:
 			
 			!! 選択範囲
 			If BufInfo<BI.BLOCKSTART> Then
-				blockSt = BufInfo<BI.BLOCKSTART, 2>
-				blockEd = BufInfo<BI.BLOCKEND, 2>
+				blockSt = BufInfo<BI.BLOCKSTART,2>
+				If BufInfo<BI.BLOCKSTART,1> < BufInfo<BI.BLOCKEND,1> THEN
+					blockEd = clLen
+				END ELSE
+					blockEd = BufInfo<BI.BLOCKEND,2>
+				END
 				If blockSt > blockEd Then tmp = blockSt; blockSt = blockEd; blockEd = tmp
 				i2 = i - Len(prmptStr) + 1
 				If i2 = blockSt Then crtBuff := HI.SELECT.ON
 				If i2 = blockEd Then crtBuff := SGR.ALL.OFF
-			End
+			END
 			
 		Next
 		cmdlineRows = tmpY ;** 行数を格納
@@ -842,7 +854,8 @@ Launch.Editor:
 					End Else
 						If actNo = A.INSCHAR Then
 							!! 描画高速化
-							Crt @(-19):C:
+							!!Crt @(-19):C:
+							Crt CSI:"1@":C:
 							GoTo Shell.KeyLoop.Bef.GetKey
 						End
 					End
@@ -943,6 +956,10 @@ Run.Command:
 	If verb="Q" or verb="QUIT" Then
 		!! 終了
 		GoTo QUIT.SHELL
+	End Else If verb = "TERM" Then
+		IF @TERM.TYPE = 'msvt' AND cmdline MATCHES "...1N0N..." THEN
+			Execute cmdline : " qmterm":@FM:"TERM msvt"
+		END
 	End Else If verb[1,1] = "." Then
 		!! シェル内部コマンド
 		k = verb[2,1]
@@ -999,6 +1016,13 @@ Run.Command:
 		End Case
 	End
 	
+$IFNDEF U2__UNIVERSE
+	IF isComoActive THEN
+		!! COMOを実行前に復帰させる
+		EXECUTE "COMO RESUME"
+	END
+$ENDIF
+	
 	GoSub Clear.Cmdline.Crt
 	crtBuff := HI.SHELL.ON:PROMPT.STR:HI.SHELL.OFF:cmdline
 	Crt crtBuff:
@@ -1054,14 +1078,21 @@ $ENDIF
 $IFDEF U2__UNIVERSE
 	Perform cmdline
 $ELSE
-	Execute cmdline TRAPPING ABORTS
+	If verb = "LOGTO" Then
+		!! アカウントをスタックする
+		cmdline<-1> = "SISH"
+		Execute cmdline TRAPPING ABORTS
+		Execute "WHO" ;** 自分の居場所を出力
+	End Else
+		Execute cmdline TRAPPING ABORTS
+	End
 $ENDIF
 
 	If bTimer Then
 		!! 時間計測開終了
 		endTime = Time()
 		endTimeCpu = System(9)
-		Crt "実行時間  " : (endTime - startTime) : "s  (CPU時間  " : (endTimeCpu - startTimeCpu) : "s)":ESC.CRT.MOVE_NEXT_LINE:
+		Crt "実行時間  " : (endTime - startTime) : "s  (CPU時間  " : (endTimeCpu - startTimeCpu)/1000 : "s)":ESC.CRT.MOVE_NEXT_LINE:
 	End
 	
 	IF prevCrt <> @CRTHIGH:@CRTWIDE Then
@@ -1135,7 +1166,7 @@ $IFNDEF U2__UNIVERSE
 	If bDispCandidate Or actNo = A.TAB Then
 		!! OSディレクトリ補完
 		path = Convert('\','/',nowWord)
-		If (Count(path,'/') AND Count(path,":")=0) Or nowWord[1,5] = "PATH:" Then
+		If (Count(path,'/') AND Count(path,":")=0) Or nowWord[1,5] = "PATH:" Or path[1,2] Matches "1A:" Then
 			If path[1,5] = "PATH:" Then
 				path = path[6,99]
 				nowWord = nowWord[6,99]
@@ -2106,7 +2137,6 @@ $ENDIF
 	End
 	
 	** Shellを抜ける
-	Print ""
 	Stop
 
 *--------------------------------
@@ -3876,7 +3906,7 @@ GetKey:
 AfterKeyWait:
 				
 		n = UniSeq(C) ;** １文字目の文字列数値表記
- 		If (n >= 31 And n <= 127) OR (n > 255) Then
+ 		If (n >= 31 And n < 127) OR (n > 255) Then
 			actNo = A.INSCHAR
 			Return
 		End
@@ -4445,7 +4475,17 @@ InitTerminal:
 	
 !! 	prompt ''
 	
-	If IS.CONSOLE Then Return
+	If IS.CONSOLE Then
+$IFNDEF U2__UNIVERSE
+		x = PTERM(2,@FALSE)
+		If System(1044) Then
+			!! ECS Mode
+			x = PTERM(7,1) ;** UTF8固定
+		End
+		EXECUTE "TERM msvt"
+$ENDIF
+		Return
+	End
 	
 $IFDEF U2__UNIVERSE
 	Ttyget ttys Then
@@ -5018,7 +5058,7 @@ PrintLine:
 		!! 現在行
 		crtBuff := FG.YELLOW:BG.BASE3
 	End Else
-		crtBuff := FG.BASE1:BG.BASE3
+		crtBuff := FG.BASE00:BG.BASE3
 	End
 	If TgtFld Then
 		!! フィールド指定モード
@@ -5559,6 +5599,7 @@ SetupTokens:
 	AddKeyWord "BEGIN"
 	AddKeyWord "BY"
 	AddKeyWord "CALL"
+	AddKeyWord "CAPTURING"
 	AddKeyWord "CASE"
 	AddKeyWord "CATCH"
 	AddKeyWord "CLEAR"
@@ -7892,7 +7933,7 @@ Act.Cut:
 * Act.SendRemotePasteCmd
 
 Act.SendRemotePasteCmd:
-	If IS.CONSOLE Then
+	If @TTY = 'console' Then
 		GoSub FromWinClip
 		GoTo Act.PasteLocal
 	End Else
