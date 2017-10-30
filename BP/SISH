@@ -29,7 +29,7 @@
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.20.a ]"
+Equ SISH.VERSION To "[ SISH v0.20.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -375,6 +375,7 @@ $INCLUDE SISH.SETTING.H
 	Equ bInvert To ShInfo<4> ;** 大文字小文字変換機能 ON/OFF
 	Equ bTimer To ShInfo<5> ;** 時間計測機能 ON/OFF
 	Equ theme To ShInfo<6> ;** テーマNo
+	Equ HAS.PASTE.EXE To ShInfo<7> ;** paste.exe存在するか
 	
 	If cmdStack=0 Then
 		cmdStack = ""
@@ -383,18 +384,19 @@ $INCLUDE SISH.SETTING.H
 		bTimer = @FALSE
 		theme = 1
 		Crt SISH.VERSION
-	End
-	
-	!! paste.exeを探す
+		!! paste.exeを探す
 $IFNDEF U2__UNIVERSE
-	HAS.PASTE.EXE = @FALSE
-	If @TTY = 'console' Then
-		OS.Execute 'where /q paste.exe'
-		If OS.Error() = 0 Then
-			HAS.PASTE.EXE = @TRUE
+		HAS.PASTE.EXE = @FALSE
+		If @TTY = 'console' Then
+			OS.Execute 'where /q paste.exe'
+			If OS.Error() = 0 Then
+				HAS.PASTE.EXE = @TRUE
+			End
 		End
-	End
+		!! ACCOUNTをスタックできるモードに変更
+		VOID OPTION(35,1) ;** OPT$STACKED.ACCOUNT 35
 $ENDIF
+	End
 	
 	cmdStackList.DispCnt = "2":@FM:"19" ;** コマンドスタックリスト表示のデフォルト値
 	prevPath = "" ;** 前回のアカウントパスは一度クリアする
@@ -1078,7 +1080,7 @@ $ENDIF
 $IFDEF U2__UNIVERSE
 	Perform cmdline
 $ELSE
-	If verb = "LOGTO" Then
+	If verb = "LOGTO" And OPTION(35) Then
 		!! アカウントをスタックする
 		cmdline<-1> = "SISH"
 		Execute cmdline TRAPPING ABORTS
@@ -5555,7 +5557,7 @@ LoadKeyBindings:
 			!! エスケープ戻す
 			For i = 1 To n
 				If z = '@@' Then
-					z = Char(0)
+					z = IF @TTY = 'console' THEN CHAR(27):CHAR(32) ELSE CHAR(0)
 				End Else If z[i,1] = '@' Then
 					j = index('ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_',z[i+1,1],1)
 					If j Then
@@ -7900,7 +7902,7 @@ Act.Copy:
 	clipboard = selString ;** ローカルクリップボードに格納
 		
 	!! リモート端末に送信する
-	If IS.CONSOLE Then
+	If @TTY = 'console' Then
 		GoSub ToWinClip
 	End Else
 $IFDEF U2__UNIVERSE
