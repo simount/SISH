@@ -29,7 +29,7 @@
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.20.0 ]"
+Equ SISH.VERSION To "[ SISH v0.20.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -1082,7 +1082,7 @@ $IFDEF U2__UNIVERSE
 $ELSE
 	If verb = "LOGTO" And OPTION(35) Then
 		!! アカウントをスタックする
-		cmdline<-1> = "SISH"
+		cmdline<-1> = MY_COMMAND
 		Execute cmdline TRAPPING ABORTS
 		Execute "WHO" ;** 自分の居場所を出力
 	End Else
