@@ -29,7 +29,7 @@
 **
 **========================================================================================
 
-Equ SISH.VERSION To "[ SISH v0.20.1 ]"
+Equ SISH.VERSION To "[ SISH v0.21.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -368,10 +368,11 @@ $INCLUDE SISH.SETTING.H
 	EQU LISTDEPTH Lit "Depth - 2"
 	
 	* セッショングローバル
-	COMMON /SISH.SHELL/ cmdStack,ShInfo
+	COMMON /SISH.SHELL/ cmdStack,ShInfo,logtoStack
 	
 	Equ bAutoTermSize To ShInfo<1> ;** 端末サイズ自動設定機能 ON/OFF
-	Equ prevPath To ShInfo<3> ;** 前回のアカウントパス
+	Equ prevAccount To ShInfo<3,1> ;** 前回のアカウント
+	Equ prevPath To ShInfo<3,2> ;** 前回のアカウントパス
 	Equ bInvert To ShInfo<4> ;** 大文字小文字変換機能 ON/OFF
 	Equ bTimer To ShInfo<5> ;** 時間計測機能 ON/OFF
 	Equ theme To ShInfo<6> ;** テーマNo
@@ -379,6 +380,7 @@ $INCLUDE SISH.SETTING.H
 	
 	If cmdStack=0 Then
 		cmdStack = ""
+		logtoStack = "" ;** LOGTOの履歴を保持
 		bAutoTermSize = @TRUE
 		bInvert = @TRUE ;** デフォルト反転モード
 		bTimer = @FALSE
@@ -393,13 +395,12 @@ $IFNDEF U2__UNIVERSE
 				HAS.PASTE.EXE = @TRUE
 			End
 		End
-		!! ACCOUNTをスタックできるモードに変更
-		VOID OPTION(35,1) ;** OPT$STACKED.ACCOUNT 35
 $ENDIF
 	End
 	
 	cmdStackList.DispCnt = "2":@FM:"19" ;** コマンドスタックリスト表示のデフォルト値
 	prevPath = "" ;** 前回のアカウントパスは一度クリアする
+	prevAccount = "" ;** 前回のアカウント
 	
 	** DICT.DESCの取得
 	Open 'DICT', 'VOC' To fpD.VOC Else Stop "Cannot Open 'DICT.VOC'"
@@ -498,8 +499,18 @@ $ENDIF
 	
 	** 端末のウィンドウタイトルを変更する
 	If prevPath >< @PATH Then
+		
+		!! アカウントをスタックする(LRU)
+		If prevPath Then
+			Find prevPath In logtoStack Setting f Then
+				Del logtoStack<f>
+			End
+			Ins prevAccount:@VM:prevPath Before logtoStack<1>
+		End
+		
 		** 前のパスと違っている時のみ実施する
 		prevPath = @PATH
+		prevAccount = @ACCOUNT
 		account = Convert(CHAR(92),'/',prevPath)
 		logname = @LOGNAME
 $IFNDEF U2__UNIVERSE
@@ -1018,6 +1029,24 @@ Run.Command:
 		End Case
 	End
 	
+	!! LOGTO単体の場合はLOGTO履歴選択モードにする
+	If Trim(cmdline)="LOGTO" Then
+		If logtoStack Then
+			a = logtoStack[@FM,1,10]
+			wide1 = Maximum(LenS(VSLice(a,1)))+2
+			Print ""
+			For i = 1 To DCount(a,@FM)
+				If a<i> = "" Then Exit
+				Print i:" ":FMT(a<i,1>,wide1:"L"):" ":a<i,2>
+			Next i
+			Print "Choice":
+			Input i,1
+			If i # "" And Num(i) Then
+				cmdline = "LOGTO ":DQUOTE(a<i,2>)
+			End
+		End
+	End
+	
 $IFNDEF U2__UNIVERSE
 	IF isComoActive THEN
 		!! COMOを実行前に復帰させる
@@ -1080,14 +1109,7 @@ $ENDIF
 $IFDEF U2__UNIVERSE
 	Perform cmdline
 $ELSE
-	If verb = "LOGTO" And OPTION(35) Then
-		!! アカウントをスタックする
-		cmdline<-1> = MY_COMMAND
-		Execute cmdline TRAPPING ABORTS
-		Execute "WHO" ;** 自分の居場所を出力
-	End Else
-		Execute cmdline TRAPPING ABORTS
-	End
+	Execute cmdline TRAPPING ABORTS
 $ENDIF
 
 	If bTimer Then
