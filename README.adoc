@@ -429,7 +429,7 @@ a|  前の単語に移動
 | kbd:[F11]    | テーマ切り替え
 | kbd:[F1]     | カーソル上の単語をヘルプ表示(UniVerseのみ)
 | kbd:[ESC]    | いろいろな場面でキャンセル
-| kbd:[Break] or kbd:[Ctrl+\] | 強制終了(プログラム実行中だと kbd:[Ctrl+C] と同じもの)
+| kbd:[Break] or kbd:[Ctrl+\{backslash}] | 強制終了(プログラム実行中だと kbd:[Ctrl+C] と同じもの)
 |===
 
 === コマンドラインのみ ===
