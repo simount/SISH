@@ -1,3 +1,4 @@
+
 **========================================================================================
 **
 **  FUNCTION
@@ -28,8 +29,7 @@
 **    MIT License
 **
 **========================================================================================
-
-Equ SISH.VERSION To "[ SISH v0.21.0 ]"
+Equ SISH.VERSION To "[ SISH v0.22.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -190,47 +190,82 @@ Equ OS.GATES To SYSTEM(91)
 	Equ A.REDO To 49
 	Equ A.SEL_ALL To 50
   Equ A.SEL_EXPAND To 51
+  Equ A.DELETE_BACKWORD To 52
+  Equ A.DELETE_NEXTWORD To 53
 	
-** 共通入力アクションの追加ポイント
-	Equ ENUM.INPUT.ACTION.LAST To 51
+	** 共通入力アクションの追加ポイント
+	Equ ENUM.INPUT.ACTION.LAST To 53
 
-  Equ A.CANCEL To 52
-  Equ A.TAB To 53
-  Equ A.SHIFT_TAB To 54
-  Equ A.THEME To 55
-  Equ A.INSVMC To 56
-  Equ A.INSSMC To 57
-  Equ A.INSTMC To 58
-  Equ A.TEMPLATE To 59
-  Equ A.COMMENT To 60
-  Equ A.SEARCH To 61
-  Equ A.REPEAT To 62
-  Equ A.REVERSE To 63
-  Equ A.REPLACE To 64
-  Equ A.BUFFER To 65
-  Equ A.OUTLINE To 66
-  Equ A.GOLINE To 67
-  Equ A.GO_DECLARATION To 68
-  Equ A.NEXTJUMP To 69
-  Equ A.PREVJUMP To 70
-  Equ A.SAVE To 71
-  Equ A.HELP To 72
-  Equ A.COMPILE To 73
-  Equ A.RELOAD To 74
-  Equ A.ACTION To 75
-  Equ A.EXIT To 76
-  Equ A.CLOSEBUF To 77
-  Equ A.DIVE To 78
-  Equ A.CASEINVERT To 79
-  Equ A.FIT.TERM To 80
-  Equ A.WORD_HOKAN To 81
-* ↑ここに追加していく
-  Equ ACTION.ENUM.LAST To 82
+  Equ A.CANCEL To 54
+  Equ A.TAB To 55
+  Equ A.SHIFT_TAB To 56
+  Equ A.THEME To 57
+  Equ A.INSVMC To 58
+  Equ A.INSSMC To 59
+  Equ A.INSTMC To 60
+  Equ A.TEMPLATE To 61
+  Equ A.COMMENT To 62
+  Equ A.SEARCH To 63
+  Equ A.REPEAT To 64
+  Equ A.REVERSE To 65
+  Equ A.REPLACE To 66
+  Equ A.BUFFER To 67
+  Equ A.OUTLINE To 68
+  Equ A.GOLINE To 69
+  Equ A.GO_DECLARATION To 70
+  Equ A.NEXTJUMP To 71
+  Equ A.PREVJUMP To 72
+  Equ A.SAVE To 73
+  Equ A.HELP To 74
+  Equ A.COMPILE To 75
+  Equ A.RELOAD To 76
+  Equ A.ACTION To 77
+  Equ A.EXIT To 78
+  Equ A.CLOSEBUF To 79
+  Equ A.DIVE To 80
+  Equ A.CASEINVERT To 81
+  Equ A.FIT.TERM To 82
+  Equ A.WORD_HOKAN To 83
+  Equ A.NEWBUF To 84
+* ↑ここに追加していく    
+  Equ ACTION.ENUM.LAST To 85
 
 ** ================================================================================
 ** Shell Main
 ** ================================================================================
 Shell.Main:
+
+	EQU CMD.STACK.SIZE To 1000 ;** コマンドスタックのサイズ
+	EQU MAXWINDOWS To 50
+	EQU BUFFS To 52
+	EQU CMD_BUF To BUFFS
+
+	* セッショングローバル
+	COMMON /SISH.SHELL/ ShInfo(30)
+	COMMON /SISH.EDITOR/ initEnvEDS,lruBuffList,jumpHistory,jumpHistoryPos,currentJumpData,CurBuf,BufInfos(BUFFS),Bufs(BUFFS),Ys(BUFFS),Xs(BUFFS),DP_Xs(BUFFS),Tops(BUFFS),XOffSets(BUFFS),RecLines(BUFFS),EditCmdStacks(BUFFS),EditCmdPoss(BUFFS),StartRecs(BUFFS),ys(BUFFS),TgtFlds(BUFFS),DIRecs(BUFFS)
+
+	Equ cmdStack To ShInfo(1) ;** コマンドスタック
+	Equ logtoStack To ShInfo(2) ;** LOGTOスタック
+	Equ prevAccount To ShInfo(3)<1> ;** 前回のアカウント
+	Equ prevPath To ShInfo(3)<2> ;** 前回のアカウントパス
+	Equ bInvert To ShInfo(4) ;** 大文字小文字変換機能 ON/OFF
+	Equ bTimer To ShInfo(5) ;** 時間計測機能 ON/OFF
+	Equ theme To ShInfo(6) ;** テーマNo
+	Equ HAS.PASTE.EXE To ShInfo(7) ;** paste.exe存在するか
+	Equ bChain To ShInfo(8) ;** Chainから来た
+	Equ bAutoTermSize To ShInfo(9) ;** 端末サイズ自動設定機能 ON/OFF
+	Equ clipboard To ShInfo(10) ;** クリップボード
+	Equ bOverlay To ShInfo(11) ;** Insert/Overlay Mode
+	Equ cmdStackList.DispCnt To ShInfo(12) ;** コマンドスタックリスト表示
+	Equ descIType To ShInfo(13) ;** DICT.DESKレコード
+	Equ typeIType To ShInfo(14) ;** DICT.TYPEレコード
+	Equ serverListIds To ShInfo(15) ;** サーバ一覧ID
+	Equ serverList To ShInfo(16) ;** サーバ一覧
+	Equ prevListStackCmd To ShInfo(17) ;** 直前のstack一覧コマンド
+	Equ prevFileName To ShInfo(18) ;** 直前のコマンドのファイル名
+	Equ bAutoCommand To ShInfo(19) ;** コマンドを実行してエディタに戻る
+	Equ bAutoEditor To ShInfo(20) ;** 自動でエディタ起動
+	Equ VOC To ShInfo(21) ;** VOC ファイルポインタ
 
 *--------------------------------------------------------------------------
 *   Full Screen Editor System
@@ -287,36 +322,6 @@ Shell.Main:
 	EQU biInfoWide To Sum(BufInfo<11>) ;* 情報エリア横幅
 	EQU biInfoWide.lineNo To BufInfo<11,1> ;* 行数エリア横幅
 	EQU biInfoWide.dict To BufInfo<11,2> ;* 辞書表示エリア横幅
-	
-	EQU CMD.STACK.SIZE To 1000 ;** コマンドスタックのサイズ
-	EQU MAXWINDOWS To 50
-	EQU BUFFS To 52
-	EQU CMD_BUF To BUFFS
-	COMMON /SISH.EDITOR/ initEnvEDS,lruBuffList,jumpHistory,jumpHistoryPos,currentJumpData,CurBuf,BufInfos(BUFFS),Bufs(BUFFS),Ys(BUFFS),Xs(BUFFS),DP_Xs(BUFFS),Tops(BUFFS),XOffSets(BUFFS),RecLines(BUFFS),EditCmdStacks(BUFFS),EditCmdPoss(BUFFS),StartRecs(BUFFS),ys(BUFFS),TgtFlds(BUFFS),DIRecs(BUFFS)
-	If initEnvEDS Else
-		initEnvEDS = @TRUE
-		lruBuffList = "" ; !! バッファの直近順List
-		jumpHistory = "" ; !! ジャンプ履歴
-		jumpHistoryPos = 0 ; !! ジャンプ履歴位置
-		currentJumpData = "" ;** 現在のジャンプデータ
-		CurBuf = 1
-		Mat BufInfos = ""
-		Mat Bufs = ""
-		Mat Xs = 0
-		Mat DP_Xs = 0
-		Mat Ys = 0
-		Mat Tops = 0
-		Mat XOffSets = 1
-		Mat EditCmdStacks = ""
-		Mat EditCmdPoss = 1
-		Mat StartRecs = ""
-		Mat DIRecs = ""
-		Mat TgtFlds = ""
-		GoSub InitTerminal
-	End
-
-!! 外部設定の読み込み
-$INCLUDE SISH.SETTING.H
 
 	Equ Depth Lit "(@CRTHIGH - 2)"
 	Equ Width Lit "(@CRTWIDE - biInfoWide)"
@@ -346,67 +351,55 @@ $INCLUDE SISH.SETTING.H
 	EQU PARSE.PARA To "PA"
 
 	MY_COMMAND = Trim(@COMMAND[' ',1,1]) ;** 自コマンド名(SISH)
+	KAKKO.CHAR.LIST = \()[]<>{}''""\:"\\" ;** 対応する括弧定義
 
-	keyQueue = ""         ;** 右クリックペースト用のキーキュー
-	inputBox = ""         ;** １行入力用バッファ
-	clipboard = ""        ;** ローカルクリップボードファ
-	kakko = ""
-	moveChar = "" ;** Move To Char モード
-	pendingCh = ""
-	bPrevEsc = @FALSE ;** 前回のキー入力が制御シーケンスだったかどうか
-	bOverlay = @FALSE ;** Insert/Overlay Mode
-	editerCmd = ""
-		
-	crtBuff = ""
-	
-	EQU REDRAW.ALL To -1
-	Redraw = 0
-	
-	GoSub Initialise  
-	
 	EQU PY Lit "@CRTHIGH - 2"
 	EQU LISTDEPTH Lit "Depth - 2"
-	
-	* セッショングローバル
-	COMMON /SISH.SHELL/ cmdStack,ShInfo,logtoStack
-	
-	Equ bAutoTermSize To ShInfo<1> ;** 端末サイズ自動設定機能 ON/OFF
-	Equ prevAccount To ShInfo<3,1> ;** 前回のアカウント
-	Equ prevPath To ShInfo<3,2> ;** 前回のアカウントパス
-	Equ bInvert To ShInfo<4> ;** 大文字小文字変換機能 ON/OFF
-	Equ bTimer To ShInfo<5> ;** 時間計測機能 ON/OFF
-	Equ theme To ShInfo<6> ;** テーマNo
-	Equ HAS.PASTE.EXE To ShInfo<7> ;** paste.exe存在するか
-	
-	If cmdStack=0 Then
+
+	If initEnvEDS Else
+		initEnvEDS = @TRUE
+		lruBuffList = "" ; !! バッファの直近順List
+		jumpHistory = "" ; !! ジャンプ履歴
+		jumpHistoryPos = 0 ; !! ジャンプ履歴位置
+		currentJumpData = "" ;** 現在のジャンプデータ
+		CurBuf = 1
+		Mat BufInfos = ""
+		Mat Bufs = ""
+		Mat Xs = 0
+		Mat DP_Xs = 0
+		Mat Ys = 0
+		Mat Tops = 0
+		Mat XOffSets = 1
+		Mat EditCmdStacks = ""
+		Mat EditCmdPoss = 1
+		Mat StartRecs = ""
+		Mat DIRecs = ""
+		Mat TgtFlds = ""
+		
 		cmdStack = ""
 		logtoStack = "" ;** LOGTOの履歴を保持
 		bAutoTermSize = @TRUE
 		bInvert = @TRUE ;** デフォルト反転モード
 		bTimer = @FALSE
 		theme = 1
+		clipboard = ""        ;** ローカルクリップボードバッファ
+		bOverlay = @FALSE
+		cmdStackList.DispCnt = "2":@FM:"19" ;** コマンドスタックリスト表示のデフォルト値
+		prevListStackCmd = ".L" ;** 直前のstack一覧コマンド
+		prevFileName = "" ;** 直前のコマンドのファイル名
+		
 		Crt SISH.VERSION
-		!! paste.exeを探す
-$IFNDEF U2__UNIVERSE
-		HAS.PASTE.EXE = @FALSE
-		If @TTY = 'console' Then
-			OS.Execute 'where /q paste.exe'
-			If OS.Error() = 0 Then
-				HAS.PASTE.EXE = @TRUE
-			End
-		End
-$ENDIF
+		GoSub InitTerminal ;* 初回起動時に１回だけ初期化するもの
 	End
+
+!! 外部設定の読み込み
+$INCLUDE SISH.SETTING.H
+		
+	GoSub SetupDefKeyBindings
+	GoSub SetupTokens
 	
-	cmdStackList.DispCnt = "2":@FM:"19" ;** コマンドスタックリスト表示のデフォルト値
 	prevPath = "" ;** 前回のアカウントパスは一度クリアする
 	prevAccount = "" ;** 前回のアカウント
-	
-	** DICT.DESCの取得
-	Open 'DICT', 'VOC' To fpD.VOC Else Stop "Cannot Open 'DICT.VOC'"
-	Read descIType From fpD.VOC,'DESC' Else Stop "Cannot Read 'DESC' in 'DICT.VOC'"
-	Read typeIType From fpD.VOC,'TYPE' Else Stop "Cannot Read 'TYPE' in 'DICT.VOC'"
-	Close fpD.VOC
 	
 	** VOCファイルを開く
 	Open 'VOC' To VOC Else Abort
@@ -433,13 +426,8 @@ $IFNDEF U2__UNIVERSE
 	Next line
 $ENDIF
 
-	prevListStackCmd = ".L" ;** 直前のstack一覧コマンド
-	prevFileName = "" ;** 直前のコマンドのファイル名
-
-	bFirstCurTop = @TRUE ;** カーソルを画面の最上部に初めての移動か
-	bAutoCommand = @FALSE ;** コマンドを実行してエディタに戻る
-	bAutoEditor = @FALSE ;** 自動でエディタ起動
-	kakkoChList = \()[]<>{}''""\:"\\" ;** 対応する括弧定義
+	bAutoCommand = @FALSE
+	bAutoEditor = @FALSE
 
 	!! Themeの反映
 	If theme Then
@@ -450,8 +438,27 @@ $ENDIF
 	
 	!! 大文字小文字変換の初期化
 	Perform "PTERM CASE ":If bInvert Then "INVERT" Else "NOINVERT"
+	
+	** DICT.DESCの取得
+	Open 'DICT', 'VOC' To fpD.VOC Else Stop "Cannot Open 'DICT.VOC'"
+	Read descIType From fpD.VOC,'DESC' Else Stop "Cannot Read 'DESC' in 'DICT.VOC'"
+	Read typeIType From fpD.VOC,'TYPE' Else Stop "Cannot Read 'TYPE' in 'DICT.VOC'"
+	Close fpD.VOC
+
+	!! 共通のテンポラリ変数
+	editerCmd = ""
+	kakko = ""
+	inputBox = ""         ;** １行入力用バッファ
+	crtBuff = ""
+	moveChar = "" ;** Move To Char モード
+	
+	EQU REDRAW.ALL To -1
+	Redraw = 0
 
 Shell.Input.Begin:
+
+	bChain = @FALSE
+	bFirstCurTop = @TRUE ;** カーソルを画面の最上部に初めての移動か
 
 	** Ctrl+C のIntruputを @28(Ctrl+\ or Break) に変更
 	** 自動ページングをON
@@ -865,9 +872,8 @@ Launch.Editor:
 						!! 入力補完処理
 						GoSub TAB.HOKAN
 					End Else
-						If actNo = A.INSCHAR Then
-							!! 描画高速化
-							!!Crt @(-19):C:
+						If actNo = A.INSCHAR And UniSeq(C) < 127 And BufInfo<BI.BLOCKSTART> = "" Then
+							!! 半角文字なら描画高速化
 							Crt CSI:"1@":C:
 							GoTo Shell.KeyLoop.Bef.GetKey
 						End
@@ -1019,7 +1025,7 @@ Run.Command:
 				GoTo Run.Command.Ending
 			Case k = "E"
 				If Trim(cmdline) = ".E" Then GoTo Launch.Editor ;** 単純にエディタに切り替える
-				!! VerbをSIEDに置換
+				!! Verbをエディタに置換
 				cmdline = "READ.BUFFER":cmdline[3,9999]
 				X += 9
 			Case k = "K"
@@ -1110,6 +1116,15 @@ $IFDEF U2__UNIVERSE
 	Perform cmdline
 $ELSE
 	Execute cmdline TRAPPING ABORTS
+	If @ABORT.CODE Then
+		IF @EXCEPTION = "SYS.PROGRAM.RESIZE_ERROR" THEN
+			!! unnamed common missmatch error
+			!! unnamed common をクリアするため自身を再起動して再実行
+			Print ""
+			Print FG.RED:"'Unnamed Common' has already been cleared, please re-execute the same command.":FG.BASE03
+			Print ""
+		END
+	End
 $ENDIF
 
 	If bTimer Then
@@ -1119,7 +1134,8 @@ $ENDIF
 		Crt "実行時間  " : (endTime - startTime) : "s  (CPU時間  " : (endTimeCpu - startTimeCpu)/1000 : "s)":ESC.CRT.MOVE_NEXT_LINE:
 	End
 	
-	IF prevCrt <> @CRTHIGH:@CRTWIDE Then
+	!! 端末サイズ自動追従
+	If Not(IS.CONSOLE) And prevCrt <> @CRTHIGH:@CRTWIDE Then
 		Crt CSI:"8;":@CRTHIGH:";":@CRTWIDE:"t":
 	End
 	
@@ -1173,7 +1189,7 @@ Run.Command.Ending:
 		End
 	End
 	
-GoTo Shell.Input.Begin; * 先頭に戻る
+	GoTo Shell.Input.Begin ;* キーループに戻る
 
 *---------------------
 * TAB補完 Action
@@ -2653,7 +2669,6 @@ Return
 ** Editor.Main
 ** ================================================================================
 Editor.Main:
-	
 *-------------------------------------------------------------------------
 *  Set up
 *-------------------------------------------------------------------------
@@ -2665,6 +2680,15 @@ Editor.Main:
 	ParentBufNo = ""
 	StatusMessage = ""
 	
+	!! 強制的に端末サイズに合わせる
+	If @TTY = 'console' Then
+		A = "TERM ":@CRTWIDE:",":@CRTHIGH
+		IF @TERM.TYPE = 'msvt' THEN A:=" qmterm":@FM:"TERM msvt"
+		Execute A
+	END ELSE
+		Crt CSI:"8;":@CRTHIGH:";":@CRTWIDE:"t":
+	END
+
 *-------------------------------------------------------------------------
 *  Parse Command Line
 *-------------------------------------------------------------------------
@@ -2746,7 +2770,7 @@ ParseCommandLine:
 	Replacing = False
 	ignoreCase = False
 	searchReverse = False
-	
+
 	GoSub GoAltScreenBuf ;** 代替画面バッファ
 	
 	!! Brackets Paste Mode on
@@ -3077,10 +3101,13 @@ DoEditCmd:
 		endY = Remove(editCmd,sep)
 		endX = Remove(editCmd,sep)
 		strings = Convert(CHAR(28):CHAR(29):CHAR(31),@SM:@VM:@IM,Remove(editCmd,sep))
-		curFlg = Remove(editCmd,sep)
+		A = Remove(editCmd,sep)
+		curFlg = A[":",1,1]
+		aftSelected = A[":",2,1]
 		
 		prevStrings = "" ;** 置換前の文字列
 		prevCurFlg = "1"
+		selected = ""
 		
 		If endY >< "" Then
 			**
@@ -3139,7 +3166,9 @@ DoEditCmd:
 			End Else
 				moveY = @TRUE
 			End
-
+			
+			selected = prevStrings <> ""
+			
 		End
 		
 		endY = stY
@@ -3190,9 +3219,15 @@ DoEditCmd:
 		End
 		
 		cmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),prevStrings)
-		cmd<6> = prevCurFlg
-		
+		cmd<6> = prevCurFlg:":":selected
 		Ins cmd Before undoCmd<1> ;** 逆順に追加していく
+		
+		!! 選択状態を元に戻す
+		If aftSelected Then
+			BufInfo<BI.BLOCKSTART> = undoCmd<1>:@VM:undoCmd<2>
+			BufInfo<BI.BLOCKEND> = undoCmd<3>:@VM:undoCmd<4>
+			keepSelection = @TRUE
+		End
 		
 	While sep Repeat
 	
@@ -3977,7 +4012,9 @@ AfterKeyWait:
 								GoSub GetCh.Timeout ;** 1
 								GoSub GetCh.Timeout ;** ~
 								
-								actNo = A.INSCHAR
+								InsBuffer = C
+								actNo = A.PASTE
+
 								Return
 							End
 						End
@@ -4097,16 +4134,16 @@ Enters:
 	keepSelection = @FALSE
 	
 	!! モード別処理
-	If BufInfo<BI.PARSETYPE> = PARSE.BASIC Then
-		!! Basicモード
-		
+!!	If BufInfo<BI.PARSETYPE> = PARSE.BASIC Then
+!! 		!! Basicモード
+!! 		
 !! 		If actNo = A.INSCHAR Then
-!! 			i = Index(kakkoChList,C,1)
+!! 			i = Index(KAKKO.CHAR.LIST,C,1)
 !! 			If i > 0 Then
 !! 				!! 開く括弧のみ閉じる括弧を自動挿入する
 !! 				!! TODO 文字リテラル内はしない
 !! 				If Rem(i,2) Then
-!! 					InsBuffer = kakkoChList[i,2]
+!! 					InsBuffer = KAKKO.CHAR.LIST[i,2]
 !! 					If C = '<' Then
 !! 						inX = X-1
 !! 						inY = Y
@@ -4120,7 +4157,7 @@ Enters:
 !! 				End
 !! 			End
 !! 		End
-	End
+!! 	End
 	
 	!! アクションを実行
 	GoSub Switch.Actions
@@ -4489,11 +4526,9 @@ Is.Space.Char:
 *  Initialise
 *--------------------------------------------------------------------------------
 Initialise: 
-	GoSub SetupDefKeyBindings
-	GoSub SetupTokens
 	Return
 *--------------------------------------------------------------------------
-* InitTerminal
+* InitTerminal(初回起動時に呼ばれる)
 *--------------------------------------------------------------------------
 InitTerminal: 
 	
@@ -4535,7 +4570,18 @@ $ELSE
 	Execute "TERM xterm-eeepc"
 	x = PTERM(8,8) ;** Backspace ^H
 $ENDIF
-	
+
+	!! paste.exeを探す
+$IFNDEF U2__UNIVERSE
+	HAS.PASTE.EXE = @FALSE
+	If @TTY = 'console' Then
+		OS.Execute 'where /q paste.exe'
+		If OS.Error() = 0 Then
+			HAS.PASTE.EXE = @TRUE
+		End
+	End
+$ENDIF
+
 	Return
 *--------------------------------------------------------------------------
 * InsMenu
@@ -4666,20 +4712,21 @@ ParseLine:
 		Case ParseType = PARSE.BASIC
 			!! Label
 			Word = Line[";",1,1][" ",1,1]
-			If Word Matches "1N0N" Or Word Matches "1A0X':'" Then
-				len = Len(Word)
-				Mask := Str(SI.LABEL,len)
-				Line = Line[len+1,BIG]
-				Word = Line[" ",1,1]
+			If Word Matches "1N0N":@VM:"1A0X:" Then
+				If INMAT() = 2 Then
+					A = Convert("0123456789._","",Word[2,*]) Matches "0A:"
+				End Else A = @TRUE
+				If A Then
+					len = Len(Word)
+					Mask := Str(SI.LABEL,len)
+					Line = Line[len+1,BIG]
+					Word = Line[" ",1,1]
+				End
 			End
 			Begin Case   
 				!! Comment & Directive
 				Case Count("*!",Word[1,1])
-					If Count(Line,'@@') Then
-						Mask := Str(SI.DOC, L)
-					End Else
-						Mask := Str(SI.COMMENT, L)
-					End
+					Mask := Str(SI.COMMENT, L)
 				Case Count("$#",Word[1,1])
 					Mask = Str(SI.DIRECTIVE, L)
 				Case 1
@@ -4858,7 +4905,7 @@ ParseLine:
 		If ParseType = PARSE.BASIC Then
 			stCh = OldLine[X,1] ;** 現在カーソル文字の再取得
 			If stCh >< "" Then
-				ki = Index(kakkoChList,stCh,1) 
+				ki = Index(KAKKO.CHAR.LIST,stCh,1) 
 				If ki Then
 					
 					If ki >= 9 Then
@@ -4869,7 +4916,7 @@ ParseLine:
 					End Else
 						!! 対応する括弧
 						moveDir = If Rem(ki,2) = 1 Then 1 Else -1
-						enCh = kakkoChList[ki+moveDir,1]
+						enCh = KAKKO.CHAR.LIST[ki+moveDir,1]
 						sign = SI.KAKKO
 					End
 					
@@ -5859,6 +5906,7 @@ ChangeBuf:
 	End
 	
 	keepDP_X = X
+	keepSelection = @TRUE
 
 	Return
 *--------------------------------------------------------------------------
@@ -6183,6 +6231,8 @@ Switch.Actions:
 								Act.Redo,
 								Act.SelAll,
 								Act.SelExpand,	
+							  Act.DelBackWord,
+								Act.DelNextWord,
 								Act.Cancel,
 								Act.Tab,
 								Act.ShiftTab,
@@ -6212,7 +6262,8 @@ Switch.Actions:
 								Act.GoDive,
 								Act.ToggleCaseInvert,
 								Act.Fit.Term,
-								Act.ShowWordHokan
+								Act.ShowWordHokan,
+								DoNew
 NULL.Action:
 	Return
 
@@ -6534,8 +6585,9 @@ Act.SelNextChar:
 	GoSub SelectionStart
 	BufInfo<BI.BLOCKEND> = ""
 Act.NextChar:
-	moveChar = @TRUE ;** 進むフラグ
+	moveChar = @FALSE ;** 進むフラグ
 	keepSelection = @TRUE
+	StatusMessage = "Enter first char in word ->"
 	Return
 
 * **************************************************************************
@@ -6545,8 +6597,9 @@ Act.SelPrevChar:
 	GoSub SelectionStart
 	BufInfo<BI.BLOCKEND> = ""
 Act.PrevChar:
-	moveChar = @FALSE ;** 戻るフラグ
+	moveChar = @TRUE ;** 戻るフラグ
 	keepSelection = @TRUE
+	StatusMessage = "Enter first char in word (move prev) ->"
 	Return
 
 * **************************************************************************
@@ -6896,7 +6949,6 @@ Act.DelBackCh:
 	If Y=1 & X=1 Else
 	
 		editCmd = ""
-		
 		If BufInfo<BI.BLOCKSTART> Then
 			** 選択中
 			editCmd<1> = BufInfo<BI.BLOCKEND, 1>
@@ -6950,7 +7002,7 @@ Act.DelLine:
 
 Act.InsertChar:
 	
-	If moveChar Then
+	If moveChar # "" Then
 		!! １文字移動割り込み処理モード
 		If moveChar<2> = "" Then
 			moveChar<2> = C ;** 検索文字をセット
@@ -7003,6 +7055,9 @@ Act.InsertChar:
 			If iX Then
 				Y = iY
 				X = iX
+				StatusMessage = "Enter same char go to next -> ":ch
+			End Else
+				StatusMessage = "Not found char -> ":ch
 			End
 			BufInfo<BI.BLOCKEND> = ""
 			keepSelection = @TRUE
@@ -7918,8 +7973,14 @@ Act.Copy:
 	
 	If selString = "" Then
 		!! 選択がなければ行選択にする
-		selString = Rec<Y>:@FM
+		selString = Rec<Y>:CHAR(10)
+		BufInfo<BI.BLOCKSTART> = Y:@VM:1
+		BufInfo<BI.BLOCKEND> = Y+1:@VM:1
 	End
+	
+	!! カーソルが行頭なら選択範囲を残す
+	keepSelection = @TRUE
+	StatusMessage = "copied"
 	
 	clipboard = selString ;** ローカルクリップボードに格納
 		
@@ -7944,6 +8005,7 @@ $ENDIF
 Act.Cut:
 	
 	GoSub Act.Copy
+	keepSelection = @FALSE
 	If BufInfo<BI.BLOCKSTART> Then
 		!! 選択中の物は削除する
 		GoSub Act.DelCh
@@ -7974,12 +8036,23 @@ Act.SendRemotePasteCmd:
 Act.PasteLocal:
 	InsBuffer = clipboard
 Act.Paste:
-	startY = If BufInfo<BI.BLOCKSTART> Then Minimum(BufInfo<BI.BLOCKSTART,1>:@FM:BufInfo<BI.BLOCKEND,1>) Else Y
+	startPos = Y:@VM:X
+	If BufInfo<BI.BLOCKSTART> Then
+		GoSub GET.SELECTION.STRING
+		
+		If selString = Convert(CHAR(13),CHAR(10),Change(InsBuffer,CHAR(13):CHAR(10),CHAR(10))) Then
+			!! 同じ行を複製したい場合があるので同一内容の場合は選択を解除
+			BufInfo<BI.BLOCKSTART> = ""
+		End Else
+			GoSub GetSelBlock
+			startPos = Lower(blockStart)
+		End
+	End
 	GoSub InsertLines
 	If X = 1 Then
-		!! 挿入後改行の次にカーソルがある場合は範囲選択を残す
-		BufInfo<BI.BLOCKSTART> = startY:@VM:1
-		BufInfo<BI.BLOCKEND> = Y:@VM:1
+		!! カーソル位置が先頭の時は選択範囲を残す
+		BufInfo<BI.BLOCKSTART> = startPos
+		BufInfo<BI.BLOCKEND> = Y:@VM:X
 		keepSelection = True
 	End
 	Return
@@ -7993,7 +8066,6 @@ Act.Undo:
 	editCmd = EditCmdStack<EditCmdPos,2> 
 	If editCmd >< "" Then
 		GoSub DoEditCmd
-		Changed = True
 		EditCmdPos += 1 ;** １つ前に戻る
 		Changed = If EditCmdStack<EditCmdPos> = "SAVED_POINT" Then False Else True
 		Redraw = REDRAW.ALL
@@ -8015,11 +8087,12 @@ Act.Redo:
 		EditCmdPos -= 1 ;** １つ先に進む
 		editCmd = EditCmdStack<EditCmdPos,1>
 		GoSub DoEditCmd
-		Changed = True
 		If EditCmdStack<EditCmdPos-1> = "SAVED_POINT" Then
 			Changed = False
 			EditCmdPos -= 1 ;** １つ先に進む
 			Redraw = REDRAW.ALL
+		End Else
+			Changed = True
 		End
 	End
 	
@@ -8254,11 +8327,23 @@ Act.IncreaseIndent:
 		blockEnd = Y:@VM:1
 	End Else
 		GoSub GET.SELECTION.STRING
+		
+		!! 選択開始位置のインデント数を取得
+		iY = BufInfo<BI.BLOCKSTART,1>
+		line = Rec<iY>
+		GoSub GetIndentCnt
+		startIndentCnt = indentCnt
 	End
 	
 	cnt = blockEnd<1>
 	If blockEnd<2> = 1 Then cnt -= 1
 	For iY = blockStart<1> To cnt
+		If startIndentCnt # 0 Then
+			!! 開始インデントが0ではないのらインデントが0の物は残す
+			line = Rec<iY>
+			GoSub GetIndentCnt
+			If indentCnt = 0 Then Continue
+		End
 		cmd = ""
 		cmd<1> = iY
 		cmd<2> = 1
@@ -8267,7 +8352,7 @@ Act.IncreaseIndent:
 		cmd<5> = IndentCh
 		cmd<6> = "0"
 		editCmd<-1> = cmd
-	Next
+	Next iY
 	
 	tmpX = X ; tmpY = Y
 	GoSub StackEditCmd
@@ -8294,8 +8379,8 @@ Act.DecreaseIndent:
 	editCmd = ""
 	
 	If Not(BufInfo<BI.BLOCKSTART>) Then
-					blockStart = Y:@VM:1
-					blockEnd = Y:@VM:1
+		blockStart = Y:@VM:1
+		blockEnd = Y:@VM:1
 	End Else
 		GoSub GET.SELECTION.STRING
 	End
@@ -8786,6 +8871,41 @@ Set.Theme:
 	End
 	
 	Return
+
+*-----------------------------------------------------------------------------
+*カーソル位置から単語の先頭までを削除する
+*-----------------------------------------------------------------------------
+Act.DelBackWord:
+	GoSub Act.SelPrevWord
+	
+	editCmd = ""
+	editCmd<1> = BufInfo<BI.BLOCKSTART, 1>
+	editCmd<2> = BufInfo<BI.BLOCKSTART, 2>
+	editCmd<3> = Y
+	editCmd<4> = X
+	editCmd<5> = ""
+	editCmd<6> = "1" ;** 選択範囲がX=1の時はカーソルX位置をキープする
+	GoSub StackEditCmd
+	
+	keepSelection = @FALSE
+
+	Return
+
+Act.DelNextWord:
+	GoSub Act.SelNextWord
+	
+	editCmd = ""
+	editCmd<1> = BufInfo<BI.BLOCKSTART, 1>
+	editCmd<2> = BufInfo<BI.BLOCKSTART, 2>
+	editCmd<3> = Y
+	editCmd<4> = X
+	editCmd<5> = ""
+	editCmd<6> = "1" ;** 選択範囲がX=1の時はカーソルX位置をキープする
+	GoSub StackEditCmd
+	
+	keepSelection = @FALSE
+	
+  Return
 
 *-----------------------------------------------------------------------------
 *  カーソル位置が単語の途中なら単語の末端へ移動

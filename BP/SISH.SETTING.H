@@ -168,8 +168,15 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.INSSMC>           = K.C_8
 	keySeq<A.INSTMC>           = K.C_1
 	keySeq<A.DELETELINE>       = K.C_K
-	keySeq<A.BACKSPACE>        = K.BACKSPACE:" ":Char(127)
 	keySeq<A.DELETECHAR>       = K.DEL:" ":Char(212)
+IF @TERM.TYPE = "msvt" or @TTY = "console" Then
+	keySeq<A.BACKSPACE>        = Char(127)
+  keySeq<A.DELETE_BACKWORD>  = "@H"
+End Else
+	keySeq<A.BACKSPACE>        = K.BACKSPACE
+  keySeq<A.DELETE_BACKWORD>  = Char(127)
+End
+  keySeq<A.DELETE_NEXTWORD>  = K.C_DEL
 	keySeq<A.TEMPLATE>         = K.C_T
 	keySeq<A.COMMENT>          = K.C_UNDERBAR:" ":K.C_S_1
 	keySeq<A.CUT>              = K.C_X
@@ -203,6 +210,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.FIT.TERM>         = K.F8:" ":Char(135)
 	keySeq<A.WORD_HOKAN>       = K.C_SPACE:" ":Char(174)
 	keySeq<A.SEL_EXPAND>       = K.C_D
+	keySeq<A.NEWBUF>           = K.C_N
 
 **
 ** Color Setting
