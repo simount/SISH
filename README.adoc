@@ -413,9 +413,9 @@ a|  前の単語に移動
 リモート接続の場合はクライアント端末のOSC52を利用する。 +
 カーソルが行の先頭にある場合は選択範囲を残すのでインデント調整等に利用できる
 | kbd:[Alt+V] | SISH内のクリップボードからペースト
-| kbd:[Ctrl+Backspace]
+| kbd:[Ctrl+Backspace] + 
 (qm.exe: kbd:[Ctrl+h]) | カーソル位置から現在の単語の先頭まで削除
-| kbd:[Ctrl+Delete]
+| kbd:[Ctrl+Delete] + 
 (qm.exe: not support) | カーソル位置から現在の単語の最後まで削除
 | kbd:[Ctrl+K] | 行削除
 | kbd:[Ctrl+A] | 全行選択　(選択範囲がある場合は以下の選択領域の拡張処理になります) +
@@ -468,7 +468,7 @@ a|  前の単語に移動
 
 | kbd:[Ctrl+B] | カーソル行が画面の中央になるようにスクロールとあわせて現在のカーソル位置をジャンプ履歴に記録します
 | kbd:[TAB] | `TAB` の挿入。選択中ならインデントを増やす
-| kbd:[Shift+TAB]
+| kbd:[Shift+TAB] + 
 (qm.exe: kbd:[Ctrl+TAB]) | 選択中ならインデントを減らす
 | kbd:[Ctrl+Space] + 
 (qm.exe: kbd:[Alt+Space]) | 単語補完
