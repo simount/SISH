@@ -163,7 +163,7 @@ Equ K.C_SPACE To          "@@"
 !! Editor Input
 	keySeq<A.NEWLINE>          = K.ENTER
 	keySeq<A.TAB>              = K.TAB
-	keySeq<A.SHIFT_TAB>        = K.SHIFT_TAB:" ":Char(150)
+	keySeq<A.SHIFT_TAB>        = K.SHIFT_TAB:" ":Char(213)
 	keySeq<A.INSVMC>           = K.C_9
 	keySeq<A.INSSMC>           = K.C_8
 	keySeq<A.INSTMC>           = K.C_1
