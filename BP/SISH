@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.23.0 ]"
+Equ SISH.VERSION To "[ SISH v0.22.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -548,7 +548,7 @@ $IFDEF U2__UNIVERSE
 					cond = (cmdline And cmdline[1,1] <> ' ')
 $ELSE
 					!! OpenQM版は取り込むコマンドの精度を上げる
-					cond = (cmdline And cmdline[1,1] <> ' ' cmdline And cmdline[1,1] <> ' ' And (retCode >= 0 Or retCode = -15 Or retCode = -7))
+					cond = (cmdline And cmdline[1,1] <> ' ' And (retCode >= 0 Or retCode = -15 Or retCode = -7))
 $ENDIF
 					If cond Then
 						cmdline = Trim(cmdline)
@@ -8804,7 +8804,7 @@ Act.SwitchTheme:
 
 Set.Theme:
 
-	If IS.CONSOLE Then Return
+	If @TTY = 'console' Then Return
 
 	crtBuff = ""
 	
