@@ -1,4 +1,4 @@
-
+PROGRAM SISH
 **========================================================================================
 **
 **  FUNCTION
@@ -29,7 +29,7 @@
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.22.0 ]"
+Equ SISH.VERSION To "[ SISH v0.23.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -265,7 +265,6 @@ Shell.Main:
 	Equ prevFileName To ShInfo(18) ;** 直前のコマンドのファイル名
 	Equ bAutoCommand To ShInfo(19) ;** コマンドを実行してエディタに戻る
 	Equ bAutoEditor To ShInfo(20) ;** 自動でエディタ起動
-	Equ VOC To ShInfo(21) ;** VOC ファイルポインタ
 
 *--------------------------------------------------------------------------
 *   Full Screen Editor System
@@ -528,10 +527,6 @@ $ENDIF
 			Crt CHAR(27):"]2;":title:CHAR(7):
 		End
 		
-		** VOCファイルを開きなおす
-		Close VOC
-		Open 'VOC' To VOC Else Abort
-		
 		** コマンドスタック保存ファイルから復元を試みる
 $IFDEF U2__UNIVERSE
 		OpenPath STACK.FILE To fpStack Then
@@ -569,6 +564,7 @@ $ENDIF
 				Write "" To fpStack,logFile On Error Print "Cannot Write Stack Log -> ":STACK.FILE:"/":logFile
 			End
 		End
+		Close fpStack
 	End
 
 	CurBuf = CMD_BUF
@@ -1108,6 +1104,9 @@ $ENDIF
 		startTime = Time()
 		startTimeCpu = System(9)
 	End
+
+	** VOCファイル一度閉じる
+	Close VOC
 	
 	!!
 	!! ##### 実行 ######
@@ -1139,6 +1138,9 @@ $ENDIF
 		Crt CSI:"8;":@CRTHIGH:";":@CRTWIDE:"t":
 	End
 	
+	** VOCファイルを開く
+	Open 'VOC' To VOC Else Abort
+
 	!! PA なら プロンプトをクリアする
 	ReadV type From VOC,verb,1 Then
 		If type[1,2] = "PA" Then
@@ -1688,6 +1690,7 @@ $IFNDEF U2__UNIVERSE
 							Read rec From fp,id:".TXT" Then
 								lines = rec
 							End
+							Close fp
 						End
 					End
 				End Else
@@ -2034,7 +2037,7 @@ $IFNDEF U2__UNIVERSE
 					End
 				End
 			Repeat
-			Close n
+			Close fpACCOUNT
 		End
 		** $SERVERSファイル
 		cnt = DCount(serverListIds,@FM)
@@ -2737,7 +2740,8 @@ ParseCommandLine:
 			Repeat
 			
 			Convert @FM To " " In FldInfo
-		
+			
+			Close TempFL
 	End Case
 
 	If FileName = "" And ItemList = "" Then
@@ -3337,8 +3341,10 @@ DoInsert:
 	Read Temp From TFL, ItemName Else
 		StatusMessage = "Cannot Read ":FileName:" ":ItemName
 		Redraw = REDRAW.ALL
+		Close TFL
 		Return
 	End
+	Close TFL
 	InsBuffer = Temp
 	GoSub InsertLines
 Return
@@ -3398,7 +3404,6 @@ DoRead.Without.Jump:
 	!! バッファ番号を直近リストの先頭に設定
 	Ins CurBuf Before lruBuffList<1>
 	
-	GoSub Common.OpenFile
 	GoSub ReadItem
 	
 Return
@@ -3428,6 +3433,10 @@ $ENDIF
 
 Return
 
+Common.CloseFile:
+	Close FL
+Return
+
 *-----------------------------------------------------------------------
 *  ReadItem
 *-----------------------------------------------------------------------
@@ -3438,6 +3447,7 @@ ReadItem:
 		Rec = Bufs(ParentBufNo)
 	End Else
 		!! ファイルから開く
+		GoSub Common.OpenFile
 		Read Rec From FL,ItemName Else
 			Rec = ""
 			IsNew = True
@@ -3451,6 +3461,7 @@ ReadItem:
 			ReadOnly = True 
 		End
 		Release FL, ItemName ;** 更新ロックは常時保持はしない
+		GoSub Common.CloseFile
 	End
 
 	GoSub StartBuf
@@ -3555,11 +3566,13 @@ DoLock:
 		If Changed Then Return
 		RecordLockU FL, ItemName Locked
 			StatusMessage = "Record previously Locked by ":Status()
+			GoSub Common.CloseFile
 			Return
 		End
 		BufInfo<BI.LOCKED> = @TRUE
 	End
 	
+	GoSub Common.CloseFile
 Return
 
 *-----------------------------------------------------------------------
@@ -4353,6 +4366,7 @@ $ENDIF
 
 	Read InsBuffer From FL, "%%format_temp%%" Else Null
 	Delete FL, "%%format_temp%%"
+	GoSub Common.CloseFile
 	
 	!! 全選択
 	BufInfo<BI.BLOCKSTART, 1> = 1
@@ -5375,12 +5389,14 @@ SaveItem:
 		Crt @(0, PY):
 		ReadU prevRec From FL, ItemName On Error Return Locked
 			StatusMessage = "Record previously Locked by ":Status():", Do Not Saved"
+			GoSub Common.CloseFile
 			Return
 		End Then
 			Convert CHAR(10):CHAR(13) To '' In Rec ;** 改行コードが残っていたら自動除外
 		End Else
 			prevRec = ""
 		End
+		GoSub Common.CloseFile
 		
 	End
 	
@@ -5504,11 +5520,13 @@ SaveItem:
 !!				ReadOnly = True
 !!				Return
 !!			End
+			GoSub Common.OpenFile
 			If BufInfo<BI.LOCKED> Then
 				WriteU saveRec On FL, ItemName On Error Return
 			End Else
 				Write saveRec On FL, ItemName On Error Return
 			End
+			GoSub Common.CloseFile
 		End
 	End
 
@@ -5551,6 +5569,7 @@ Delete:
 	Crt @(0, PY):
 	ReadU prevRec From FL, ItemName On Error Return Locked
 		StatusMessage = "Record previously Locked by ":Status():", Cannot Save"
+		GoSub Common.CloseFile
 		Return
 	End Then
 		Convert CHAR(10):CHAR(13) To '' In Rec ;** 改行コードが残っていたら自動除外
@@ -5560,9 +5579,12 @@ Delete:
 	
 	If prevRec >< StartRec Then
 		StatusMessage = "Record previously Changed by Another, Cannot Save This Modify"
+		GoSub Common.CloseFile
 		Return
 	End
 	Delete FL, ItemName
+	
+	GoSub Common.CloseFile
 	
 	StatusMessage = "Deleted ":FileName:" ":ItemName
 	GoSub Act.CloseBuff
@@ -8602,6 +8624,7 @@ $ENDIF
 				End
 			End
 			If helpRec >< "" Then HelpText<-1> = helpRec
+			Close HELPFL
 		End
 	Next HelpNo
 	If HelpText = "" Then
@@ -8624,8 +8647,9 @@ Act.Reload:
 	
 	!! レコード格納先ファイルのオープン  
 	GoSub Common.OpenFile
-	
 	Read TempRec From FL, ItemName Else TempRec = ""
+	GoSub Common.CloseFile
+	
 	Convert CHAR(10):CHAR(13) To '' In TempRec ;** 改行コードが残っていたら自動除外
 	
 	If TempRec >< StartRec Then
@@ -8637,7 +8661,6 @@ Act.Reload:
 			GoSub GetKey
 			If UpCase(C) = "Y" Else Return
 		End
-		GoSub Common.OpenFile
 		GoSub ReadItem
 	End
 
@@ -8705,6 +8728,7 @@ Act.CloseBuff:
 			Return
 		End
 		Release FL,ItemName
+		Close FL
 	End
 
 	!! 現在のバッファ終了  
