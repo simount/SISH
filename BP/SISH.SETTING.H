@@ -77,7 +77,11 @@ Equ K.F7 To               "@[[18~"
 Equ K.F8 To               "@[[19~"
 Equ K.F9 To               "@[[20~"
 Equ K.F10 To              "@[[21~"
+Equ K.C_F10 To            "@[[21;5~"
+Equ K.A_F10 To            "@[[21;3~"
 Equ K.F11 To              "@[[23~"
+Equ K.C_F11 To            "@[[23;5~"
+Equ K.S_F11 To            "@[[23;2~"
 Equ K.F12 To              "@[[24~"
 
 Equ K.C_1 To              "@[[1;5q"
@@ -163,20 +167,20 @@ Equ K.C_SPACE To          "@@"
 !! Editor Input
 	keySeq<A.NEWLINE>          = K.ENTER
 	keySeq<A.TAB>              = K.TAB
-	keySeq<A.SHIFT_TAB>        = K.SHIFT_TAB:" ":Char(213)
+	keySeq<A.SHIFT_TAB>        = K.SHIFT_TAB:" ":Char(213):" ":K.C_F11
 	keySeq<A.INSVMC>           = K.C_9
 	keySeq<A.INSSMC>           = K.C_8
 	keySeq<A.INSTMC>           = K.C_1
 	keySeq<A.DELETELINE>       = K.C_K
 	keySeq<A.DELETECHAR>       = K.DEL:" ":Char(212)
 IF @TERM.TYPE = "msvt" or @TTY = "console" Then
-	keySeq<A.BACKSPACE>        = Char(127)
-  keySeq<A.DELETE_BACKWORD>  = "@H"
+	keySeq<A.BACKSPACE>        = Char(127):" ":K.BACKSPACE
+  keySeq<A.DELETE_BACKWORD>  = K.C_F10
 End Else
 	keySeq<A.BACKSPACE>        = K.BACKSPACE
   keySeq<A.DELETE_BACKWORD>  = Char(127)
 End
-  keySeq<A.DELETE_NEXTWORD>  = K.C_DEL
+  keySeq<A.DELETE_NEXTWORD>  = K.C_DEL:" ":K.A_F10
 	keySeq<A.TEMPLATE>         = K.C_T
 	keySeq<A.COMMENT>          = K.C_UNDERBAR:" ":K.C_S_1
 	keySeq<A.CUT>              = K.C_X
@@ -208,7 +212,7 @@ End
 	keySeq<A.THEME>            = K.F11:" ":KEY.FUNCTION.11:" ":Char(138)
 	keySeq<A.CANCEL>           = K.ESC:" ":K.ESC:K.ESC
 	keySeq<A.FIT.TERM>         = K.F8:" ":Char(135)
-	keySeq<A.WORD_HOKAN>       = K.C_SPACE:" ":Char(174)
+	keySeq<A.WORD_HOKAN>       = K.C_SPACE:" ":Char(174):" ":K.S_F11
 	keySeq<A.SEL_EXPAND>       = K.C_D
 	keySeq<A.NEWBUF>           = K.C_N
 

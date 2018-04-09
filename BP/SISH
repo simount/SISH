@@ -16,7 +16,7 @@ PROGRAM SISH
 **
 **  DATE
 **
-**    2017/07/24
+**    2018/04/06
 **  
 **  AUTHOR
 **    
@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.22.1 ]"
+Equ SISH.VERSION To "[ SISH v0.23.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -388,8 +388,21 @@ Shell.Main:
 		prevFileName = "" ;** 直前のコマンドのファイル名
 		
 		Crt SISH.VERSION
-		GoSub InitTerminal ;* 初回起動時に１回だけ初期化するもの
+		
+		!! paste.exeを探す
+$IFNDEF U2__UNIVERSE
+		HAS.PASTE.EXE = @FALSE
+		If @TTY = 'console' Then
+			OS.Execute 'where /q paste.exe'
+			If OS.Error() = 0 Then
+				HAS.PASTE.EXE = @TRUE
+			End
+		End
+$ENDIF
+
 	End
+
+	GoSub InitTerminal ;* 初回起動時に１回だけ初期化するもの
 
 !! 外部設定の読み込み
 $INCLUDE SISH.SETTING.H
@@ -522,7 +535,7 @@ $ENDIF
 $IFNDEF U2__UNIVERSE
 		logname = @HOSTNAME:"\":logname
 $ENDIF
-		title = account['/',DCount(account,'/'),1]:" @ ":logname:" (":System(18):")"
+		title = "QM ":account['/',DCount(account,'/'),1]:" @ ":logname:" (":System(18):")"
 		If NOT(IS.CONSOLE) Then
 			Crt CHAR(27):"]2;":title:CHAR(7):
 		End
@@ -847,9 +860,11 @@ Launch.Editor:
 					!! インクリメンタルサーチモード
 					If actNo = A.INSCHAR Then
 						iSearchText := C
+						cmdStackPos = 1
 					End Else If actNo = A.BACKSPACE Then
 						If Len(iSearchText) > 0 Then
 							iSearchText = iSearchText[1,Len(iSearchText)-1]
+							cmdStackPos = 1
 						End
 					End Else
 						bIncSearch = "" ;** 終了
@@ -870,7 +885,7 @@ Launch.Editor:
 					End Else
 						If actNo = A.INSCHAR And UniSeq(C) < 127 And BufInfo<BI.BLOCKSTART> = "" Then
 							!! 半角文字なら描画高速化
-							Crt CSI:"1@":C:
+							CRT (IF IS.CONSOLE AND @TERM.TYPE # 'msvt' THEN @(-19) ELSE CSI:"1@"):C:
 							GoTo Shell.KeyLoop.Bef.GetKey
 						End
 					End
@@ -1098,16 +1113,16 @@ $ENDIF
 	prevCrt = @CRTHIGH:@CRTWIDE
 
 	@USER.RETURN.CODE = 999999999
-	
+
+	** VOCファイル一度閉じる
+	Close VOC
+
 	If bTimer Then
 		!! 時間計測開始
 		startTime = Time()
 		startTimeCpu = System(9)
 	End
 
-	** VOCファイル一度閉じる
-	Close VOC
-	
 	!!
 	!! ##### 実行 ######
 	!!
@@ -1190,6 +1205,12 @@ Run.Command.Ending:
 			GoSub GetKey
 		End
 	End
+	
+!! 非同期メッセージの表示
+$IFNDEF U2__UNIVERSE
+	msgs = GET.MESSAGES()
+	If msgs THEN PRINT msgs
+$ENDIF
 	
 	GoTo Shell.Input.Begin ;* キーループに戻る
 
@@ -2179,6 +2200,12 @@ $ENDIF
 		Crt ESC:"]R":ESC:"[?69l"
 	End
 	
+$IFNDEF U2__UNIVERSE
+	IF @TERM.TYPE = 'msvt' THEN
+		EXECUTE "TERM qmterm"
+	END
+$ENDIF
+	
 	** Shellを抜ける
 	Stop
 
@@ -2621,16 +2648,6 @@ AUTO.COMPLATE:
 	InsBuffer = commonWord
 	GoSub InsertLines
 
-	!! 誤操作が多いので溜まっているキーキューをクリアする
-!! 	Loop
-!! $IFDEF U2__UNIVERSE
-!! 		Input test,-1
-!! $ElSE
-!! 		test = KeyReady()
-!! $ENDIF
-!! 	While test Do
-!! 		k = KeyIn()
-!! 	Repeat
 	Loop
 		GoSub GetCh.Timeout
 		While ch <> ""
@@ -4545,21 +4562,19 @@ Initialise:
 * InitTerminal(初回起動時に呼ばれる)
 *--------------------------------------------------------------------------
 InitTerminal: 
-	
-!! 	prompt ''
-	
-	If IS.CONSOLE Then
+
 $IFNDEF U2__UNIVERSE
+	If @TTY = 'console' Then
 		x = PTERM(2,@FALSE)
 		If System(1044) Then
 			!! ECS Mode
 			x = PTERM(7,1) ;** UTF8固定
 		End
 		EXECUTE "TERM msvt"
-$ENDIF
 		Return
 	End
-	
+$ENDIF
+
 $IFDEF U2__UNIVERSE
 	Ttyget ttys Then
 		If ttys<1,1> = 3 Then; * EMULATE mode
@@ -4583,17 +4598,6 @@ $ELSE
 	End
 	Execute "TERM xterm-eeepc"
 	x = PTERM(8,8) ;** Backspace ^H
-$ENDIF
-
-	!! paste.exeを探す
-$IFNDEF U2__UNIVERSE
-	HAS.PASTE.EXE = @FALSE
-	If @TTY = 'console' Then
-		OS.Execute 'where /q paste.exe'
-		If OS.Error() = 0 Then
-			HAS.PASTE.EXE = @TRUE
-		End
-	End
 $ENDIF
 
 	Return
@@ -5283,11 +5287,11 @@ MenuLine:
 		If ch = '' Then Exit
 		If f Then
 			If ch = 'E' And MenuLine[i,3] = "ESC" Then
-				crtBuff := SBOLD:FG.BASE2:"ESC":EBOLD:HI.STATUS.ON
+				crtBuff := SBOLD:FG.RED:"ESC":EBOLD:HI.STATUS.ON
 				f = @FALSE
 				i += 2
 			End Else If ((ch >= 'A' And ch <= 'Z') or ch = '!') Then
-				crtBuff := SBOLD:FG.BASE2:ch:EBOLD:HI.STATUS.ON
+				crtBuff := SBOLD:FG.RED:ch:EBOLD:HI.STATUS.ON
 				f = @FALSE
 			End Else 
 				crtBuff := ch
