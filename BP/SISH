@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.23.0 ]"
+Equ SISH.VERSION To "[ SISH v0.24.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -378,7 +378,7 @@ Shell.Main:
 		cmdStack = ""
 		logtoStack = "" ;** LOGTOの履歴を保持
 		bAutoTermSize = @TRUE
-		bInvert = @TRUE ;** デフォルト反転モード
+		bInvert = @FALSE ;** デフォルト反転モード
 		bTimer = @FALSE
 		theme = 1
 		clipboard = ""        ;** ローカルクリップボードバッファ
@@ -8065,8 +8065,7 @@ Act.Paste:
 	startPos = Y:@VM:X
 	If BufInfo<BI.BLOCKSTART> Then
 		GoSub GET.SELECTION.STRING
-		
-		If selString = Convert(CHAR(13),CHAR(10),Change(InsBuffer,CHAR(13):CHAR(10),CHAR(10))) Then
+		If Convert(CHAR(13):CHAR(10):@FM,"",selString) = Convert(CHAR(13):CHAR(10):@FM,"",InsBuffer) Then
 			!! 同じ行を複製したい場合があるので同一内容の場合は選択を解除
 			BufInfo<BI.BLOCKSTART> = ""
 		End Else
@@ -9143,10 +9142,6 @@ $IFNDEF U2__UNIVERSE
 	clipboard = ""
 	OpenPath SYSTEM(38) To fp Then
 		Read clipboard Encoding enc From fp,"SISH.CLIP.":@USERNO Then
-			If Count(clipboard,@FM) >= 1 Then
-				!! Readで最後の改行が消えるQMのバグに対応(1行だけのコピーのみおかしい)
-				clipboard := @FM
-			End
 		End
 	End
 
