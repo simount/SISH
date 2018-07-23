@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.24.0 ]"
+Equ SISH.VERSION To "[ SISH v0.24.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -1209,7 +1209,7 @@ Run.Command.Ending:
 !! 非同期メッセージの表示
 $IFNDEF U2__UNIVERSE
 	msgs = GET.MESSAGES()
-	If msgs THEN PRINT msgs
+	If msgs THEN PRINT CONVERT(@FM,CHAR(10),msgs)
 $ENDIF
 	
 	GoTo Shell.Input.Begin ;* キーループに戻る
