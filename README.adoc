@@ -77,8 +77,10 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
 QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタマイズを行うとより使いやすくなります。
 
 色の設定 +
-link:base16-eighties.reg[base16-eighties.reg]をダウンロードしてダブルクリックでインポート。 +
-(cmd.exeのデフォルト設定を書き換えます。スタートメニューのQM Consoleに適応するにはqm.exeへのショートカットを再度作成する必要があります。）
+link:https://github.com/Microsoft/console/tree/master/tools/ColorTool[ColorTool] をダウンロードします。
+以下のコマンドを実行するとcmd.exeの色設定のレジストリが更新されます
+
+    ColorTool -b solarized_dark
 
 クリップボード貼り付け +
 以下の `paste.exe` を system32 に配置すれば、貼り付けで画面が点滅する問題を回避できます。
@@ -129,11 +131,10 @@ SISHシェル起動時や `LOGTO` によるアカウント移動時にそのコ�
 
 kbd:[F9] キーでON/OFFを切り替えます
 
-==== カラーテーマの切替機能（リモート接続のみ） ====
+==== 背景色の切替機能 ====
 
-kbd:[F11] キーでカラーテーマを切り替える事ができます。(OSCによるカラーパレット変更に対応している端末のみ) +
-パレットは以下のサイトのSolarized-lightとdarkが利用できます。  +
-http://ethanschoonover.com/solarized
+kbd:[F11] 黒背景ベースと白背景ベースを切り換える。
+デフォルトの設定ファイルでは ColorTool の solarized_dark に対応しています。
 
 ==== ターミナルサイズの自動変更機能（リモート接続のみ） ====
 
@@ -567,6 +568,9 @@ https://myrica.estable.jp/
 
 
 == 更新履歴 ==
+
+=== 2018/08/03 - 0.25.0 ===
+- `[IMP]` Thema設定を背景色の反転に変更。カラーパレットはColorToolに合わせるようにした
 
 === 2018/07/23 - 0.24.1 ===
 - `[Bug]` GET.MESSAGE()の出力が複数行の場合に改行で表示されるようにした

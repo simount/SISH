@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.24.1 ]"
+Equ SISH.VERSION To "[ SISH v0.25.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -250,7 +250,7 @@ Shell.Main:
 	Equ prevPath To ShInfo(3)<2> ;** 前回のアカウントパス
 	Equ bInvert To ShInfo(4) ;** 大文字小文字変換機能 ON/OFF
 	Equ bTimer To ShInfo(5) ;** 時間計測機能 ON/OFF
-	Equ theme To ShInfo(6) ;** テーマNo
+!!	Equ theme To ShInfo(6) ;** テーマNo
 	Equ HAS.PASTE.EXE To ShInfo(7) ;** paste.exe存在するか
 	Equ bChain To ShInfo(8) ;** Chainから来た
 	Equ bAutoTermSize To ShInfo(9) ;** 端末サイズ自動設定機能 ON/OFF
@@ -380,7 +380,6 @@ Shell.Main:
 		bAutoTermSize = @TRUE
 		bInvert = @FALSE ;** デフォルト反転モード
 		bTimer = @FALSE
-		theme = 1
 		clipboard = ""        ;** ローカルクリップボードバッファ
 		bOverlay = @FALSE
 		cmdStackList.DispCnt = "2":@FM:"19" ;** コマンドスタックリスト表示のデフォルト値
@@ -440,13 +439,6 @@ $ENDIF
 
 	bAutoCommand = @FALSE
 	bAutoEditor = @FALSE
-
-	!! Themeの反映
-	If theme Then
-		noThemePopup = @TRUE
-		GoSub Set.Theme
-	End
-	noThemePopup = @FALSE
 	
 	!! 大文字小文字変換の初期化
 	Perform "PTERM CASE ":If bInvert Then "INVERT" Else "NOINVERT"
@@ -811,10 +803,8 @@ Shell.KeyLoop.Bef.GetKey:
 			
 		** イベント
 			Case actNo = A.THEME
-				GoSub CUR.TOP.OF.SCREEN
 				GoSub Act.SwitchTheme
-				crtBuff = ESC.CUR.TOP:CHAR(8):@(-3)
-				Crt crtBuff:
+				CRT SGR.ALL.OFF:
 
 			Case actNo = A.FIT.TERM
 				!! 端末サイズ自動設定
@@ -4995,7 +4985,7 @@ ParseLine:
 		selection<1> = iXOffSet
 	End
 
-	HI.OFF = FG.BASE02:BG.BASE2:EBOLD
+	HI.OFF = SGR.ALL.OFF
 	repTabCh = "»":Space(STDTAB-1)
 	PLine = ""
 	Old = ""
@@ -5145,9 +5135,9 @@ PrintLine:
 	!! 行情報部の色指定
 	If Row = Y Then
 		!! 現在行
-		crtBuff := FG.YELLOW:BG.BASE3
+		crtBuff := FG.YELLOW:BG.BASE2
 	End Else
-		crtBuff := FG.BASE00:BG.BASE3
+		crtBuff := FG.BASE00:BG.BASE2
 	End
 	If TgtFld Then
 		!! フィールド指定モード
@@ -5969,26 +5959,16 @@ SubstPrompts:
 * ToolsMenu
 *--------------------------------------------------------------------------
 ToolsMenu: 
-	MenuLine = "Theme Keys :"
+	MenuLine = "BGColorSwitch Keys :"
 	GoSub MenuLine
 	C = UpCase(C)
 	Begin Case
-		Case C = "T"
-			GoSub ThemeMenu
+		Case C = "B"
+			GoSub Act.SwitchTheme
 		Case C = "K"
 			GoSub Keys
 			GoSub ShowWindow
 		End Case
-	Return
-*--------------------------------------------------------------------------
-* ThemeMenu
-*--------------------------------------------------------------------------
-ThemeMenu: 
-	MenuLine = "1.Default 2.Solarized-dark 3.Solarized-light :"
-	GoSub MenuLine
-	If Not(C Matches "1N") Then Return
-	theme = C
-	GoSub Act.SwitchTheme
 	Return
 *---------------------------------------------------------------------------
 * Keys
@@ -6007,6 +5987,22 @@ Keys:
 !! 	KeyName = "Next Word" ; Key = K.NEXTWORD ; GoSub ShowKey
 !! 	KeyName = "Prev Word" ; Key = K.PREVWORD ; GoSub ShowKey
 
+	CRT FG.BASE3:"BASE3  ":BG.BASE3:"  ":SGR.ALL.OFF
+	CRT FG.BASE2:"BASE2  ":BG.BASE2:"  ":SGR.ALL.OFF
+	CRT FG.BASE1:"BASE1  ":BG.BASE1:"  ":SGR.ALL.OFF
+	CRT FG.BASE0:"BASE0  ":BG.BASE0:"  ":SGR.ALL.OFF
+	CRT FG.BASE00:"BASE00 ":BG.BASE00:"  ":SGR.ALL.OFF
+	CRT FG.BASE01:"BASE01 ":BG.BASE01:"  ":SGR.ALL.OFF
+	CRT FG.BASE02:"BASE02 ":BG.BASE02:"  ":SGR.ALL.OFF
+	CRT FG.BASE03:"BASE03 ":BG.BASE03:"  ":SGR.ALL.OFF
+	CRT FG.YELLOW:"YELLOW ":BG.YELLOW:"  ":SGR.ALL.OFF
+	CRT FG.ORANGE:"ORANGE ":BG.ORANGE:"  ":SGR.ALL.OFF
+	CRT FG.RED:"RED    ":BG.RED:"  ":SGR.ALL.OFF
+	CRT FG.MAGENTA:"MAGENT ":BG.MAGENTA:"  ":SGR.ALL.OFF
+	CRT FG.VIOLET:"VIOLET ":BG.VIOLET:"  ":SGR.ALL.OFF
+	CRT FG.BLUE:"BLUE   ":BG.BLUE:"  ":SGR.ALL.OFF
+	CRT FG.CYAN:"CYAN   ":BG.CYAN:"  ":SGR.ALL.OFF
+	CRT FG.GREEN:"GREEN  ":BG.GREEN:"  ":SGR.ALL.OFF	
 	actNo = 0	
 	strKey = ""
 	Loop
@@ -8798,106 +8794,22 @@ Act.ToggleCaseInvert:
 
 
 * **************************************************************************
-* Act.SwitchTheme
+* Act.SwitchTheme (背景色の入れ替え)
 
 Act.SwitchTheme:
 
-	theme += 1
-	If theme > 3 Then theme = 1
-
-Set.Theme:
-
-	If @TTY = 'console' Then Return
-
-	crtBuff = ""
+	A = FG.BASE3; FG.BASE3 = FG.BASE03; FG.BASE03 = A
+	A = FG.BASE2; FG.BASE2 = FG.BASE02; FG.BASE02 = A
+	A = FG.BASE1; FG.BASE1 = FG.BASE01; FG.BASE01 = A
+	A = FG.BASE0; FG.BASE0 = FG.BASE00; FG.BASE00 = A
+	A = BG.BASE3; BG.BASE3 = BG.BASE03; BG.BASE03 = A
+	A = BG.BASE2; BG.BASE2 = BG.BASE02; BG.BASE02 = A
+	A = BG.BASE1; BG.BASE1 = BG.BASE01; BG.BASE01 = A
+	A = BG.BASE0; BG.BASE0 = BG.BASE00; BG.BASE00 = A
 	
-	Begin Case
-		Case theme = 1
-		
-			themeName = "terminal default"
-			crtBuff := ESC:"]R"
-		
-		Case theme = 2
-		
-			themeName = "Solarized - dark"
-
-			crtBuff := ESC:"]4;0;#002b36":BEL
-			crtBuff := ESC:"]4;10;#073642":BEL
-			crtBuff := ESC:"]4;11;#586e75":BEL
-			crtBuff := ESC:"]4;8;#657b83":BEL
-			crtBuff := ESC:"]4;12;#839496":BEL
-			crtBuff := ESC:"]4;7;#93a1a1":BEL
-			crtBuff := ESC:"]4;13;#eee8d5":BEL
-			crtBuff := ESC:"]4;15;#fdf6e3":BEL
-			
-			crtBuff := ESC:"]4;3;#b58900":BEL
-			crtBuff := ESC:"]4;9;#cb4b16":BEL
-			crtBuff := ESC:"]4;1;#dc322f":BEL
-			crtBuff := ESC:"]4;14;#d33682":BEL
-			crtBuff := ESC:"]4;5;#6c71c4":BEL
-			crtBuff := ESC:"]4;4;#268bd2":BEL
-			crtBuff := ESC:"]4;6;#2aa198":BEL
-			crtBuff := ESC:"]4;2;#859900":BEL
-		
-			crtBuff := ESC:"]10;#93a1a1":BEL
-			crtBuff := ESC:"]11;#002b36":BEL
-			crtBuff := ESC:"]4;260;#000000":BEL
-			crtBuff := ESC:"]12;#ffffff":BEL
-		
-		Case theme = 3
-			
-			themeName = "Solarized - light"
-			
-			crtBuff := ESC:"]4;0;#fdf6e3":BEL
-			crtBuff := ESC:"]4;10;#eee8d5":BEL
-			crtBuff := ESC:"]4;11;#93a1a1":BEL
-			crtBuff := ESC:"]4;8;#839496":BEL
-			crtBuff := ESC:"]4;12;#657b83":BEL
-			crtBuff := ESC:"]4;7;#586e75":BEL
-			crtBuff := ESC:"]4;13;#073642":BEL
-			crtBuff := ESC:"]4;15;#002b36":BEL
-			
-			crtBuff := ESC:"]4;3;#b58900":BEL
-			crtBuff := ESC:"]4;9;#cb4b16":BEL
-			crtBuff := ESC:"]4;1;#dc322f":BEL
-			crtBuff := ESC:"]4;14;#d33682":BEL
-			crtBuff := ESC:"]4;5;#6c71c4":BEL
-			crtBuff := ESC:"]4;4;#268bd2":BEL
-			crtBuff := ESC:"]4;6;#2aa198":BEL
-			crtBuff := ESC:"]4;2;#859900":BEL
-		
-			crtBuff := ESC:"]10;#586e75":BEL
-			crtBuff := ESC:"]11;#fdf6e3":BEL
-			crtBuff := ESC:"]4;260;#ffffff":BEL
-			crtBuff := ESC:"]12;#000000":BEL
-			
+	Redraw = REDRAW.ALL
 	
-	End Case
-
-	If noThemePopup Then
-		Crt crtBuff:
-	End Else
-		!! テーマ名の表示
-		popupX = Int(@CRTWIDE/2)
-		popupY = Int(@CRTHIGH/2) - 3
-		crtBuff := BG.BASE2:FG.BASE00
-		crtBuff := @(popupX-12,popupY)  :"--------- Theme ---------"
-		crtBuff := @(popupX-12,popupY+1):"|                       |"
-		crtBuff := @(popupX-12,popupY+2):"|                       |"
-		crtBuff := @(popupX-12,popupY+3):"|                       |"
-		crtBuff := @(popupX-12,popupY+4):"-------------------------"
-	
-		crtBuff := SGR.ALL.OFF
-		crtBuff := @(popupX-Int(Len(themeName)/2),popupY+2):themeName
-	
-		Crt crtBuff:
-		GoSub GetKey
-		If actNo = A.THEME Then GoTo Act.SwitchTheme
-
-		Redraw = REDRAW.ALL
-	End
-	
-	Return
+	RETURN
 
 *-----------------------------------------------------------------------------
 *カーソル位置から単語の先頭までを削除する
