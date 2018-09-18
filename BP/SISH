@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.25.1 ]"
+Equ SISH.VERSION To "[ SISH v0.26.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -1402,7 +1402,12 @@ $ENDIF
 		End Else
 			For i = 1 To 999
 				word = Remove(words, sep);
-				If word >< nowWord Then
+				If word = "DICT" Then
+					Open "DICT.DICT" To fpDICT Then
+						dictName = "DICT.DICT"
+						Exit
+					End
+				End Else If word >< nowWord Then
 					Open dictType,word To fpDICT Then
 						dictName = word
 						Exit
@@ -1614,10 +1619,9 @@ DispCandidate.Common:
 		If commonWord And nowWord <> commonWord Then
 			GoSub Setting.WordInfo
 			GoSub Prev.Match.Filter
-			If dispType = "OS Path" Then
-				bDispCandidate = @TRUE
-				GoTo TAB.HOKAN ;** 連続で候補表示する
-			End
+			IF candidateMode = "FILE" THEN candidateMode = "FIELD"
+			bDispCandidate = @TRUE
+			GoTo TAB.HOKAN ;** 連続で候補表示する
 		End
 	End
 
@@ -1784,13 +1788,15 @@ $ENDIF
 				End Else
 					keyInfos<-1> = grpId<i>:"...(":cnt:")"
 					ids = ""
+					lastDesc = ""
 					Loop
 						id = Remove(desc,sep)
 						non = Remove(desc,s)
 						ids := If id[1] = " " Then id Else id:" "
 					While sep
+						lastDesc = non
 					Repeat
-					descInfos<-1> = Len(grpId<i>):@VM:ids
+					descInfos<-1> = Len(grpId<i>):@VM:ids:"# ":lastDesc[' ',5,*]
 				End
 			Next i
 		End Else
@@ -2605,7 +2611,6 @@ AUTO.COMPLATE:
 			separator = "%"
 		End
 		commonWord = slist : separator ;* 候補は１つなので確定
-		bDispCandidate = @FALSE
 		slist = ""
 		
 	End Else
