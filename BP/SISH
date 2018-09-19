@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.26.0 ]"
+Equ SISH.VERSION To "[ SISH v0.26.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -8726,13 +8726,11 @@ Act.CloseBuff:
 	ItemName = BufInfo<BI.ITEM>
 	
 	!! ロックを外す
-	If FileName >< "" And ItemName >< "" Then
-		Open FileName To FL Else
-			StatusMessage = "Cannot Open ":FileName
-			Return
+	If BufInfo<BI.LOCKED> And FileName >< "" And ItemName >< "" Then
+		Open FileName To FL Then
+			Release FL,ItemName
+			Close FL
 		End
-		Release FL,ItemName
-		Close FL
 	End
 
 	!! 現在のバッファ終了  
