@@ -77,10 +77,14 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
 QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタマイズを行うとより使いやすくなります。
 
 色の設定 +
-link:https://github.com/Microsoft/console/tree/master/tools/ColorTool[ColorTool] をダウンロードします。
-以下のコマンドを実行するとcmd.exeの色設定のレジストリが更新されます
+link:https://github.com/chriskempson/base16[base16]の色アーキテクチャで綺麗に表示されるよう構築されています。 +
+既存のbase16のカラーパレットは以下の方法で設定できます。 +
+link:https://github.com/Microsoft/console/tree/master/tools/ColorTool[ColorTool] をダウンロードします。 +
+ColorToolはiterm2設定を取り込むことができます。base16のiterm2版のスキーマ設定は以下からダウンロードできます。 +
+https://github.com/martinlindhe/base16-iterm2/tree/master/itermcolors +
+ダウンロードしたスキーマ設定を `ColorTool\schema` に置いて以下のコマンドで設定します。
 
-    ColorTool -b solarized_dark
+    ColorTool -b base16-solarized-dark
 
 クリップボード貼り付け +
 以下の `paste.exe` を system32 に配置すれば、貼り付けで画面が点滅する問題を回避できます。
@@ -134,7 +138,8 @@ kbd:[F9] キーでON/OFFを切り替えます
 ==== 背景色の切替機能 ====
 
 kbd:[F11] 黒背景ベースと白背景ベースを切り換える。
-デフォルトの設定ファイルでは ColorTool の solarized_dark に対応しています。
+背景を反転させると文字色と合わない色設定も存在しますので注意が必要です。
+`base16-solarized-dark` は背景を反転させても見やすい色設定となっています。
 
 ==== ターミナルサイズの自動変更機能（リモート接続のみ） ====
 
@@ -568,6 +573,11 @@ https://myrica.estable.jp/
 
 
 == 更新履歴 ==
+
+=== 2018/09/25 - 0.27.0 ===
+- `[BUG]` DIRECTORY FILE の後の補完の初期モードVOCになっている問題を修正
+- `[IMP]` `~~` もPUNC扱いにした
+- `[IMP]` 色の設定をBASE16パレットシステムをベースにするようにした
 
 === 2018/09/19 - 0.26.0 ===
 - `[IMP]` AutoComplete決定後に補完モードはONのままにするように仕様変更

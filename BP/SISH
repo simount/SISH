@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.26.1 ]"
+Equ SISH.VERSION To "[ SISH v0.27.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -405,7 +405,7 @@ $ENDIF
 
 !! 外部設定の読み込み
 $INCLUDE SISH.SETTING.H
-		
+	
 	GoSub SetupDefKeyBindings
 	GoSub SetupTokens
 	
@@ -1616,11 +1616,12 @@ DispCandidate.Common:
 		!! 文字入力により自動的にオートコンプリートする
 		commonWord = ""
 		GoSub AUTO.COMPLATE
-		If commonWord And nowWord <> commonWord Then
+		If (commonWord And nowWord <> commonWord) OR slist = "" Then
 			GoSub Setting.WordInfo
 			GoSub Prev.Match.Filter
-			IF candidateMode = "FILE" THEN candidateMode = "FIELD"
 			bDispCandidate = @TRUE
+			candidateMode = "FLATREC"
+			startCandidateMode = ""
 			GoTo TAB.HOKAN ;** 連続で候補表示する
 		End
 	End
@@ -1854,7 +1855,7 @@ $ENDIF
 			prevCh = ch
 			
 			crtBuff := id[nowWord.len+2,descInfos<i,1>-grpCh]
-			crtBuff := SGR.ALL.OFF
+			crtBuff := EBOLD:SGR.ALL.OFF
 			crtBuff := id[nowWord.len+2+descInfos<i,1>-grpCh,99]
 			
 			!! desc
@@ -3899,14 +3900,14 @@ ProcChoiceList:
 		selected = (choiceNo = winTop+i) ;** 選択行か？
 		line = Raise(Raise(choiceOutList<winTop+i,1>))
 		crtBuff := @(winX,i+1)
-		crtBuff := If selected Then HI.SELECT1 Else FG.BASE02:BG.BASE3:EBOLD
+		crtBuff := If selected Then HI.SELECT.ON Else FG.BASE01:BG.BASE2
 		crtBuff := line<1>
 		If line<2> Then
-			crtBuff := FG.RED
+			crtBuff := FG.BASE03
 			crtBuff := line<2>
 		End
 		If line<3> Then
-			crtBuff := If selected Then HI.SELECT1 Else FG.BASE02:BG.BASE3:EBOLD
+			crtBuff := If selected Then HI.SELECT.ON Else FG.BASE01:BG.BASE2
 			crtBuff := line<3>
 		End
 		crtBuff := @(-4):SGR.ALL.OFF
@@ -5231,7 +5232,7 @@ PrintStatus:
 		crtBuff := @(@CRTWIDE-19,PY): HI.STATUS.ON
 	End
 
-	!! 文字コード情報B
+	!! 文字コード情報
 	cd = UniSeq(Rec<Y>[X,1])
 	If cd = 0 Then cd = 10 ;** 改行コードにする
 	hex = OConv(cd,'MX')
@@ -5251,7 +5252,7 @@ PrintStatus:
 	End Else
 		curInfo := Y:".":DP_X
 	End
-	crtBuff := curInfo "L#11"
+	crtBuff := curInfo "L#12"
 	crtBuff := HI.STATUS.OFF
 	
 	!! ステータスメッセージ
@@ -5782,7 +5783,7 @@ SetupTokens:
 	AddKeyWord "WRITEVU"
 	FUNCS = ""
 
-	PUNCS = ", []()<>{}=+-/*:;^#!":Char(9)
+	PUNCS = ", []()<>{}~=+-/*:;^#!":Char(9)
 	STRQTS = "'\":'"'
 	Return
 *-----------------------------------------------------------------------
@@ -7373,7 +7374,7 @@ Act.ShowOutline:
 		End
 	Next
 
-	title = SBOLD:FG.BASE3:BG.YELLOW:" Outline"
+	title = SBOLD:FG.BASE03:BG.YELLOW:" Outline"
 	tmpList = Fields(Convert(@VM,",",choiceList),",",2)
 	Locate Y In tmpList By "AR" Setting choiceNo Else choiceNo -= 1
 	
@@ -7511,7 +7512,7 @@ Core.ShowWordHokan:
 
 	!! 選択リストボックス初期化
 	choiceNo = 1
-	title = SBOLD:FG.BASE3:BG.YELLOW:" Words"
+	title = SBOLD:FG.BASE03:BG.YELLOW:" Words"
 	GoSub InitChoiceList
 	
 	filter = currentWord
@@ -8156,7 +8157,7 @@ Act.ShowBuffList:
 		End Case
 		choiceList<-1> = dispStr
 	Next
-	title = SBOLD:FG.BASE3:BG.BLUE:" Choice Buffer"
+	title = SBOLD:FG.BASE03:BG.BLUE:" Choice Buffer"
 	choiceNo = If DCount(choiceList,@FM) < 2 Then 1 Else 2 ;**   !! 初期値は１つ前のものにする
 	
 	!! 選択リストボックス初期化
