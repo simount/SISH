@@ -76,22 +76,21 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
 
 QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタマイズを行うとより使いやすくなります。
 
-色の設定 +
+*色の設定* +
 link:https://github.com/chriskempson/base16[base16]の色アーキテクチャで綺麗に表示されるよう構築されています。 +
-既存のbase16のカラーパレットは以下の方法で設定できます。 +
-link:https://github.com/Microsoft/console/tree/master/tools/ColorTool[ColorTool] をダウンロードします。 +
-ColorToolはiterm2設定を取り込むことができます。base16のiterm2版のスキーマ設定は以下からダウンロードできます。 +
+既存のbase16のカラーパレットはlink:https://github.com/Microsoft/console/tree/master/tools/ColorTool[ColorTool]で設定できます。 +
+ColorToolはiterm2カラースキーマ設定を取り込むことができます。base16のiterm2版設定は以下からダウンロードできます。 +
 https://github.com/martinlindhe/base16-iterm2/tree/master/itermcolors +
 ダウンロードしたスキーマ設定を `ColorTool\schema` に置いて以下のコマンドで設定します。
 
     ColorTool -b base16-solarized-dark
 
-クリップボード貼り付け +
+*クリップボード貼り付け* +
 以下の `paste.exe` を system32 に配置すれば、貼り付けで画面が点滅する問題を回避できます。
 http://www.c3scripts.com/tutorials/msdos/paste.html
 
 NOTE: kbd:[Ctrl+カーソル] で単語単位の移動、kbd:[Shift+カーソル]で範囲選択を利用する場合は
-QM3.4-12以降でWindows10以降(Console Virtual Terminal Sequencesに対応)が必要
+QM3.4-12以降かつWindows10以降(Console Virtual Terminal Sequencesに対応)が必要
 
 ==== リモート接続 For Windows
 
