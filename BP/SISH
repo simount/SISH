@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.27.0 ]"
+Equ SISH.VERSION To "[ SISH v0.27.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -5080,7 +5080,7 @@ ParseLine:
 		c = Line[K,1]
 		If c = Char(9) Then
 			!! 文字の描画(タブの場合は表示形式に置換)
-			PLine := HI.Light:repTabCh:HI.Default
+			PLine := FG.BASE2:repTabCh:HI.Default
 			Old = ""
 		End Else If c = Char(10) Then
 			!! 改行の表示
@@ -5143,7 +5143,7 @@ PrintLine:
 		!! 現在行
 		crtBuff := FG.YELLOW:BG.BASE2
 	End Else
-		crtBuff := FG.BASE00:BG.BASE2
+		crtBuff := FG.BASE1:BG.BASE2
 	End
 	If TgtFld Then
 		!! フィールド指定モード
