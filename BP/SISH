@@ -466,7 +466,6 @@ $ENDIF
 	Redraw = 0
 
 	!! Editor用変数の初期化
-	LastCapture = 0
 	ItemList = ""
 	FileName = ""
 	FldInfo = ""
@@ -2265,8 +2264,8 @@ Return
 ACTION.CMDSTACK.LIST:
 	
 	!! 範囲パラメータの習得
-	f1 = MatchField(cmdline,"'.L'0N...",2)
-	f2 = MatchField(cmdline,"'.L'0N,0N...",4)
+	f1 = MatchField(UpCase(cmdline),"'.L'0N...",2)
+	f2 = MatchField(UpCase(cmdline),"'.L'0N,0N...",4)
 	If f2 Then
 		If f1 Then cmdStackList.DispCnt<1> = f1 + 1
 		cmdStackList.DispCnt<2> = f2 - 1
@@ -2282,22 +2281,9 @@ ACTION.CMDSTACK.LIST:
 		!! List VOC
 		id = Trim(cmdline[' ',2,999])
 		Read rec From VOC,id Then
-			!! Print Voc
-			BufInfo<BI.PARSETYPE> = If rec[1,2] = "PA" Then PARSE.PARA Else PARSE.DATA
-			Row = ""
-			Print ""
-			
-			!! 1行目はすべてコメント
-			cnt = DCount(rec,@FM)
-			Print "001  ":HI.COMMENT.ON:rec<1>
-			
-			!! 2行目以降を汎用ハイライト
-			For i = 2 To cnt
-				Line = rec<i>
-				GoSub ParseLine
-				Print SGR.ALL.OFF:(i "R%3"):"  ":PLine
-			Next i
-			GoTo Run.Command.Ending
+			cmdline = "CT VOC ":id
+			bAutoCommand = @TRUE
+			GoTo Run.Command
 		End
 	End
 	
@@ -2348,7 +2334,7 @@ GoTo Run.Command.Ending
 *--------------------------------
 ACTION.CMDSTACK.GOTO:
 	
-	no = MatchField(cmdline,"'.G'0N...",2)
+	no = MatchField(UpCase(cmdline),"'.G'0N...",2)
 	cmdline = ""
 	curPos = 1
 	If no <> "" And DCount(cmdStack,@FM) > no + 1 Then
@@ -2401,7 +2387,7 @@ ACTION.CMDSTACK.INC.SEARCH:
 *--------------------------------
 ACTION.CMDSTACK.APPEND:
 
-	no = MatchField(cmdline,"'.A'0N...",2)
+	no = MatchField(UpCase(cmdline),"'.A'0N...",2)
 	If no="" Then no=1
 	
 	If cmdStackPage<no+1> = "" Then cmdStackPage<no+1> = cmdStack<no+1>
@@ -2422,10 +2408,8 @@ ACTION.CMDSTACK.SAVE:
 	endNo   = MatchField(UpCase(cmdline),"'.S'0N'-'0N...",4)
 	paName  = Trim(cmdline[' ',2,1])
 	
-	If endNo = "" Then endNo = 1
-	
-	startNo += 1
-	endNo += 1
+	If startNo = "" Then startNo = cmdStackList.DispCnt<1> Else startNo += 1
+	If endNo = "" Then endNo = cmdStackList.DispCnt<2> + startNo Else endNo += 1
 	
 	If startNo < endNo Then
 		a = startNo
@@ -2467,8 +2451,8 @@ GoTo Shell.Input.Begin ;* キーループに戻る
 ACTION.CMDSTACK.READ:
 
 	cmdline = Trim(cmdline)
-	n = MatchField(cmdline,"'.R'0N...",2)
-	m = MatchField(cmdline,"'.R'0N'-'0N...",4)
+	n = MatchField(UpCase(cmdline),"'.R'0N...",2)
+	m = MatchField(UpCase(cmdline),"'.R'0N'-'0N...",4)
 	
 	cmdlines = ""
 	cmdlines_page = ""
@@ -2529,7 +2513,7 @@ ACTION.CMDSTACK.DELETE:
 
 	cmdline = Trim(cmdline)
 	
-	If cmdline[1,3] = ".D " Then
+	If UpCase(cmdline)[1,3] = ".D " Then
 		!! VOCから削除
 		name = Trim(cmdline[4,BIG])
 		Read rec From VOC,name Then
@@ -2540,8 +2524,8 @@ ACTION.CMDSTACK.DELETE:
 		End
 	End Else If n Then
 		!! 番号指定で削除
-		n = MatchField(cmdline,"'.D'0N...",2)
-		m = MatchField(cmdline,"'.D'0N'-'0N...",4)
+		n = MatchField(UpCase(cmdline),"'.D'0N...",2)
+		m = MatchField(UpCase(cmdline),"'.D'0N'-'0N...",4)
 		
 		If n = "" Then n = 1 ;** デフォルトはトップ位置
 		If m = "" Then m = n ;** 1行にする
@@ -2706,7 +2690,15 @@ Return
 ** Editor.Main
 ** ================================================================================
 Editor.Main:
-	
+
+	LastCapture = 0
+	ItemList = ""
+	FileName = ""
+	FldInfo = ""
+	DiveValuePos = ""
+	ParentBufNo = ""
+	StatusMessage = ""
+
 	!! 強制的に端末サイズに合わせる
 	If @TTY = 'console' Then
 		A = "TERM ":@CRTWIDE:",":@CRTHIGH
