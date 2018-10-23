@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.27.1 ]"
+Equ SISH.VERSION To "[ SISH v0.28.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -227,8 +227,9 @@ Equ OS.GATES To SYSTEM(91)
   Equ A.FIT.TERM To 82
   Equ A.WORD_HOKAN To 83
   Equ A.NEWBUF To 84
+  Equ A.RUN To 85
 * ↑ここに追加していく    
-  Equ ACTION.ENUM.LAST To 85
+  Equ ACTION.ENUM.LAST To 86
 
 ** ================================================================================
 ** Shell Main
@@ -250,7 +251,7 @@ Shell.Main:
 	Equ prevPath To ShInfo(3)<2> ;** 前回のアカウントパス
 	Equ bInvert To ShInfo(4) ;** 大文字小文字変換機能 ON/OFF
 	Equ bTimer To ShInfo(5) ;** 時間計測機能 ON/OFF
-!!	Equ theme To ShInfo(6) ;** テーマNo
+	Equ theme To ShInfo(6) ;** テーマNo
 	Equ HAS.PASTE.EXE To ShInfo(7) ;** paste.exe存在するか
 	Equ bChain To ShInfo(8) ;** Chainから来た
 	Equ bAutoTermSize To ShInfo(9) ;** 端末サイズ自動設定機能 ON/OFF
@@ -398,6 +399,7 @@ $IFNDEF U2__UNIVERSE
 			End
 		End
 $ENDIF
+		theme = @FALSE
 
 	End
 
@@ -405,6 +407,10 @@ $ENDIF
 
 !! 外部設定の読み込み
 $INCLUDE SISH.SETTING.H
+	If theme Then
+		GoSub Act.SwitchTheme
+		theme = Not(theme)
+	End
 	
 	GoSub SetupDefKeyBindings
 	GoSub SetupTokens
@@ -458,6 +464,15 @@ $ENDIF
 	
 	EQU REDRAW.ALL To -1
 	Redraw = 0
+
+	!! Editor用変数の初期化
+	LastCapture = 0
+	ItemList = ""
+	FileName = ""
+	FldInfo = ""
+	DiveValuePos = ""
+	ParentBufNo = ""
+	StatusMessage = ""
 
 Shell.Input.Begin:
 
@@ -589,13 +604,13 @@ $ENDIF
 *
 Shell.KeyLoop.Start:
 	Loop
-		
+	
 		!! １行に固定する
 		Y = 1
 		
 		Rec = Rec<1>
 		Line = Rec
-		
+
 AutocommanLoop.Start:
 		!!
 		!! 表示
@@ -604,7 +619,7 @@ AutocommanLoop.Start:
 		crtBuff = ""
 		GoSub Clear.Cmdline.Crt
 		crtBuff := HI.SHELL.ON
-		
+
 		!! プロンプト部分の構築
 		prmptStr = "si"
 		If bInvert Then prmptStr = UpCase(prmptStr)
@@ -823,6 +838,7 @@ Shell.KeyLoop.Bef.GetKey:
 				editerCmd = ""
 Launch.Editor:
 				GoSub Editor.Main
+				If bAutoCommand Then GoTo AutocommanLoop.Start
 			
 			Case actNo = A.CANCEL
 				If Not(bFirstCurTop) Then
@@ -894,7 +910,7 @@ Launch.Editor:
 			BufInfo<BI.BLOCKSTART> = ""
 			BufInfo<BI.BLOCKEND> = ""
 		End
-
+		
 Shell.KeyLoop.End:
 	Repeat
 	
@@ -965,7 +981,7 @@ Run.Command:
 	End
 
 	cmdlines = "" ;** 複数コマンド
-	If Count(cmdline,@FM) Then
+	If Count(cmdline,@FM)>0 Then
 		!! 複数コマンドなら先だしで１つ選ぶ
 		cmdlines = cmdline
 		cmdline = cmdline<1>
@@ -2402,39 +2418,44 @@ ACTION.CMDSTACK.SAVE:
 	
 	cmd = Trim(cmdline[4,9999])
 	
-	startNo = MatchField(cmdline,"'.S'0N...",2)
-	endNo   = MatchField(cmdline,"'.S'0N'-'0N...",4)
+	startNo = MatchField(UpCase(cmdline),"'.S'0N...",2)
+	endNo   = MatchField(UpCase(cmdline),"'.S'0N'-'0N...",4)
 	paName  = Trim(cmdline[' ',2,1])
 	
+	If endNo = "" Then endNo = 1
+	
+	startNo += 1
+	endNo += 1
+	
+	If startNo < endNo Then
+		a = startNo
+		startNo = endNo
+		endNo = a
+	End
+	
+	Print ""
+	ReadU pa From VOC,paName Then
+		Print 'Item "':paName:'" already exists in VOC.'
+		Print " Overwirte (Y)":
+		Input ans
+		If UpCase(Trim(ans)) = "Y" Else GoTo Shell.KeyLoop.End
+		pa = pa<1> ;** 1行目を残す
+	End Else
+		pa = "PA Created at ":OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS"):" by ":@LOGNAME:"@":@ACCOUNT
+	End
+	For i = startNo To endNo Step -1
+		pa<-1> = If cmdStackPage<i> = "" Then cmdStack<i> Else cmdStackPage<i>
+	Next
+	
 	If paName <> "" Then
-
-		If endNo = "" Then endNo = 1
-		
-		startNo += 1
-		endNo += 1
-		
-		If startNo < endNo Then
-			a = startNo
-			startNo = endNo
-			endNo = a
-		End
-		
-		Print ""
-		ReadU rec From VOC,paName Then
-			Print 'Item "':paName:'" already exists in VOC.'
-			Print " Overwirte (Y)":
-			Input ans
-			If UpCase(Trim(ans)) = "Y" Else GoTo Shell.KeyLoop.End
-			rec = rec<1> ;** 1行目を残す
-		End Else
-			rec = "PA Created at ":OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS"):" by ":@LOGNAME:"@":@ACCOUNT
-		End
-		For i = startNo To endNo Step -1
-			rec<-1> = If cmdStackPage<i> = "" Then cmdStack<i> Else cmdStackPage<i>
-		Next
-		Write rec To VOC,paName On Error Print "Cannot Write to VOC."
+		Write pa To VOC,paName On Error Print "Cannot Write to VOC."
 		Print 'Item "':paName:'" Saved in VOC.'
-		
+	End Else
+		GoSub DoNew
+		Rec = pa
+		GoSub StartBuf
+		editerCmd = ""
+		GoTo Launch.Editor
 	End
 	
 GoTo Shell.Input.Begin ;* キーループに戻る
@@ -2685,16 +2706,6 @@ Return
 ** Editor.Main
 ** ================================================================================
 Editor.Main:
-*-------------------------------------------------------------------------
-*  Set up
-*-------------------------------------------------------------------------
-	LastCapture = 0
-	ItemList = ""
-	FileName = ""
-	FldInfo = ""
-	DiveValuePos = ""
-	ParentBufNo = ""
-	StatusMessage = ""
 	
 	!! 強制的に端末サイズに合わせる
 	If @TTY = 'console' Then
@@ -2789,6 +2800,8 @@ ParseCommandLine:
 	searchReverse = False
 
 	GoSub GoAltScreenBuf ;** 代替画面バッファ
+	
+	Redraw = REDRAW.ALL
 	
 	!! Brackets Paste Mode on
 	crtBuff := CSI:"?2004h"
@@ -2899,12 +2912,14 @@ BookMenu:
 * CodeMenu
 *--------------------------------------------------------------------------
 CodeMenu: 
-	MenuLine = "Build Catalog Format Words Mode Indent Help :"
+	MenuLine = "Build Run Catalog Format Words Mode Indent Help :"
 	GoSub MenuLine
 	C = UpCase(C)
 	Begin Case
 		Case C = "B"
 			GoSub Act.Compile
+		Case C = "R"
+			GoSub Act.Run
 		Case C = "C"
 			GoSub Catalog
 		Case C = "F"
@@ -4201,7 +4216,11 @@ Enters:
 		GoSub GetX.From.keepDPX
 		X = outX
 	End
-	DP_X = If X = 1 Then 1 Else LenDP(Change(Line[1,X-1],Char(9),Space(STDTAB))) + 1
+	DP_X = 1
+	FOR I=1 TO X-1
+		c = Line[I,1]
+		DP_X += If c = Char(9) Then STDTAB-REM((DP_X-1),STDTAB) Else LenDP(c)
+	NEXT I
 	
 	moveX = (prevX >< X)
 	If Not(moveY) And moveX Then
@@ -4717,7 +4736,7 @@ ParseLine:
 			selection = 1:@FM:BIG
 		End
 	End
- 
+
 	ParseType = BufInfo<BI.PARSETYPE>
 	Begin Case
 		** --------------------
@@ -4992,9 +5011,9 @@ ParseLine:
 	End
 
 	HI.OFF = SGR.ALL.OFF
-	repTabCh = "»":Space(STDTAB-1)
 	PLine = ""
 	Old = ""
+	IX = 0
 	L = Len(Line)
 	For K = 1 to L
 		
@@ -5080,7 +5099,9 @@ ParseLine:
 		c = Line[K,1]
 		If c = Char(9) Then
 			!! 文字の描画(タブの場合は表示形式に置換)
-			PLine := FG.BASE2:repTabCh:HI.Default
+			A = STDTAB-1-REM(IX,STDTAB)
+			PLine := FG.BASE2:"»":Space(A):HI.Default
+			IX += 1+A
 			Old = ""
 		End Else If c = Char(10) Then
 			!! 改行の表示
@@ -5092,6 +5113,7 @@ ParseLine:
 			PLine := "↲"
 		End Else
 			PLine := c
+			IX += LenDP(C)
 		End
 	Next
 	PLine := HI.OFF
@@ -5699,16 +5721,19 @@ SetupTokens:
 	AddKeyWord "CLEARFILE"
 	AddKeyWord "CLEARSELECT"
 	AddKeyWord "COMMIT"
+	AddKeyWord "CONTINUE"
 	AddKeyWord "CONVERT"
 	AddKeyWord "CREATE"
 	AddKeyWord "CREATING.SEQKEY"
 	AddKeyWord "CRT"
+	AddKeyWord "DEFFUN"
 	AddKeyWord "DEL"
 	AddKeyWord "DELETE"
 	AddKeyWord "DELETELIST"
 	AddKeyWord "DELETEU"
 	AddKeyWord "DELIMITER"
 	AddKeyWord "DIM"
+	AddKeyWord "DISPLAY"
 	AddKeyWord "DO"
 	AddKeyWord "EACH"
 	AddKeyWord "ELSE"
@@ -5736,6 +5761,7 @@ SetupTokens:
 	AddKeyWord "LOCKED"
 	AddKeyWord "LOOP"
 	AddKeyWord "MATCHES"
+	AddKeyWord "MAT"
 	AddKeyWord "NEXT"
 	AddKeyWord "ON"
 	AddKeyWord "OPEN"
@@ -6291,7 +6317,8 @@ Switch.Actions:
 								Act.ToggleCaseInvert,
 								Act.Fit.Term,
 								Act.ShowWordHokan,
-								DoNew
+								DoNew,
+								Act.Run
 NULL.Action:
 	Return
 
@@ -8283,6 +8310,7 @@ Act.AutoIndent:
 		
 		!! 自動閉じ処理が不要な場合を探す
 		For iY = Y+1 To Lines
+			
 			line = Rec<iY>
 			GoSub GetIndentCnt
 			
@@ -8556,12 +8584,12 @@ Act.InsCommentOut:
 	For Z = StBlock To EdBlock
 		cmd = ""
 		cmd<6> = "0"
-		If Rec<Z>[1,3] = "!! " Then
+		If Rec<Z>[1,1] = "!" Then
 			** コメント外す
 			cmd<1> = Z
 			cmd<2> = 1
 			cmd<3> = Z
-			cmd<4> = 4
+			cmd<4> = 2
 			cmd<5> = ""
 		End Else
 			** コメント付ける
@@ -8569,7 +8597,7 @@ Act.InsCommentOut:
 			cmd<2> = 1
 			cmd<3> = ""
 			cmd<4> = ""
-			cmd<5> = "!! "
+			cmd<5> = "!"
 		End
 		editCmd<-1> = cmd
 	Next
@@ -8699,6 +8727,29 @@ $ENDIF
 	Return
 
 * **************************************************************************
+* Act.Run
+
+Act.Run:
+
+	If BufInfo<BI.PARSETYPE> = PARSE.BASIC Then
+		FileName = BufInfo<BI.FILE>
+		ItemName = BufInfo<BI.ITEM>
+$IFDEF U2__UNIVERSE
+		cmdline = "BASIC ":FileName:" ":ItemName
+$ELSE
+		cmdline = "BASIC ":FileName:" ":ItemName:" CHANGED DEBUGGING"
+$ENDIF
+		cmdline<-1> = "RUN ":FileName:" ":ItemName
+	End Else If BufInfo<BI.PARSETYPE> = PARSE.PARA Then
+		If DCount(Rec,@FM)=1 Then Return
+		cmdline = Rec[@FM,2,*]
+	End
+	bAutoCommand = @TRUE
+	bAutoEditor = @TRUE
+	GoSub Act.Exit
+	Return
+
+* **************************************************************************
 * Act.Action
 
 Act.Action:
@@ -8810,6 +8861,8 @@ Act.SwitchTheme:
 	A = BG.BASE2; BG.BASE2 = BG.BASE02; BG.BASE02 = A
 	A = BG.BASE1; BG.BASE1 = BG.BASE01; BG.BASE01 = A
 	A = BG.BASE0; BG.BASE0 = BG.BASE00; BG.BASE00 = A
+	
+	theme = Not(theme)
 	
 	Redraw = REDRAW.ALL
 	
@@ -8968,7 +9021,7 @@ GetIndentCnt:
 		indentLen += 1
 		indentCnt += (If ch = Char(9) Then STDTAB Else 1) 
 	Repeat
-	If indentCnt > 0 Then indentCnt -= indentCnt / STDTAB
+	If indentCnt > 0 Then indentCnt = indentCnt / STDTAB
 	
 	Return
 

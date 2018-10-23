@@ -67,6 +67,7 @@ Equ K.DEL To              "@[[3~"
 Equ K.C_DEL To            "@[[3;5~"
 
 Equ K.F1 To               "@[OP"
+Equ K.F2 To               "@[OQ"
 Equ K.C_F2 To             "@[[1;5Q"
 Equ K.F3 To               "@[OR"
 Equ K.S_F3 To             "@[[1;2R"
@@ -74,6 +75,7 @@ Equ K.S_F2 To             "@[[1;2Q"
 Equ K.F4 To               "@[OS"
 Equ K.C_F4 To             "@[[1;5S"
 Equ K.F5 To               "@[[15~"
+Equ K.F6 To               "@[[17~"
 Equ K.F7 To               "@[[18~"
 Equ K.F8 To               "@[[19~"
 Equ K.F9 To               "@[[20~"
@@ -183,7 +185,7 @@ End Else
 End
   keySeq<A.DELETE_NEXTWORD>  = K.C_DEL:" ":K.A_F10
 	keySeq<A.TEMPLATE>         = K.C_T
-	keySeq<A.COMMENT>          = K.C_UNDERBAR:" ":K.C_S_1
+	keySeq<A.COMMENT>          = K.C_UNDERBAR:" ":K.C_S_1:" ":K.F2
 	keySeq<A.CUT>              = K.C_X
 	keySeq<A.COPY>             = K.C_C
 	keySeq<A.SEND_PASTE>       = K.C_V
@@ -203,7 +205,7 @@ End
 	keySeq<A.PREVJUMP>         = K.A_LEFT:" ":char(172)
 	keySeq<A.SAVE>             = K.C_S
 	keySeq<A.HELP>             = K.F1:KEY.FUNCTION.1:" ":Char(128)
-	keySeq<A.COMPILE>          = K.F7:" ":Char(134)
+	keySeq<A.COMPILE>          = K.F6:" ":Char(133)
 	keySeq<A.RELOAD>           = K.F5:" ":Char(132)
 	keySeq<A.ACTION>           = K.F10:" ":Char(137)
 	keySeq<A.EXIT>             = K.C_E
@@ -216,6 +218,7 @@ End
 	keySeq<A.WORD_HOKAN>       = K.C_SPACE:" ":Char(174):" ":K.S_F11
 	keySeq<A.SEL_EXPAND>       = K.C_D
 	keySeq<A.NEWBUF>           = K.C_N
+	keySeq<A.RUN>              = K.F7:" ":Char(134)
 
 **
 ** Color Setting
@@ -368,6 +371,6 @@ EQU HI.STATUS.ON TO BG.BASE0:FG.BASE3
 EQU HI.STATUS.OFF TO SGR.ALL.OFF
 EQU HI.SHELL.ON TO FG.GREEN
 EQU HI.SHELL.OFF TO SGR.ALL.OFF
-EQU HI.KAKKO.ON TO SBOLD:BG.BASE1:FG.BASE03
+EQU HI.KAKKO.ON TO SBOLD:BG.BASE2:FG.BASE03
 EQU HI.KAKKO.OFF TO SGR.ALL.OFF
 
