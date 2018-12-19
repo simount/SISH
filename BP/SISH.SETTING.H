@@ -125,6 +125,7 @@ Equ K.C_CARET To          "@^"
 Equ K.C_BACKSLASH To      "@\"
 Equ K.C_UNDERBAR To       "@_"
 Equ K.ESC To              "@["
+Equ K.RB To               "@]"
 Equ K.C_SPACE To          "@@"
                           
 * Key To Action Mapping
@@ -162,7 +163,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.SEL_PREVPAGE>     = K.S_PGUP:" ":char(167)
 	keySeq<A.SEL_NEXTHALF>     = K.C_S_PGDOWN:" ":char(168)
 	keySeq<A.SEL_PREVHALF>     = K.C_S_PGUP:" ":char(169)
-	keySeq<A.SEL_NEXTCHAR>     = K.C_S_GREATER
+	keySeq<A.SEL_NEXTCHAR>     = K.C_S_GREATER:" ":K.RB
 	keySeq<A.SEL_PREVCHAR>     = K.C_S_LESS
 	keySeq<A.SEL_TOP>          = K.C_S_HOME:" ":char(170)
 	keySeq<A.SEL_BOTTOM>       = K.C_S_END:" ":char(171)
@@ -330,13 +331,13 @@ EQU SUL   TO CSI:"4m"
 EQU EUL   TO CSI:"24m"
 !! BOLD
 
-IF @TERM.TYPE = "msvt" or @TTY = "console" THEN
-	SBOLD = ""
-	EBOLD = ""
-END ELSE
+!IF @TERM.TYPE = "msvt" or @TTY = "console" THEN
+!	SBOLD = ""
+!	EBOLD = ""
+!END ELSE
 	SBOLD = CSI:"1m"
 	EBOLD = CSI:"22m"
-END
+!END
 
 !! Highlights Mapping
 EQU SGR.ALL.OFF TO EBOLD:FG.DEFAULT:BG.DEFAULT

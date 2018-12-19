@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.28.0 ]"
+Equ SISH.VERSION To "[ SISH v0.29.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -3808,12 +3808,11 @@ $ELSE
 		choiceList<i,1> = choiceList<i,1>[1,Len(FoldDW(Convert(" ","-",choiceList<i,1>),winWidth)<1>)]
 $ENDIF
 	Next
-	choiceOutList = choiceList
-	choiceOutList.org = choiceList
-	choiceOutList.length = choiceList.length
 	winX += 1
 	filter = ""
-	filterPrev = ""
+	filterPrev = "@"
+	choiceSelNo = choiceNo
+	choiceOutList.length = choiceList.length
 	C = ""
 	
 Return
@@ -3838,9 +3837,9 @@ ProcChoiceList:
 				filter = filter[1,Len(filter)-1]
 				
 		!! リストの操作
-			Case actNo = A.UP
+			Case actNo = A.UP or actNo = A.SHIFT_TAB
 				choiceNo -= 1
-			Case actNo = A.DOWN
+			Case actNo = A.DOWN Or actNo = A.TAB
 				choiceNo += 1
 			Case actNo = A.PREVSTMT
 				choiceNo -= 4
@@ -3862,29 +3861,28 @@ ProcChoiceList:
 		C = ""
 	End
 
-	!! 選択範囲チェック
-	If choiceNo < 1 Then choiceNo = 1 Else
-		If choiceNo >= choiceOutList.length Then choiceNo = choiceOutList.length
-	End
-
 	!! フィルター処理
 	If filter >< filterPrev Then
 		choiceOutList = ""
-		choiceOutList.org = ""
 		filter.len = Len(filter)
 		filterUpper = UpCase(filter)
 		For i = 1 To choiceList.length
 			line = choiceList<i>
-			p = Index(UpCase(line<1,1>),filterUpper,1)
-			If p Then
-				choiceOutList.org<-1> = line
-				line<1,1> = line<1,1>[1,p-1]:@SVM:line<1,1>[p,filter.len]:@SVM:line<1,1>[p+filter.len,9999]
-				choiceOutList<-1> = line
+			If filter="" Or Index(UpCase(line<1,1>),filterUpper,1) Then
+				choiceOutList<-1> = i ;** choiceListへの参照を保持
 			End
 		Next
 		choiceOutList.length = DCount(choiceOutList,@FM)
-		choiceNo = 1
 		filterPrev = filter
+		Locate choiceSelNo In choiceOutList By "AR" Setting choiceNo Else
+			choiceNo = choiceNo - 1
+		End
+		winTop = 0
+	End
+
+	!! 選択範囲チェック
+	If choiceNo < 1 Then choiceNo = 1 Else
+		If choiceNo >= choiceOutList.length Then choiceNo = choiceOutList.length
 	End
 
 	!! リスト表示
@@ -3899,23 +3897,33 @@ ProcChoiceList:
 		End
 	End
 	
-	crtBuff = SGR.ALL.OFF
+	!! タイトルに件数
+	crtBuff = @(winX,0):title:" (":choiceOutList.length:")":@(-4)
+
+	crtBuff := SGR.ALL.OFF
 	listLen = choiceOutList.length - winTop
 	If listLen > winHeight Then listLen = winHeight
 	i = 1
 	Loop While i <= listLen
+		no = choiceOutList<winTop+i,1>
 		selected = (choiceNo = winTop+i) ;** 選択行か？
-		line = Raise(Raise(choiceOutList<winTop+i,1>))
+		line = choiceList<no,1>
 		crtBuff := @(winX,i+1)
 		crtBuff := If selected Then HI.SELECT.ON Else FG.BASE01:BG.BASE2
-		crtBuff := line<1>
-		If line<2> Then
-			crtBuff := FG.BASE03
-			crtBuff := line<2>
-		End
-		If line<3> Then
-			crtBuff := If selected Then HI.SELECT.ON Else FG.BASE01:BG.BASE2
-			crtBuff := line<3>
+		If filter<>"" Then
+			!! フィルター文字と一致するものに色を付ける
+			Loop
+				p = Index(UpCase(line),filterUpper)
+			While p
+				crtBuff := line[1,p-1]
+				crtBuff := FG.RED
+				crtBuff := line[p,Len(filter)]
+				crtBuff := (If selected Then HI.SELECT.ON Else FG.BASE01:BG.BASE2)
+				line = line[p+Len(filter),*]
+			Repeat
+			crtBuff := line
+		End Else
+			crtBuff := line
 		End
 		crtBuff := @(-4):SGR.ALL.OFF
 		i += 1
@@ -3930,7 +3938,8 @@ ProcChoiceList:
 	crtBuff := @(winX,1):SGR.ALL.OFF:@(-4):filter
 	GoSub CRT.BUFF.FLUSH
 	
-	choiceSelection = choiceOutList.org<choiceNo>
+	choiceSelNo = choiceOutList<choiceNo>
+	choiceSelection = choiceList<choiceSelNo>
 	
 Return
 
@@ -4735,9 +4744,9 @@ ParseLine:
 		** Basic
 		** --------------------
 		Case ParseType = PARSE.BASIC
-			!! Label
-			Word = Line[";",1,1][" ",1,1]
+			Word = Line[";",1,1][" ",1,1]["*",1,1]["!",1,1]
 			If Word Matches "1N0N":@VM:"1A0X:" Then
+				!! Label
 				If INMAT() = 2 Then
 					A = Convert("0123456789._","",Word[2,*]) Matches "0A:"
 				End Else A = @TRUE
@@ -4745,34 +4754,39 @@ ParseLine:
 					len = Len(Word)
 					Mask := Str(SI.LABEL,len)
 					Line = Line[len+1,BIG]
-					Word = Line[" ",1,1]
+					A = Trim(Line)[1,1]
+					IF A#"" AND Count("*!",A) THEN
+						!! Comment
+						Mask := Str(SI.COMMENT, L)
+					END
 				End
-			End
-			Begin Case   
-				!! Comment & Directive
-				Case Count("*!",Word[1,1])
-					Mask := Str(SI.COMMENT, L)
-				Case Count("$#",Word[1,1])
-					Mask = Str(SI.DIRECTIVE, L)
-				Case 1
-					Dc = Count(Line,";")
-					If Not(Dc) Then
-						Mask := Space(L)
-					End Else
-						FoundComment = False
-						For Z = 1 To Dc Until FoundComment
-							Word = TrimF(Line[";",Z+1,1])
-							If Count("*!",Word[1,1]) Then
-								FoundComment = Z
-							End
-						Next
-						If FoundComment Then
-							Mask := Space(Len(Line[";",1, FoundComment])):Str(SI.COMMENT, L)
-						End Else
+			End Else
+				Begin Case   
+					!! Comment & Directive
+					Case Count("*!",Word[1,1])
+						Mask := Str(SI.COMMENT, L)
+					Case Count("$#",Word[1,1])
+						Mask = Str(SI.DIRECTIVE, L)
+					Case 1
+						Dc = Count(Line,";")
+						If Not(Dc) Then
 							Mask := Space(L)
+						End Else
+							FoundComment = False
+							For Z = 1 To Dc Until FoundComment
+								Word = TrimF(Line[";",Z+1,1])
+								If Count("*!",Word[1,1]) Then
+									FoundComment = Z
+								End
+							Next
+							If FoundComment Then
+								Mask := Space(Len(Line[";",1, FoundComment])):Str(SI.COMMENT, L)
+							End Else
+								Mask := Space(L)
+							End
 						End
-					End
-			End Case
+				End Case
+			End
 			!! Word
 			Lin = Convert(PUNCS,Str(@fm,Len(PUNCS)), UpCase(OldLine))
 			Dc3 = Dcount(Lin,@fm)
@@ -4800,7 +4814,7 @@ ParseLine:
 						End
 					Case 1
 						Locate Word In KEYWORDS By "AL" Setting Pos Then
-							If Mask[St,1] = " " Then
+							If Mask[St,1] = " " AND OldLine[St+Len(Word),1]#"(" Then
 								Mask[St, Len(Word)] = Str(SI.KEY, Len(Word))
 							End
 						End Else
@@ -5025,77 +5039,24 @@ ParseLine:
 				Old = SI.DIRECTIVE
 			End
 		End
-			If K = selection<1> - iXOffSet + 1 And selection<1> <> selection<2> Then
+		If K = selection<1> - iXOffSet + 1 And selection<1> <> selection<2> Then
 			!! 選択開始
 			HI.Default = HI.SELECT.ON
 			HI.Light = FG.BASE00
 			HI.Search = HI.SEARCH.SEL
-			PLine := HI.Default
+			PLine := HI.SELECT.ON
 			Old = ""
 		End
 
-		!! Maskによる色付け
-		C = Mask[K,1]
-		If C <> Old Then
-			Begin Case
-				Case Old = SI.KAKKO
-					PLine := HI.KAKKO.OFF
-				Case Old = SI.LABEL
-					PLine := HI.LABEL.OFF
-				Case Old = SI.COMMENT
-					PLine := HI.COMMENT.OFF
-				Case Old = SI.KEY
-					PLine := HI.KEY.OFF
-				Case Old = SI.STRING
-					PLine := HI.STRING.OFF
-				Case Old = SI.NUMBER
-					PLine := HI.NUMBER.OFF
-				Case Old = SI.OPERATOR
-					PLine := HI.OP.OFF
-				Case Old = SI.SEARCH
-					PLine := HI.SEARCH.OFF
-				Case Old = SI.VMK
-					PLine := HI.VMK.OFF
-				Case Old = SI.SMK
-					PLine := HI.SMK.OFF
-			End Case
-			PLine := HI.Default
-			Begin Case
-				Case C = SI.KAKKO
-					PLine := HI.KAKKO.ON
-				Case C = SI.LABEL
-					PLine := HI.LABEL.ON
-				Case C = SI.COMMENT
-					PLine := HI.COMMENT.ON
-				Case C = SI.KEY
-					PLine := HI.KEY.ON
-				Case C = SI.STRING
-					PLine := HI.STRING.ON
-				Case C = SI.NUMBER
-					PLine := HI.NUMBER.ON
-				case C = SI.OPERATOR
-					PLine := HI.OP.ON
-				Case C = SI.FUNCTION
-					PLine := HI.FUNC.ON
-				Case C = SI.SEARCH
-					PLine := HI.Search
-				Case C = SI.DOC
-					PLine := HI.DOC.ON
-				Case C = SI.VMK
-					PLine := HI.VMK.ON
-				Case C = SI.SMK
-					PLine := HI.SMK.ON
-			End case
-			Old = Mask[K,1]
-		End
-		c = Line[K,1]
-		If c = Char(9) Then
+		cc = Line[K,1]
+		If cc = Char(9) Then
 			!! 文字の描画(タブの場合は表示形式に置換)
+			If Not(K>1 And Old=Char(9)) Then PLine := FG.BASE2
 			A = STDTAB-1-REM(IX,STDTAB)
-			PLine := FG.BASE2:"»":Space(A):HI.Default
+			PLine := "»":Space(A)
 			IX += 1+A
-			Old = ""
-		End Else If c = Char(10) Then
+			Old = Char(9)
+		End Else If cc = Char(10) Then
 			!! 改行の表示
 			If selection<2> = BIG Then
 				PLine := HI.Light
@@ -5104,8 +5065,62 @@ ParseLine:
 			End
 			PLine := "↲"
 		End Else
-			PLine := c
-			IX += LenDP(C)
+			!! Maskによる色付け
+			C = Mask[K,1]
+			If C <> Old Then
+				Begin Case
+					Case Old = SI.KAKKO
+						PLine := HI.KAKKO.OFF
+					Case Old = SI.LABEL
+						PLine := HI.LABEL.OFF
+					Case Old = SI.COMMENT
+						PLine := HI.COMMENT.OFF
+					Case Old = SI.KEY
+						PLine := HI.KEY.OFF
+					Case Old = SI.STRING
+						PLine := HI.STRING.OFF
+					Case Old = SI.NUMBER
+						PLine := HI.NUMBER.OFF
+					Case Old = SI.OPERATOR
+						PLine := HI.OP.OFF
+					Case Old = SI.SEARCH
+						PLine := HI.SEARCH.OFF
+					Case Old = SI.VMK
+						PLine := HI.VMK.OFF
+					Case Old = SI.SMK
+						PLine := HI.SMK.OFF
+				End Case
+				PLine := HI.Default
+				Begin Case
+					Case C = SI.KAKKO
+						PLine := HI.KAKKO.ON
+					Case C = SI.LABEL
+						PLine := HI.LABEL.ON
+					Case C = SI.COMMENT
+						PLine := HI.COMMENT.ON
+					Case C = SI.KEY
+						PLine := HI.KEY.ON
+					Case C = SI.STRING
+						PLine := HI.STRING.ON
+					Case C = SI.NUMBER
+						PLine := HI.NUMBER.ON
+					case C = SI.OPERATOR
+						PLine := HI.OP.ON
+					Case C = SI.FUNCTION
+						PLine := HI.FUNC.ON
+					Case C = SI.SEARCH
+						PLine := HI.Search
+					Case C = SI.DOC
+						PLine := HI.DOC.ON
+					Case C = SI.VMK
+						PLine := HI.VMK.ON
+					Case C = SI.SMK
+						PLine := HI.SMK.ON
+				End case
+				Old = Mask[K,1]
+			End
+			PLine := cc
+			IX += LenDP(cc)
 		End
 	Next
 	PLine := HI.OFF
@@ -5709,9 +5724,12 @@ SetupTokens:
 	AddKeyWord "CAPTURING"
 	AddKeyWord "CASE"
 	AddKeyWord "CATCH"
+	AddKeyWord "CLASS"
 	AddKeyWord "CLEAR"
 	AddKeyWord "CLEARFILE"
 	AddKeyWord "CLEARSELECT"
+	AddKeyWord "CLOSE"
+	AddKeyWord "CLOSESEQ"
 	AddKeyWord "COMMIT"
 	AddKeyWord "CONTINUE"
 	AddKeyWord "CONVERT"
@@ -5766,6 +5784,7 @@ SetupTokens:
 	AddKeyWord "PRINTER"
 	AddKeyWord "PRIVATE"
 	AddKeyWord "PROGRAM"
+	AddKeyWord "PUBLIC"
 	AddKeyWord "READ"
 	AddKeyWord "READBLK"
 	AddKeyWord "READLIST"
@@ -6526,8 +6545,8 @@ Act.NextStmt:
 			Next 
 			Y = iY
 		End Else
-			!! 次行が文字なら３行進むかインデントの出現かコメント行でない場合に止める
-			For iY = Y+1 To Y+4
+			!! 文の切れ目まで進む（インデントの出現かコメント行の出現で止める）
+			For iY = Y+1 To Lines
 				Line = Change(Rec<iY>,Char(9),Space(STDTAB))
 				If Not(Count("*!",TrimF(Line)[1,1])) Then Exit
 				GoSub GetX.From.keepDPX
@@ -6550,8 +6569,8 @@ Act.NextStmt:
 			Next 
 			Y = iY
 		End Else
-			!! 次行が文字なら３行進むかインデントの出現かコメント行の出現で止める
-			For iY = Y+1 To Y+4
+			!! 文の切れ目まで進む（インデントの出現かコメント行の出現で止める）
+			For iY = Y+1 To Lines
 				Line = Change(Rec<iY>,Char(9),Space(STDTAB))
 				If Count("*!",TrimF(Line)[1,1]) Then Exit
 				GoSub GetX.From.keepDPX
@@ -6581,15 +6600,15 @@ Act.PrevStmt:
 		Line = Rec<Y-1>
 		ch = Line[X,1]
 		If Not(Count("*!",ch)) And (ch = "" Or TrimF(Convert("*!","  ",Line)[1,X]) = "") Then
-			!! 次行がインデント内なら次に文字が出現するまで進む
+			!! 次行がインデント内なら次に文字が出現するまで戻る
 			For iY = Y-1 To 1 Step -1
 				Line = Rec<iY>
 				If Not(Line[X,1] = "" Or TrimF(Convert("*!","  ",Line)[1,X]) = "") Then Exit
 			Next 
 			Y = iY
 		End Else
-			!! 次行が文字なら３行進むかインデントの出現で止める
-			For iY = Y-1 To Y-4 Step -1
+			!! 文の切れ目まで戻る（インデントの出現で止める）
+			For iY = Y-1 To 1 Step -1
 				Line = Rec<iY>
 				ch = Line[X,1] 
 				If Not(Count("*!",TrimF(Line)[1,1])) Then Exit
@@ -6611,8 +6630,8 @@ Act.PrevStmt:
 			Next 
 			Y = iY
 		End Else
-			!! 次行が文字なら３行進むかインデントの出現で止める
-			For iY = Y-1 To Y-4 Step -1
+			!! 文の切れ目まで戻る（インデントの出現で止める）
+			For iY = Y-1 To 1 Step -1
 				Line = Change(Rec<iY>,Char(9),Space(STDTAB))
 				If Count("*!",TrimF(Line)[1,1]) Then Exit
 				GoSub GetX.From.keepDPX
@@ -6632,7 +6651,7 @@ Act.SelNextChar:
 	GoSub SelectionStart
 	BufInfo<BI.BLOCKEND> = ""
 Act.NextChar:
-	moveChar = @FALSE ;** 進むフラグ
+	moveChar = @TRUE ;** 進むフラグ
 	keepSelection = @TRUE
 	StatusMessage = "Enter first char in word ->"
 	Return
@@ -6644,7 +6663,7 @@ Act.SelPrevChar:
 	GoSub SelectionStart
 	BufInfo<BI.BLOCKEND> = ""
 Act.PrevChar:
-	moveChar = @TRUE ;** 戻るフラグ
+	moveChar = @FALSE ;** 戻るフラグ
 	keepSelection = @TRUE
 	StatusMessage = "Enter first char in word (move prev) ->"
 	Return
@@ -6746,7 +6765,7 @@ Act.NextHalf:
 		X = prevPos<2> ;** X位置は元に戻す
 	End
 	
-	cnt = Int(Depth/3)
+	cnt = Int(Depth/4)
 	For curMoveCnt = 1 To cnt
 		GoSub Act.Down
 	Next
@@ -6764,7 +6783,7 @@ Act.PrevHalf:
 		X = prevPos<2> ;** X位置は元に戻す
 	End
 	
-	cnt = Int(Depth/3)
+	cnt = Int(Depth/4)
 	For curMoveCnt = 1 To cnt
 		GoSub Act.Up
 	Next
@@ -7164,7 +7183,7 @@ Search.Core:
 			startX = BufInfo<BI.BLOCKSTART,2>
 			endX = BufInfo<BI.BLOCKEND, 2>
 			If startX > endX Then tmp = startX; startX = endX; endX = tmp
-			PromptLine = "Enter Search Text ->" ; GoSub PromptLine
+			PromptLine = HI.SEARCH.ON:"Enter Search Text -> " ; GoSub PromptLine
 			inputBox = Rec<Y>[startX, endX-startX]
 			GoSub InputBox
 			SearchString = inputBox
@@ -7173,7 +7192,7 @@ Search.Core:
 	End
 	
 	If (SearchString = "") Then 
-		PromptLine = "Enter Search Text ->" ; GoSub PromptLine
+		PromptLine = HI.SEARCH.ON:"Enter Search Text -> " ; GoSub PromptLine
 		inputBox = ""
 		GoSub InputBox
 		SearchString = inputBox
@@ -7184,10 +7203,11 @@ Search.Core:
 	
 	!! 小文字のみの場合に大小無視
 	ignoreCase = @TRUE
-	len = Len(SearchString)
+	a = Convert(PUNCS,"",SearchString)
+	len = Len(a)
 	For i = 1 To len
-		c = SearchString[i,1]
-		If 'a' <= c And c <= 'z' Or c = '.' Or c = '_' Else ignoreCase = @FALSE
+		c = a[i,1]
+		If 'a' <= c And c <= 'z' Else ignoreCase = @FALSE
 	Next
 	
 	Redraw = REDRAW.ALL
@@ -7360,17 +7380,26 @@ Search.Core:
 * Act.ShowOutline - Show a list of Outlines
 *-----------------------------------------------------------------------
 Act.ShowOutline:
-
+	
+	SWord = BufInfo<BI.HIWORD>
 	choiceList = ""
 	For I = 1 to Lines
-		Line = TrimF(Rec<I>)
+		Line = Convert(char(9)," ",Rec<I>) ;** インデントはSP1とする
+		
+		IF SWord#"" THEN
+			!! 検索ハイライトの行を含める
+			If Index((If ignoreCase Then DownCase(Line) Else Line),SWord) Then
+				choiceList<-1> = Line:@VM:I
+				Continue
+			End
+		END
 		
 		!! Label
-		word = Line[";",1,1][" ",1,1]
+		word = Line[";",1,1][" ",1,1]["*",1,1]["!",1,1]
 		If word Matches "1n0n":@VM:"1A0X':'" Then
-			choiceList<-1> = " ":Line:@VM:I
+			choiceList<-1> = Line:@VM:I
 		End
-		
+
 		!! PROGRAM, SUBROUTINE, $INCLUDE
 		lists = ""
 		lists<-1> = "PROGRAM"
@@ -7380,7 +7409,7 @@ Act.ShowOutline:
 		lists<-1> = "$INCLUDE"
 		Convert @FM To @VM In lists
 		a = CatS(lists,Reuse("..."))
-		
+
 		!! 修飾子を削る
 		b = UpCase(Line)
 		b = Change(b,"LOCAL","")
@@ -7393,8 +7422,8 @@ Act.ShowOutline:
 		End
 	Next
 
-	title = SBOLD:FG.BASE03:BG.YELLOW:" Outline"
-	tmpList = Fields(Convert(@VM,",",choiceList),",",2)
+	title = FG.BASE3:BG.YELLOW:" Outline"
+	tmpList = Fields(Convert(@VM,char(1),choiceList),char(1),2)
 	Locate Y In tmpList By "AR" Setting choiceNo Else choiceNo -= 1
 	
 	!! 選択リストボックス初期化
@@ -7531,7 +7560,7 @@ Core.ShowWordHokan:
 
 	!! 選択リストボックス初期化
 	choiceNo = 1
-	title = SBOLD:FG.BASE03:BG.YELLOW:" Words"
+	title = SBOLD:FG.BASE3:BG.YELLOW:" Words"
 	GoSub InitChoiceList
 	
 	filter = currentWord
@@ -8176,7 +8205,7 @@ Act.ShowBuffList:
 		End Case
 		choiceList<-1> = dispStr
 	Next
-	title = SBOLD:FG.BASE03:BG.BLUE:" Choice Buffer"
+	title = SBOLD:FG.BASE3:BG.BLUE:" Buffers"
 	choiceNo = If DCount(choiceList,@FM) < 2 Then 1 Else 2 ;**   !! 初期値は１つ前のものにする
 	
 	!! 選択リストボックス初期化
@@ -8202,6 +8231,17 @@ Act.ShowBuffList:
 				Exit
 			Case actNo = A.BUFFER ;** バッファ進める
 				actNo = A.DOWN
+			Case actNo = A.CLOSEBUF ;** この場でバッファを閉じる
+				If choiceSelection Then
+					Found = choiceSelection[' ',1,1]
+					GoSub StackJumpHistory
+					GoSub ChangeBuf
+					GoSub ShowWindow
+					GoSub Act.CloseBuff
+					If AllDone Then Exit 
+					GoSub ShowWindow
+					GoTo Act.ShowBuffList
+				End
 		End Case
 		
 	Repeat
@@ -8296,6 +8336,7 @@ Act.AutoIndent:
 	editCmd<4> = indentLen 
 	editCmd<5> = Str(IndentCh,adjustIndentCnt)
 	editCmd<6> = ""
+	GoSub StackEditCmd
 	
 	!! 自動閉じ文挿入
 	If autoClosing Then
@@ -8319,18 +8360,17 @@ Act.AutoIndent:
 		Next iY
 		
 		cmd = ""
-		cmd<1> = Y+1
-		cmd<2> = 1
+		cmd<1> = Y
+		cmd<2> = X
 		cmd<3> = ""
 		cmd<4> = ""
-		cmd<5> = Str(IndentCh,adjustIndentCnt-1):autoClosing:Char(10)
+		cmd<5> = Char(10):Str(IndentCh,adjustIndentCnt-1):autoClosing
 		cmd<6> = "1"
-		editCmd<-1> = cmd
+		editCmd = cmd
+		GoSub StackEditCmd
 		
 	Skip.AutoClosing:
 	End
-	
-	GoSub StackEditCmd
 	
 	Return
 
