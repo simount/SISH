@@ -74,14 +74,12 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
 
 ==== ローカル接続 For Windows
 
+必須バージョン: QM3.4-12以降、Windows10(1709)以降
 QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタマイズを行うとより使いやすくなります。
 
 [クリップボード貼り付け] +
 以下の `paste.exe` を system32 に配置すれば、貼り付けで画面が点滅する問題を回避できます。
 http://www.c3scripts.com/tutorials/msdos/paste.html
-
-NOTE: kbd:[Ctrl+カーソル] で単語単位の移動、kbd:[Shift+カーソル]で範囲選択を利用する場合は
-QM3.4-12以降かつWindows10以降(Console Virtual Terminal Sequencesに対応)が必要
 
 ==== リモート接続 For Windows
 
