@@ -228,33 +228,34 @@ End
 ** [http://ethanschoonover.com/solarized]
 **
 
+!! Color Palette Mapping
 !! Solalizedのカラーテーマ設定
 THEME.COLOR.SETTINGS = ""
-THEME.COLOR.SETTINGS := ESC:"]4;0;rgb:00/2b/36":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;10;rgb:07/36/42":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;11;rgb:58/6e/75":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;8;rgb:65/7b/83":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;12;rgb:83/94/96":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;7;rgb:93/a1/a1":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;13;rgb:ee/e8/d5":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;15;rgb:fd/f6/e3":ESC:" "
-
-THEME.COLOR.SETTINGS := ESC:"]4;3;rgb:b5/89/00":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;9;rgb:cb/4b/16":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;1;rgb:dc/32/2f":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;14;rgb:d3/36/82":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;5;rgb:6c/71/c4":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;4;rgb:26/8b/d2":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;6;rgb:2a/a1/98":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;2;rgb:85/99/00":ESC:" "
-
-THEME.COLOR.SETTINGS := ESC:"]10;rgb:93/a1/a1":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]11;rgb:00/2b/36":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]4;260;rgb:00/00/00":ESC:" "
-THEME.COLOR.SETTINGS := ESC:"]12;rgb:ff/ff/ff":ESC:" "
-
-
-!! Color Palette Mapping
+IF @TTY = "console" AND @TERM.TYPE # "msvt" ELSE
+	A = IF @TERM.TYPE = "msvt" THEN ESC ELSE BEL
+	THEME.COLOR.SETTINGS := ESC:"]4;0;rgb:00/2b/36":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;10;rgb:07/36/42":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;11;rgb:58/6e/75":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;8;rgb:65/7b/83":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;12;rgb:83/94/96":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;7;rgb:93/a1/a1":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;13;rgb:ee/e8/d5":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;15;rgb:fd/f6/e3":A:" "
+	
+	THEME.COLOR.SETTINGS := ESC:"]4;3;rgb:b5/89/00":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;9;rgb:cb/4b/16":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;1;rgb:dc/32/2f":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;14;rgb:d3/36/82":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;5;rgb:6c/71/c4":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;4;rgb:26/8b/d2":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;6;rgb:2a/a1/98":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;2;rgb:85/99/00":A:" "
+	
+	THEME.COLOR.SETTINGS := ESC:"]10;rgb:93/a1/a1":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]11;rgb:00/2b/36":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;260;rgb:00/00/00":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]12;rgb:ff/ff/ff":A:" "
+END
 
 If IS.CONSOLE Then
 	

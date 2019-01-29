@@ -3816,6 +3816,7 @@ $ENDIF
 	choiceSelNo = choiceNo
 	choiceOutList.length = choiceList.length
 	C = ""
+	choiceParse = @False
 	
 Return
 *-----------------------------------------------------------------------
@@ -3909,25 +3910,29 @@ ProcChoiceList:
 	Loop While i <= listLen
 		no = choiceOutList<winTop+i,1>
 		selected = (choiceNo = winTop+i) ;** 選択行か？
-		line = choiceList<no,1>
+		Line = choiceList<no,1>
 		crtBuff := @(winX,i+1)
-		crtBuff := If selected Then HI.SELECT.ON Else FG.BASE01:BG.BASE2
+		If selected Then
+			crtBuff := HI.SELECT.ON
+			PLine = Line
+		End Else
+			crtBuff := FG.BASE01:BG.BASE3
+			If choiceParse Then GoSub ParseLine ELSE PLine = Line
+		End
+		crtBuff := PLine
+		crtBuff := @(-4)
 		If filter<>"" Then
 			!! フィルター文字と一致するものに色を付ける
+			crtBuff := Char(13):CSI:(winX):"C"
 			Loop
-				p = Index(UpCase(line),filterUpper)
+				p = Index(UpCase(Line),filterUpper)
 			While p
-				crtBuff := line[1,p-1]
+				If p>1 Then crtBuff := CSI:(p-1):"C"
 				crtBuff := FG.RED
-				crtBuff := line[p,Len(filter)]
-				crtBuff := (If selected Then HI.SELECT.ON Else FG.BASE01:BG.BASE2)
-				line = line[p+Len(filter),*]
-			Repeat
-			crtBuff := line
-		End Else
-			crtBuff := line
+				crtBuff := Line[p,Len(filter)]
+				Line = Line[p+Len(filter),*]
+			Repeat			
 		End
-		crtBuff := @(-4):SGR.ALL.OFF
 		i += 1
 	Repeat
 	crtBuff := BG.BASE3
@@ -3937,7 +3942,7 @@ ProcChoiceList:
 	Repeat
 	
 	!! フィルター入力欄表示
-	crtBuff := @(winX,1):SGR.ALL.OFF:@(-4):filter
+	crtBuff := @(winX,1):FG.BASE03:BG.BASE2:@(-4):filter
 	GoSub CRT.BUFF.FLUSH
 	
 	choiceSelNo = choiceOutList<choiceNo>
@@ -7440,6 +7445,7 @@ Act.ShowOutline:
 	
 	!! 選択リストボックス初期化
 	GoSub InitChoiceList
+	choiceParse = @True
 	
 	Loop
 		

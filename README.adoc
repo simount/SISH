@@ -72,7 +72,7 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
 
 === クライアント端末側の設定
 
-==== ローカル接続 For Windows
+==== ローカル接続 on Windows
 
 必須バージョン: QM3.4-12以降、Windows10(1709)以降
 QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタマイズを行うとより使いやすくなります。
@@ -81,7 +81,7 @@ QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタ
 以下の `paste.exe` を system32 に配置すれば、貼り付けで画面が点滅する問題を回避できます。
 http://www.c3scripts.com/tutorials/msdos/paste.html
 
-==== リモート接続 For Windows
+==== リモート接続 from Windows Client
 
 .ターミナルエミュレータ（クライアント端末）のダウンロード
 
@@ -567,6 +567,7 @@ https://myrica.estable.jp/
 
 === 2019/01/29 - 0.30.0 ===
 - `[BUG]` 置換を続けると表示が乱れていく問題を修正
+- `[IMP]` Outline内もカラーフォーマットで表示するようにした
 - `[IMP]` カラーテーマを固定化した。今後設定ファイルにて変更できるようにする予定。
 
 === 2018/12/19 - 0.29.0 ===
