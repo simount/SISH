@@ -407,6 +407,7 @@ $ENDIF
 
 !! 外部設定の読み込み
 $INCLUDE SISH.SETTING.H
+
 	If theme Then
 		GoSub Act.SwitchTheme
 		theme = Not(theme)
@@ -4207,7 +4208,8 @@ Enters:
 		Case actNo = A.CANCEL
 			GoSub Act.Action ;** メニュー表示
 	End Case
-	
+
+Draw.Editor:
 	** --------------------------
 	** X表示位置の計算
 	** --------------------------
@@ -6002,12 +6004,14 @@ SubstPrompts:
 * ToolsMenu
 *--------------------------------------------------------------------------
 ToolsMenu: 
-	MenuLine = "BGColorSwitch Keys :"
+	MenuLine = "BGColorSwitch Loadtheme Keys :"
 	GoSub MenuLine
 	C = UpCase(C)
 	Begin Case
 		Case C = "B"
 			GoSub Act.SwitchTheme
+		Case C = "L"
+			GoSub Load.Theme
 		Case C = "K"
 			GoSub Keys
 			GoSub ShowWindow
@@ -7222,6 +7226,8 @@ Search.Core:
 	Loop
 
 		GoSub StackJumpHistory
+		
+		prevY = Y
 	
 		!! 検索ロジック
 		isFound = @FALSE
@@ -7294,19 +7300,19 @@ Search.Core:
 			BufInfo<BI.BLOCKEND> = Y:@VM:X+Len(SearchString)
 			keepSelection = True
 			If Replacing Then
-				Top = If Y > 10 Then Y - 10 Else 1
-				If X < XOffSet Then XOffSet = X
 				
-				If X > (XOffSet + Width) Then XOffSet = X
-				GoSub ShowWindow
+				!! エディタ画面の再描画
+				crtBuff = ""
+				GoSub Draw.Editor
+				GoSub CRT.BUFF.FLUSH
 				
 				If firstFound Then
 					firstFound = @FALSE
-					PromptLine = "Enter Replacement ->"; GoSub PromptLine
+					PromptLine = HI.SEARCH.ON:"Enter Replacement -> "; GoSub PromptLine
 					inputBox = ""
 					GoSub InputBox
 					Replacement = inputBox
-					PromptLine = "All or Verify :"; GoSub PromptLine
+					PromptLine = HI.SEARCH.ON:"(All or Verify) :"; GoSub PromptLine
 					GoSub GetKey
 					Ok = TrimF(UpCase(C[1,1]))
 					If Ok = "A" Then
@@ -7322,7 +7328,7 @@ Search.Core:
 				If skipVerify Then
 					Ok = "Y"
 				End Else 
-					PromptLine = "Replace This Selection (Y/N/Cancel) :"; GoSub PromptLine
+					PromptLine = HI.SEARCH.ON:"Replace This Selection (Y/N/All) :"; GoSub PromptLine
 					GoSub GetKey
 					Ok = UpCase(TrimF(C)[1,1])
 				End
@@ -7333,6 +7339,10 @@ Search.Core:
 						GoSub InsertLines
 					Case Ok = "N"
 						X += 1
+					Case Ok = "A"
+						skipVerify = @TRUE
+						Y = 1 ; X = 1
+						Continue
 					Case 1
 						Exit
 				End Case
@@ -7355,6 +7365,7 @@ Search.Core:
 			End
 			If Replacing And skipVerify Then
 				StatusMessage = replaceCnt:" Strings Replaced"
+				keepSelection = False
 				Exit
 			End
 			GoSub ShowWindow
@@ -7422,7 +7433,7 @@ Act.ShowOutline:
 		End
 	Next
 
-	title = FG.BASE3:BG.YELLOW:" Outline"
+	title = FG.BASE03:BG.YELLOW:" Outline"
 	tmpList = Fields(Convert(@VM,char(1),choiceList),char(1),2)
 	Locate Y In tmpList By "AR" Setting choiceNo Else choiceNo -= 1
 	
@@ -7560,7 +7571,7 @@ Core.ShowWordHokan:
 
 	!! 選択リストボックス初期化
 	choiceNo = 1
-	title = SBOLD:FG.BASE3:BG.YELLOW:" Words"
+	title = SBOLD:FG.BASE03:BG.YELLOW:" Words"
 	GoSub InitChoiceList
 	
 	filter = currentWord
@@ -8165,10 +8176,10 @@ Act.Redo:
 		If EditCmdStack<EditCmdPos-1> = "SAVED_POINT" Then
 			Changed = False
 			EditCmdPos -= 1 ;** １つ先に進む
-			Redraw = REDRAW.ALL
 		End Else
 			Changed = True
 		End
+		Redraw = REDRAW.ALL
 	End
 	
 	Redraw.StatusLine = @TRUE
@@ -8205,7 +8216,7 @@ Act.ShowBuffList:
 		End Case
 		choiceList<-1> = dispStr
 	Next
-	title = SBOLD:FG.BASE3:BG.BLUE:" Buffers"
+	title = SBOLD:FG.BASE03:BG.BLUE:" Buffers"
 	choiceNo = If DCount(choiceList,@FM) < 2 Then 1 Else 2 ;**   !! 初期値は１つ前のものにする
 	
 	!! 選択リストボックス初期化
@@ -8879,6 +8890,40 @@ Act.ToggleCaseInvert:
 	
 	Return
 
+* **************************************************************************
+* テーマカラー設定を読み込む
+
+Load.Theme:
+	!! TODO @HOME\sish_theme.ini があればそれを読み込む
+	
+	!! なければSolalizedのテーマをデフォルトとして設定する
+	!! 以下の設定を@HOME\sish_theme.iniに書き出す
+	crtBuff = ""
+	crtBuff := ESC:"]4;0;rgb:00/2b/36":ESC:" "
+	crtBuff := ESC:"]4;10;rgb:07/36/42":ESC:" "
+	crtBuff := ESC:"]4;11;rgb:58/6e/75":ESC:" "
+	crtBuff := ESC:"]4;8;rgb:65/7b/83":ESC:" "
+	crtBuff := ESC:"]4;12;rgb:83/94/96":ESC:" "
+	crtBuff := ESC:"]4;7;rgb:93/a1/a1":ESC:" "
+	crtBuff := ESC:"]4;13;rgb:ee/e8/d5":ESC:" "
+	crtBuff := ESC:"]4;15;rgb:fd/f6/e3":ESC:" "
+	
+	crtBuff := ESC:"]4;3;rgb:b5/89/00":ESC:" "
+	crtBuff := ESC:"]4;9;rgb:cb/4b/16":ESC:" "
+	crtBuff := ESC:"]4;1;rgb:dc/32/2f":ESC:" "
+	crtBuff := ESC:"]4;14;rgb:d3/36/82":ESC:" "
+	crtBuff := ESC:"]4;5;rgb:6c/71/c4":ESC:" "
+	crtBuff := ESC:"]4;4;rgb:26/8b/d2":ESC:" "
+	crtBuff := ESC:"]4;6;rgb:2a/a1/98":ESC:" "
+	crtBuff := ESC:"]4;2;rgb:85/99/00":ESC:" "
+
+	crtBuff := ESC:"]10;rgb:93/a1/a1":ESC:" "
+	crtBuff := ESC:"]11;rgb:00/2b/36":ESC:" "
+	crtBuff := ESC:"]4;260;rgb:00/00/00":ESC:" "
+	crtBuff := ESC:"]12;rgb:ff/ff/ff":ESC:" "
+	Crt crtBuff:
+	
+	Return
 
 * **************************************************************************
 * Act.SwitchTheme (背景色の入れ替え)

@@ -76,15 +76,6 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
 
 QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタマイズを行うとより使いやすくなります。
 
-*色の設定* +
-特にエディタ部分はlink:https://github.com/chriskempson/base16[base16]の色アーキテクチャで正しく表示されるよう構築されています。 +
-既存のbase16のカラーパレットはlink:https://github.com/Microsoft/console/tree/master/tools/ColorTool[ColorTool]で設定できます。 +
-ColorToolはiterm2カラースキーマ設定を取り込むことができます。base16のiterm2版設定は以下からダウンロードできます。 +
-https://github.com/martinlindhe/base16-iterm2/tree/master/itermcolors +
-ダウンロードしたスキーマ設定を `ColorTool\schema` に置いて以下のコマンドでレジストリに設定します。
-
-    ColorTool -b base16-solarized-light
-
 *クリップボード貼り付け* +
 以下の `paste.exe` を system32 に配置すれば、貼り付けで画面が点滅する問題を回避できます。
 http://www.c3scripts.com/tutorials/msdos/paste.html
@@ -138,7 +129,6 @@ kbd:[F9] キーでON/OFFを切り替えます
 
 kbd:[F11] 黒背景ベースと白背景ベースを切り換える。
 背景を反転させると文字色と合わない色設定も存在しますので注意が必要です。
-`base16-solarized-light` は背景の反転を考慮した色設定となっています。
 
 ==== ターミナルサイズの自動変更機能（リモート接続のみ） ====
 
@@ -576,6 +566,10 @@ https://myrica.estable.jp/
 
 
 == 更新履歴 ==
+
+=== 2019/01/29 - 0.30.0 ===
+- `[BUG]` 置換を続けると表示が乱れていく問題を修正
+- `[IMP]` カラーテーマを固定化した。今後設定ファイルにて変更できるようにする予定。
 
 === 2018/12/19 - 0.29.0 ===
 - `[IMP]` 検索ハイライト中はアウトラインにも検索行を含めるようにした
