@@ -76,7 +76,7 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
 
 QM Console (qm.exe) そのままで概ね動作しますが、以下のカスタマイズを行うとより使いやすくなります。
 
-*クリップボード貼り付け* +
+[クリップボード貼り付け] +
 以下の `paste.exe` を system32 に配置すれば、貼り付けで画面が点滅する問題を回避できます。
 http://www.c3scripts.com/tutorials/msdos/paste.html
 
