@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.29.0 ]"
+Equ SISH.VERSION To "[ SISH v0.30.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -408,6 +408,7 @@ $ENDIF
 !! 外部設定の読み込み
 $INCLUDE SISH.SETTING.H
 
+	GoSub Load.Theme
 	If theme Then
 		GoSub Act.SwitchTheme
 		theme = Not(theme)
@@ -8895,34 +8896,7 @@ Act.ToggleCaseInvert:
 
 Load.Theme:
 	!! TODO @HOME\sish_theme.ini があればそれを読み込む
-	
-	!! なければSolalizedのテーマをデフォルトとして設定する
-	!! 以下の設定を@HOME\sish_theme.iniに書き出す
-	crtBuff = ""
-	crtBuff := ESC:"]4;0;rgb:00/2b/36":ESC:" "
-	crtBuff := ESC:"]4;10;rgb:07/36/42":ESC:" "
-	crtBuff := ESC:"]4;11;rgb:58/6e/75":ESC:" "
-	crtBuff := ESC:"]4;8;rgb:65/7b/83":ESC:" "
-	crtBuff := ESC:"]4;12;rgb:83/94/96":ESC:" "
-	crtBuff := ESC:"]4;7;rgb:93/a1/a1":ESC:" "
-	crtBuff := ESC:"]4;13;rgb:ee/e8/d5":ESC:" "
-	crtBuff := ESC:"]4;15;rgb:fd/f6/e3":ESC:" "
-	
-	crtBuff := ESC:"]4;3;rgb:b5/89/00":ESC:" "
-	crtBuff := ESC:"]4;9;rgb:cb/4b/16":ESC:" "
-	crtBuff := ESC:"]4;1;rgb:dc/32/2f":ESC:" "
-	crtBuff := ESC:"]4;14;rgb:d3/36/82":ESC:" "
-	crtBuff := ESC:"]4;5;rgb:6c/71/c4":ESC:" "
-	crtBuff := ESC:"]4;4;rgb:26/8b/d2":ESC:" "
-	crtBuff := ESC:"]4;6;rgb:2a/a1/98":ESC:" "
-	crtBuff := ESC:"]4;2;rgb:85/99/00":ESC:" "
-
-	crtBuff := ESC:"]10;rgb:93/a1/a1":ESC:" "
-	crtBuff := ESC:"]11;rgb:00/2b/36":ESC:" "
-	crtBuff := ESC:"]4;260;rgb:00/00/00":ESC:" "
-	crtBuff := ESC:"]12;rgb:ff/ff/ff":ESC:" "
-	Crt crtBuff:
-	
+	Crt THEME.COLOR.SETTINGS: ;** SISH.SETTING.H を事前に読み込んでおく
 	Return
 
 * **************************************************************************
