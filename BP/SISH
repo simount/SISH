@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.30.0 ]"
+Equ SISH.VERSION To "[ SISH v0.31.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -437,7 +437,7 @@ $IFNDEF U2__UNIVERSE
 	serverListIds = ""
 	serverList = ""
 	Execute "LIST.SERVERS" CAPTURING out
-	out = out[@FM,2,*]
+	out = out[@FM,2,999]
 	For Each line In out
 		line = Trim(line)
 		serverListIds<-1> = line[' ',1,1]
@@ -1481,14 +1481,14 @@ $IFNDEF U2__UNIVERSE
 					!! 対象のVOCをすり替える
 					fpTgtAccVOC = fpTemp
 					tgtAccVOC = tmpName
-					nowWord = nowWord[":",2,*]
+					nowWord = nowWord[":",2,9999]
 					GoSub Setting.WordInfo2
 				End Else
 					!! サーバ名か確認する
 					tmpName = nowWord[":",1,1]
 					Locate tmpName In serverListIds<1> By "AL" Then
 						!! アカウントのみ補完する特殊モード
-						nowWord = nowWord[":",2,*]
+						nowWord = nowWord[":",2,9999]
 						tgtAccFile = tmpName:":QMSYS:QM.ACCOUNTS"
 						GoSub Setting.WordInfo2
 						GoTo Account.Hokan
@@ -1500,7 +1500,7 @@ $IFNDEF U2__UNIVERSE
 					!! 対象のVOCをすり替える
 					fpTgtAccVOC = fpTemp
 					tgtAccVOC = tmpName
-					nowWord = nowWord[":",3,*]
+					nowWord = nowWord[":",3,9999]
 					GoSub Setting.WordInfo2
 				End
 			End
@@ -1814,7 +1814,7 @@ $ENDIF
 					While sep
 						lastDesc = non
 					Repeat
-					descInfos<-1> = Len(grpId<i>):@VM:ids:"# ":lastDesc[' ',5,*]
+					descInfos<-1> = Len(grpId<i>):@VM:ids:"# ":lastDesc[' ',5,9999]
 				End
 			Next i
 		End Else
@@ -2213,7 +2213,7 @@ $ENDIF
 		** テーマをリセット
 		Crt ESC:"]R":ESC:"[?69l"
 	End
-	
+
 $IFNDEF U2__UNIVERSE
 	IF @TERM.TYPE = 'msvt' THEN
 		EXECUTE "TERM qmterm"
@@ -3791,7 +3791,7 @@ InitChoiceList: ;** 選択リストボックス初期化
 		tmp<-1> = LenDP(choiceList<i,1>)
 	Next
 	winWidth = Maximum("20":@FM:tmp)
-	If winWidth > Width Then winWidth = Width
+	If winWidth > Width*2/3 Then winWidth = Int(Width*2/3)
 	winX = Width - winWidth
 	winHeight = Depth - 2
 	winTop = 0
@@ -3867,14 +3867,40 @@ ProcChoiceList:
 	!! フィルター処理
 	If filter >< filterPrev Then
 		choiceOutList = ""
-		filter.len = Len(filter)
-		filterUpper = UpCase(filter)
-		For i = 1 To choiceList.length
-			line = choiceList<i>
-			If filter="" Or Index(UpCase(line<1,1>),filterUpper,1) Then
+		filterCnt = 0
+		If TRIM(filter)="" Then
+			For i = 1 To choiceList.length
 				choiceOutList<-1> = i ;** choiceListへの参照を保持
+			Next
+		End Else
+			Dim filterUpcase(10) ;** And検索は最大10まで
+			a = UpCase(filter)
+			If filter[1,1]=" " Then
+				!! スペースで始まる場合は単語単位の前方一致で検索
+				filterCnt = 1
+				For i = 1 To choiceList.length
+					line = choiceList<i,1>
+					p = Index(line,filter[2,9999])
+					If p>0 And (p=1 Or Convert(PUNCS:".","",line[p-1,1])="") Then
+						choiceOutList<-1> = i ;** choiceListへの参照を保持
+					End
+				Next i
+			End Else
+				!! スペース区切り単語のAND検索
+				MatParse filterUpcase From Trim(a)," " Setting filterCnt
+				For i = 1 To choiceList.length
+					line = UpCase(choiceList<i,1>)
+					flg = @True
+					For j = 1 To filterCnt
+						If Index(line,filterUpcase(j))=0 Then
+							flg = @False
+							Exit ;** １つでも一致しなければ抜ける
+						End
+					Next j
+					If flg Then choiceOutList<-1> = i ;** choiceListへの参照を保持
+				Next i
 			End
-		Next
+		End
 		choiceOutList.length = DCount(choiceOutList,@FM)
 		filterPrev = filter
 		Locate choiceSelNo In choiceOutList By "AR" Setting choiceNo Else
@@ -3914,24 +3940,52 @@ ProcChoiceList:
 		crtBuff := @(winX,i+1)
 		If selected Then
 			crtBuff := HI.SELECT.ON
-			PLine = Line
+			If choiceParse Then
+				XOffSet = 1
+				selection = 1:@FM:BIG
+				GoSub ParseLine2
+				PLine := HI.SELECT.ON
+			End Else PLine = Line
 		End Else
 			crtBuff := FG.BASE01:BG.BASE3
-			If choiceParse Then GoSub ParseLine ELSE PLine = Line
+			If choiceParse Then
+				XOffSet = 1
+				selection = ""
+				GoSub ParseLine2 
+			End Else PLine = Line
 		End
-		crtBuff := PLine
-		crtBuff := @(-4)
-		If filter<>"" Then
+		crtBuff := PLine:@(-4)
+		If filterCnt>0 Then
 			!! フィルター文字と一致するものに色を付ける
-			crtBuff := Char(13):CSI:(winX):"C"
-			Loop
-				p = Index(UpCase(Line),filterUpper)
-			While p
-				If p>1 Then crtBuff := CSI:(p-1):"C"
-				crtBuff := FG.RED
-				crtBuff := Line[p,Len(filter)]
-				Line = Line[p+Len(filter),*]
-			Repeat			
+			If filter[1,1]=" " Then
+				crtBuff := Char(13):CSI:(winX):"C"
+				fi = filter[2,9999]
+				fi.len = Len(fi)
+				li = Line
+				Loop
+					p = Index(li,fi)
+				While p
+					If p=1 Or Convert(PUNCS:".","",li[p-1,1])="" Then
+						If p>1 Then crtBuff := CSI:(p-1):"C"
+						crtBuff := FG.RED
+						crtBuff := li[p,fi.len]
+					End
+					li = li[p+fi.len,9999]
+				Repeat			
+			End Else
+				For j = 1 To filterCnt
+					crtBuff := Char(13):CSI:(winX):"C"
+					li = Line
+					Loop
+						p = Index(UpCase(li),filterUpcase(j))
+					While p
+						If p>1 Then crtBuff := CSI:(p-1):"C"
+						crtBuff := FG.RED
+						crtBuff := li[p,Len(filterUpcase(j))]
+						li = li[p+Len(filterUpcase(j)),9999]
+					Repeat			
+				Next j
+			End
 		End
 		i += 1
 	Repeat
@@ -4014,7 +4068,7 @@ GetKey:
 AfterKeyWait:
 				
 		n = UniSeq(C) ;** １文字目の文字列数値表記
- 		If (n >= 31 And n < 127) OR (n > 255) Then
+ 		If (n >= 32 And n < 127) OR (n > 255) Then
 			actNo = A.INSCHAR
 			Return
 		End
@@ -4324,7 +4378,7 @@ GetX.From.keepDPX:
 	Loop
 		char = Line[outX,1]
 		If char = "" Then Exit
-		tmpX += If char = Char(9) Then STDTAB Else LenDP(char)
+		tmpX += If char = Char(9) Then STDTAB-REM(tmpX,STDTAB) Else LenDP(char)
 	Until tmpX >= keepDP_X
 		outX += 1
 	Repeat
@@ -4717,11 +4771,6 @@ Return
 *--------------------------------------------------------------------------
 ParseLine:
 	
-	L = Len(Line)
-	OldLine = Line
-	Line = TrimF(Convert(Char(9),Space(STDTAB),Line))
-	Mask = Space(L - Len(Line))
-	
 	** 選択領域がある
 	selection = ""
 	If BufInfo<BI.BLOCKSTART> Then
@@ -4746,6 +4795,13 @@ ParseLine:
 		End
 	End
 
+ParseLine2: ;** (Outline用、呼び出す前に必ず selection に値を入れること)
+
+	L = Len(Line)
+	OldLine = Line
+	Line = TrimF(Convert(Char(9),Space(STDTAB),Line))
+	Mask = Space(L - Len(Line))
+	
 	ParseType = BufInfo<BI.PARSETYPE>
 	Begin Case
 		** --------------------
@@ -4756,45 +4812,40 @@ ParseLine:
 			If Word Matches "1N0N":@VM:"1A0X:" Then
 				!! Label
 				If INMAT() = 2 Then
-					A = Convert("0123456789._","",Word[2,*]) Matches "0A:"
+					A = Convert("0123456789._","",Word[2,9999]) Matches "0A:"
 				End Else A = @TRUE
 				If A Then
 					len = Len(Word)
 					Mask := Str(SI.LABEL,len)
 					Line = Line[len+1,BIG]
-					A = Trim(Line)[1,1]
-					IF A#"" AND Count("*!",A) THEN
-						!! Comment
-						Mask := Str(SI.COMMENT, L)
-					END
 				End
-			End Else
-				Begin Case   
-					!! Comment & Directive
-					Case Count("*!",Word[1,1])
-						Mask := Str(SI.COMMENT, L)
-					Case Count("$#",Word[1,1])
-						Mask = Str(SI.DIRECTIVE, L)
-					Case 1
-						Dc = Count(Line,";")
-						If Not(Dc) Then
-							Mask := Space(L)
-						End Else
-							FoundComment = False
-							For Z = 1 To Dc Until FoundComment
-								Word = TrimF(Line[";",Z+1,1])
-								If Count("*!",Word[1,1]) Then
-									FoundComment = Z
-								End
-							Next
-							If FoundComment Then
-								Mask := Space(Len(Line[";",1, FoundComment])):Str(SI.COMMENT, L)
-							End Else
-								Mask := Space(L)
-							End
-						End
-				End Case
 			End
+			Begin Case   
+				!! Comment & Directive
+				Case Count("*!",Word[1,1])
+					Mask := Str(SI.COMMENT, L)
+				Case Count("$#",Word[1,1])
+					Mask = Str(SI.DIRECTIVE, L)
+				Case 1
+					Dc = Count(Line,";")
+					If Not(Dc) Then
+						Mask := Space(L)
+					End Else
+						FoundComment = False
+						For Z = 1 To Dc Until FoundComment
+							Word = TrimF(Line[";",Z+1,1])
+							If Count("*!",Word[1,1]) Then
+								FoundComment = Z
+							End
+						Next
+						If FoundComment Then
+							Mask := Space(Len(Line[";",1, FoundComment])):Str(SI.COMMENT, L)
+						End Else
+							Mask := Space(L)
+						End
+					End
+			End Case
+			
 			!! Word
 			Lin = Convert(PUNCS,Str(@fm,Len(PUNCS)), UpCase(OldLine))
 			Dc3 = Dcount(Lin,@fm)
@@ -4938,7 +4989,16 @@ ParseLine:
 	If Word <> "" Then
 		Oc = 1
 		Loop
-			Ix = If ignoreCase Then Index(DownCase(OldLine),Word,Oc) Else Index(OldLine,Word,Oc)
+			If ignoreCase Then
+				Ix = Index(UpCase(OldLine),Word,Oc) 
+			End Else
+				Ix = Index(OldLine,Word,Oc)
+				If Ix Then
+					If Convert(PUNCS:".":@fm:@vm:@svm,"",OldLine[Ix-1,1])#"" Then
+						Ix = 0
+					End
+				End
+			End
 		While Ix Do
 			Oc += 1
 			Mask[Ix, Len(Word)] = Str(SI.SEARCH, Len(Word))
@@ -5036,13 +5096,14 @@ ParseLine:
 			!! 選択終了
 			HI.Default = HI.OFF
 			HI.Light = FG.BASE1
+			HI.Key = HI.KEY.ON
 			HI.Search = HI.SEARCH.ON
 			PLine := BG.DEFAULT
 			Old = ""
 			!! 行全体のハイライト
 			If Mask[1,1] = SI.DIRECTIVE Then
 				HI.Light = FG.BASE3
-				HI.Default = HI.DIR.ON
+				HI.Key = SBOLD:FG.BASE2
 				PLine := HI.DIR.ON
 				Old = SI.DIRECTIVE
 			End
@@ -5051,6 +5112,7 @@ ParseLine:
 			!! 選択開始
 			HI.Default = HI.SELECT.ON
 			HI.Light = FG.BASE00
+			HI.Key = SBOLD:FG.BASE2
 			HI.Search = HI.SEARCH.SEL
 			PLine := HI.SELECT.ON
 			Old = ""
@@ -5059,11 +5121,11 @@ ParseLine:
 		cc = Line[K,1]
 		If cc = Char(9) Then
 			!! 文字の描画(タブの場合は表示形式に置換)
-			If Not(K>1 And Old=Char(9)) Then PLine := FG.BASE2
+			If Not(K>1 And Old=Char(9)) Then PLine := If Old#SI.DIRECTIVE Then FG.BASE2 Else ""
 			A = STDTAB-1-REM(IX,STDTAB)
 			PLine := "»":Space(A)
 			IX += 1+A
-			Old = Char(9)
+			If Old#SI.DIRECTIVE Then Old = Char(9)
 		End Else If cc = Char(10) Then
 			!! 改行の表示
 			If selection<2> = BIG Then
@@ -5107,7 +5169,7 @@ ParseLine:
 					Case C = SI.COMMENT
 						PLine := HI.COMMENT.ON
 					Case C = SI.KEY
-						PLine := HI.KEY.ON
+						PLine := HI.Key
 					Case C = SI.STRING
 						PLine := HI.STRING.ON
 					Case C = SI.NUMBER
@@ -5893,7 +5955,7 @@ StartBuf:
 	BufInfo<BI.USED> = True
 	BufInfo<BI.BLOCKSTART> = False
 	BufInfo<BI.READONLY> = False
-	BufInfo<BI.CAPTURE> = If FileName = "" Then "(Untitled) [Create At ":OConv(Date(),"D-YMD[,2]"):" ":OConv(Time(),"MTS"):"]" Else ""
+	BufInfo<BI.CAPTURE> = ""
 
 	!! アカウントの設定
 	!! ショートネームがあればそちらを採用なければフルパス
@@ -5933,11 +5995,15 @@ $ENDIF
 		End
 	End
 	** Paragraph
-	If Rec [1,2] = "PA" Then ParseType = PARSE.PARA
+	If Rec[1,2] = "PA" Then ParseType = PARSE.PARA
 	BufInfo<BI.PARSETYPE> = ParseType
 	BufInfo<BI.INDENTTYPE> = If ParseType = PARSE.DATA Then "Tab" Else DEFAULT.INDENT.TYPE
 	BufInfo<BI.INDENTSIZE> = DEFAULT.INDENT
-	
+
+	If FileName = "" Then
+		BufInfo<BI.CAPTURE> = "Create At ":OConv(Date(),"D-YMD[,2]"):" ":OConv(Time(),"MTS")
+	End
+
 	Y = 1
 	X = 1
 	DP_X = 1
@@ -7195,8 +7261,12 @@ Search.Core:
 			If startX > endX Then tmp = startX; startX = endX; endX = tmp
 			PromptLine = HI.SEARCH.ON:"Enter Search Text -> " ; GoSub PromptLine
 			inputBox = Rec<Y>[startX, endX-startX]
+			If Convert(PUNCS:".":@fm:@vm:@svm,"",Rec<Y>[startX-1,1])="" Then inputBox = " ":inputBox
 			GoSub InputBox
 			SearchString = inputBox
+			!! スペースで始まる場合は厳格モード
+			ignoreCase = (Trim(SearchString)="" Or SearchString[1,1] # " ")
+			SearchString = If ignoreCase Then UpCase(SearchString) Else SearchString[2,9999]
 			If Replacing Then X = startX - 2
 		End
 	End
@@ -7206,19 +7276,13 @@ Search.Core:
 		inputBox = ""
 		GoSub InputBox
 		SearchString = inputBox
+		!! スペースで始まる場合は厳格モード
+		ignoreCase = (Trim(SearchString)="" Or SearchString[1,1] # " ")
+		SearchString = If ignoreCase Then UpCase(SearchString) Else SearchString[2,9999]
 	End
-	
+
 	!! ハイライト文字列の設定
 	BufInfo<BI.HIWORD> = SearchString
-	
-	!! 小文字のみの場合に大小無視
-	ignoreCase = @TRUE
-	a = Convert(PUNCS,"",SearchString)
-	len = Len(a)
-	For i = 1 To len
-		c = a[i,1]
-		If 'a' <= c And c <= 'z' Else ignoreCase = @FALSE
-	Next
 	
 	Redraw = REDRAW.ALL
 	If SearchString = "" Then Return
@@ -7231,8 +7295,6 @@ Search.Core:
 	skipVerify = @FALSE
 	Loop
 
-		GoSub StackJumpHistory
-		
 		prevY = Y
 	
 		!! 検索ロジック
@@ -7242,7 +7304,7 @@ Search.Core:
 			If searchReverse Then
 				Ix = X - 1
 				For Iy = Y To 1 Step -1
-					Line = DownCase(Rec<Iy>[1,Ix])
+					Line = UpCase(Rec<Iy>[1,Ix])
 					Ix = Index(Line, SearchString, Count(Line,SearchString))
 					If Ix Then
 						If Not(Y = Iy And X <= Ix) Then
@@ -7257,7 +7319,7 @@ Search.Core:
 			End Else
 				Ix = X + 1
 				For Iy = Y To Lines
-					idx = Index(DownCase(Rec<Iy>[Ix,HUGE]), SearchString, 1)
+					idx = Index(UpCase(Rec<Iy>[Ix,HUGE]), SearchString, 1)
 					If idx Then
 						Ix += idx - 1
 						If Not(Y = Iy And X >= Ix) Then
@@ -7271,13 +7333,13 @@ Search.Core:
 				Next
 			End
 		End Else
-			!! 完全一致
+			!! スペースで始まる場合は単語単位の前方一致で検索
 			If searchReverse Then
 				Ix = X - 1
 				For Iy = Y To 1 Step -1
 					Line = Rec<Iy>[1,Ix]
 					Ix = Index(Line, SearchString, Count(Line,SearchString))
-					If Ix Then
+					If Ix>0 And (Ix=1 Or Convert(PUNCS:".":@fm:@vm:@svm,"",Line[Ix-1,1])="") Then
 						If Not(Y = Iy And X <= Ix) Then
 							Y = Iy
 							X = Ix
@@ -7292,9 +7354,11 @@ Search.Core:
 				Ix = Index(Rec[SPos,HUGE], SearchString, 1)
 				If Ix Then
 					Ox = SPos + Ix - 1
-					Y = DCount(Rec[1, Ox], @fm)
-					X = Len(Rec[1, Ox][@fm, Y,1])
-					isFound = @TRUE
+					If Convert(PUNCS:".":@fm:@vm:@svm,"",Rec[Ox-1,1])="" Then
+						Y = DCount(Rec[1, Ox], @fm)
+						X = Len(Rec[1, Ox][@fm, Y,1])
+						isFound = @TRUE
+					End
 				End
 			End
 		End
@@ -7363,10 +7427,10 @@ Search.Core:
 		End Else
 			!! 見つからなかった
 			
-			Del jumpHistory<1> ;** Jump履歴を戻す
-			
-			If Y = 1 And X= 1 Then
+			If Y = 1 And X = 1 Then
 				StatusMessage = "Search Text Not Found"
+				Top = 1
+				Redraw = REDRAW.ALL
 				Exit
 			End
 			If Replacing And skipVerify Then
@@ -7398,18 +7462,30 @@ Search.Core:
 *-----------------------------------------------------------------------
 Act.ShowOutline:
 	
-	SWord = BufInfo<BI.HIWORD>
-	choiceList = ""
+	blockStart = ""
+	If BufInfo<BI.BLOCKSTART> Then
+		GoSub GetSelBlock
+	End
+	SWord = BufInfo<BI.HIWORD> ;** 検索ハイライトの単語
+	choiceList = "" ;** アウトライン出力対象
 	For I = 1 to Lines
 		Line = Convert(char(9)," ",Rec<I>) ;** インデントはSP1とする
 		
-		IF SWord#"" THEN
-			!! 検索ハイライトの行を含める
-			If Index((If ignoreCase Then DownCase(Line) Else Line),SWord) Then
+		If blockStart Then
+			!! 選択範囲内の行を含める
+			If blockStart<1> <= I And I <= blockEnd<1> Then
 				choiceList<-1> = Line:@VM:I
 				Continue
 			End
-		END
+		End
+		
+		If SWord#"" Then
+			!! 検索ハイライトの行を含める
+			If Index((If ignoreCase Then UpCase(Line) Else Line),SWord) Then
+				choiceList<-1> = Line:@VM:I
+				Continue
+			End
+		End
 		
 		!! Label
 		word = Line[";",1,1][" ",1,1]["*",1,1]["!",1,1]
@@ -7446,6 +7522,7 @@ Act.ShowOutline:
 	!! 選択リストボックス初期化
 	GoSub InitChoiceList
 	choiceParse = @True
+	Stack.XOffSet = XOffSet
 	
 	Loop
 		
@@ -7458,6 +7535,7 @@ Act.ShowOutline:
 			!! Cancel
 			Case actNo = A.CANCEL Or actNo = A.OUTLINE
 				actNo = 0
+				XOffSet = Stack.XOffSet
 				Exit
 			!!決定
 			Case actNo = A.NEWLINE
@@ -7467,6 +7545,14 @@ Act.ShowOutline:
 					Top = Y - SCROLLMERGINE
 					If Top <= 0 Then Top = 1
 					X = 1
+					!! ハイライト単語があればそのX位置にする
+					If ignoreCase Then
+						Ix = Index(UpCase(Rec<Y>),Word)
+						If Ix Then X = Ix
+					End Else
+						Ix = Index(Rec<Y>,Word)
+						If Ix And Convert(PUNCS:".":@fm:@vm:@svm,"",Rec<Y>[Ix-1,1])="" Then X = Ix
+					End
 					keepDP_X = X
 					XOffSet = 1
 					Redraw = REDRAW.ALL
@@ -7581,7 +7667,7 @@ Core.ShowWordHokan:
 	title = SBOLD:FG.BASE03:BG.YELLOW:" Words"
 	GoSub InitChoiceList
 	
-	filter = currentWord
+	filter = " ":currentWord
 	
 	Loop
 		
@@ -7724,7 +7810,7 @@ Act.GoLine:
 			!! バリュー固定モード
 			If fldCnt = 1 Then
 				!! フィールド数が１つ
-				PromptLine = "SubValue No ->"
+				PromptLine = BG.GREEN:FG.BASE02:"SubValue No ->"
 				GoSub PromptLine
 				inputBox = ""
 				GoSub InputBox
@@ -7732,7 +7818,7 @@ Act.GoLine:
 				vno = Ok<1>
 			End Else
 				!! フィールド数が複数
-				PromptLine = "Value No : f-no,sv-no ->"
+				PromptLine = BG.GREEN:FG.BASE02:"Value No : fno,svno ->"
 				inputBox = ""
 				GoSub InputBox
 				Ok = TrimS(Convert(",",@FM,inputBox))
@@ -7745,7 +7831,7 @@ Act.GoLine:
 			If fldCnt = 1 Then
 				!! フィールド数が１つ
 				fno = TgtFld<1,1>
-				PromptLine = "Value No : v-no[,sv-no] ->"
+				PromptLine = BG.GREEN:FG.BASE02:"Value No : vno[,svno] -> "
 				GoSub PromptLine
 				inputBox = ""
 				GoSub InputBox
@@ -7754,7 +7840,7 @@ Act.GoLine:
 				vno = Ok<1>
 				svno = Ok<2>
 			End Else
-				PromptLine = "Value No : f-no,v-no[,sv-no] ->"
+				PromptLine = BG.GREEN:FG.BASE02:"Value No : fno,vno[,svno] -> "
 				inputBox = ""
 				GoSub InputBox
 				Ok = TrimS(Convert(",",@FM,inputBox))
@@ -7785,7 +7871,7 @@ Act.GoLine:
 		End
 		
 	End Else
-		PromptLine = "Line No : f-no[,v-no[,sv-no]] ->"
+		PromptLine = BG.GREEN:FG.BASE02:"Line No : fno[,vno[,svno]] -> "
 		GoSub PromptLine
 		inputBox = ""
 		GoSub InputBox
@@ -8209,16 +8295,14 @@ Act.ShowBuffList:
 		If info<BI.USED> Else Continue
 		dispStr = no:" > "
 		Begin Case
-			Case info<BI.CAPTURE> <> ""
-				dispStr := info<BI.CAPTURE> "L#60"
 			Case 1
 				If info<BI.CHANGED> Then dispStr := "*"
-				If info<BI.NEW> Then dispStr := "(NEW)"
-				dispStr := If info<BI.FILE> >< "" Then info<BI.FILE> Else "(Untitled)" 
-				dispStr := " ":info<BI.ITEM>
+				If info<BI.NEW> Then dispStr := "(New)"
+				If info<BI.FILE> >< "" Then dispStr := info<BI.FILE>
+				dispStr := " ":If info<BI.ITEM> >< "" Then info<BI.ITEM> Else "[":(If Bufs(no)<1>#"" Then Bufs(no)<1> Else info<BI.CAPTURE>):"]"
 				If info<BI.FIELDFIX> Then dispStr:= " {":info<BI.FIELDFIX>:"}"
 				If info<BI.VALUEFIX> Then dispStr:= ",V":info<BI.VALUEFIX>
-				If @PATH >< info<BI.ACCOUNT> Then dispStr:= " [":info<BI.ACCOUNT>:"]"
+				If info<BI.FILE> >< "" And @PATH >< info<BI.ACCOUNT> Then dispStr:= " [":info<BI.ACCOUNT>:"]"
 				If info<BI.LOCKED> Then dispStr:= " <Locked>"
 		End Case
 		choiceList<-1> = dispStr
@@ -8620,7 +8704,9 @@ Act.InsTemplate:
 * Act.InsCommentOut
 
 Act.InsCommentOut:
-	
+	tmpX = X ;** X位置を維持する
+	tmpLen = Len(Rec<Y>)
+
 	StBlock = BufInfo<BI.BLOCKSTART,1>
 	EdBlock = BufInfo<BI.BLOCKEND,1>
 	If StBlock<1> > EdBlock<1> Then tmp = StBlock; StBlock = EdBlock; EdBlock = tmp
@@ -8634,24 +8720,44 @@ Act.InsCommentOut:
 	For Z = StBlock To EdBlock
 		cmd = ""
 		cmd<6> = "0"
-		If Rec<Z>[1,1] = "!" Then
-			** コメント外す
-			cmd<1> = Z
-			cmd<2> = 1
-			cmd<3> = Z
-			cmd<4> = 2
-			cmd<5> = ""
-		End Else
-			** コメント付ける
-			cmd<1> = Z
-			cmd<2> = 1
-			cmd<3> = ""
-			cmd<4> = ""
-			cmd<5> = "!"
-		End
-		editCmd<-1> = cmd
+		IF ParseType = PARSE.PARA THEN
+			If Rec<Z>[1,1] = "*" Then
+				** コメント外す
+				cmd<1> = Z
+				cmd<2> = 1
+				cmd<3> = Z
+				cmd<4> = 1 + IF Rec<Z>[1,2] = "* " THEN 2 ELSE 1
+				cmd<5> = ""
+			End Else
+				** コメント付ける
+				cmd<1> = Z
+				cmd<2> = 1
+				cmd<3> = ""
+				cmd<4> = ""
+				cmd<5> = "* "
+			End
+			editCmd<-1> = cmd
+		END IF ParseType = PARSE.BASIC THEN
+			If Rec<Z>[1,1] = "!" Then
+				** コメント外す
+				cmd<1> = Z
+				cmd<2> = 1
+				cmd<3> = Z
+				cmd<4> = 2
+				cmd<5> = ""
+			End Else
+				** コメント付ける
+				cmd<1> = Z
+				cmd<2> = 1
+				cmd<3> = ""
+				cmd<4> = ""
+				cmd<5> = "!"
+			End
+			editCmd<-1> = cmd
+		END
 	Next
 	GoSub StackEditCmd
+	X = tmpX + (Len(Rec<Y>) - tmpLen)
 	Return
 
 * **************************************************************************
@@ -8792,7 +8898,7 @@ $ENDIF
 		cmdline<-1> = "RUN ":FileName:" ":ItemName
 	End Else If BufInfo<BI.PARSETYPE> = PARSE.PARA Then
 		If DCount(Rec,@FM)=1 Then Return
-		cmdline = Rec[@FM,2,*]
+		cmdline = Rec[@FM,2,9999]
 	End
 	bAutoCommand = @TRUE
 	bAutoEditor = @TRUE
