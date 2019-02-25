@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.31.0 ]"
+Equ SISH.VERSION To "[ SISH v0.32.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -40,7 +40,7 @@ $IFDEF U2__UNIVERSE
 	EQU SAVEDLISTS.FILE To "&SAVEDLISTS&"
 	EQU STACK.FILE To "stacks"
 	
-	EQU IS.CONSOLE Lit "@TTY = 'console'"
+	EREQU IS.CONSOLE Lit "@TTY = 'console'"
 $ELSE
 	!! For OpenQM compatibility
 	
@@ -588,6 +588,7 @@ $ENDIF
 		Close fpStack
 	End
 
+	cmdline = ""
 	CurBuf = CMD_BUF
 	
 	Y = 1
@@ -3805,9 +3806,9 @@ InitChoiceList: ;** 選択リストボックス初期化
 	
 	For i = 1 To choiceList.length
 $IFDEF U2__UNIVERSE
-		choiceList<i,1> = choiceList<i,1>[1,Len(FoldDP(Convert(" ","-",choiceList<i,1>),winWidth,"UTF8")<1>)]
+		choiceList<i,1> = choiceList<i,1>[1,Len(FoldDP(Convert(" ","-",choiceList<i,1>),winWidth-3,"UTF8")<1>)]
 $ELSE
-		choiceList<i,1> = choiceList<i,1>[1,Len(FoldDW(Convert(" ","-",choiceList<i,1>),winWidth)<1>)]
+		choiceList<i,1> = choiceList<i,1>[1,Len(FoldDW(Convert(" ","-",choiceList<i,1>),winWidth-3)<1>)]
 $ENDIF
 	Next
 	winX += 1
@@ -3879,7 +3880,7 @@ ProcChoiceList:
 				!! スペースで始まる場合は単語単位の前方一致で検索
 				filterCnt = 1
 				For i = 1 To choiceList.length
-					line = choiceList<i,1>
+					line = choiceList<i>
 					p = Index(line,filter[2,9999])
 					If p>0 And (p=1 Or Convert(PUNCS:".","",line[p-1,1])="") Then
 						choiceOutList<-1> = i ;** choiceListへの参照を保持
@@ -3889,7 +3890,7 @@ ProcChoiceList:
 				!! スペース区切り単語のAND検索
 				MatParse filterUpcase From Trim(a)," " Setting filterCnt
 				For i = 1 To choiceList.length
-					line = UpCase(choiceList<i,1>)
+					line = UpCase(choiceList<i>)
 					flg = @True
 					For j = 1 To filterCnt
 						If Index(line,filterUpcase(j))=0 Then
@@ -3944,14 +3945,19 @@ ProcChoiceList:
 				XOffSet = 1
 				selection = 1:@FM:BIG
 				GoSub ParseLine2
-				PLine := HI.SELECT.ON
+				Gyo = Fmt(choiceList<no,2>,"4R"):" "
+				PLine = FG.BASE1:Gyo:PLine:HI.SELECT.ON
+				Line = Gyo:Line
 			End Else PLine = Line
 		End Else
 			crtBuff := FG.BASE01:BG.BASE3
 			If choiceParse Then
 				XOffSet = 1
 				selection = ""
-				GoSub ParseLine2 
+				GoSub ParseLine2
+				Gyo = Fmt(choiceList<no,2>,"4R"):" "
+				PLine = FG.BASE1:Gyo:PLine
+				Line = Gyo:Line
 			End Else PLine = Line
 		End
 		crtBuff := PLine:@(-4)
@@ -4990,18 +4996,20 @@ ParseLine2: ;** (Outline用、呼び出す前に必ず selection に値を入れ
 		Oc = 1
 		Loop
 			If ignoreCase Then
-				Ix = Index(UpCase(OldLine),Word,Oc) 
+				Ix = Index(UpCase(OldLine),UpCase(Word),Oc)
+				If Ix Then
+					Mask[Ix, Len(Word)] = Str(SI.SEARCH, Len(Word))
+				End
 			End Else
 				Ix = Index(OldLine,Word,Oc)
 				If Ix Then
-					If Convert(PUNCS:".":@fm:@vm:@svm,"",OldLine[Ix-1,1])#"" Then
-						Ix = 0
+					If Ix=1 Or Convert(PUNCS:".":@fm:@vm:@svm,"",OldLine[Ix-1,1])="" Then
+						Mask[Ix, Len(Word)] = Str(SI.SEARCH, Len(Word))
 					End
 				End
 			End
 		While Ix Do
 			Oc += 1
-			Mask[Ix, Len(Word)] = Str(SI.SEARCH, Len(Word))
 		Repeat
 	End
 	
@@ -7219,6 +7227,7 @@ Act.InsertChar:
 Act.Search:
 	Replacing = False
 	searchReverse = False
+	inputBox = SearchString
 	SearchString = ""
 	GoSub Search.Core
 	Return
@@ -7252,41 +7261,37 @@ Act.Replace:
 * Search.Core
 
 Search.Core:
-	If SearchString = "" And BufInfo<BI.BLOCKSTART> Then
-		** 選択されている文字列を初期値にする
-		If BufInfo<BI.BLOCKSTART,1> = BufInfo<BI.BLOCKEND,1> Then
-			** 単行選択であること
+	If SearchString = "" Then 
+		If BufInfo<BI.BLOCKSTART> And BufInfo<BI.BLOCKSTART,1> = BufInfo<BI.BLOCKEND,1> Then
+			** インラインで選択されている文字列を初期値にする
 			startX = BufInfo<BI.BLOCKSTART,2>
 			endX = BufInfo<BI.BLOCKEND, 2>
 			If startX > endX Then tmp = startX; startX = endX; endX = tmp
-			PromptLine = HI.SEARCH.ON:"Enter Search Text -> " ; GoSub PromptLine
 			inputBox = Rec<Y>[startX, endX-startX]
 			If Convert(PUNCS:".":@fm:@vm:@svm,"",Rec<Y>[startX-1,1])="" Then inputBox = " ":inputBox
-			GoSub InputBox
-			SearchString = inputBox
-			!! スペースで始まる場合は厳格モード
-			ignoreCase = (Trim(SearchString)="" Or SearchString[1,1] # " ")
-			SearchString = If ignoreCase Then UpCase(SearchString) Else SearchString[2,9999]
-			If Replacing Then X = startX - 2
 		End
-	End
-	
-	If (SearchString = "") Then 
 		PromptLine = HI.SEARCH.ON:"Enter Search Text -> " ; GoSub PromptLine
-		inputBox = ""
 		GoSub InputBox
 		SearchString = inputBox
 		!! スペースで始まる場合は厳格モード
-		ignoreCase = (Trim(SearchString)="" Or SearchString[1,1] # " ")
-		SearchString = If ignoreCase Then UpCase(SearchString) Else SearchString[2,9999]
+		If Trim(SearchString)="" Or SearchString[1,1] # " " Then
+			ignoreCase = True
+		End Else
+			ignoreCase = False
+			SearchString = SearchString[2,9999]
+		End
+		!! ハイライト文字列の設定
+		BufInfo<BI.HIWORD> = SearchString
+		
+		Redraw = REDRAW.ALL
+		If SearchString = "" Then Return
+		
+		If BufInfo<BI.BLOCKSTART> And BufInfo<BI.BLOCKSTART,1> = BufInfo<BI.BLOCKEND,1> Then
+			If Replacing Then X = startX - 2 ;** 現在カーソル位置の物を対象に入れるため
+		End
+		
 	End
 
-	!! ハイライト文字列の設定
-	BufInfo<BI.HIWORD> = SearchString
-	
-	Redraw = REDRAW.ALL
-	If SearchString = "" Then Return
-	
 	!!
 	!! 検索ループ
 	!!
@@ -7300,12 +7305,13 @@ Search.Core:
 		!! 検索ロジック
 		isFound = @FALSE
 		If ignoreCase Then
+			Word = UpCase(SearchString)
 			!! 大小無視
 			If searchReverse Then
 				Ix = X - 1
 				For Iy = Y To 1 Step -1
 					Line = UpCase(Rec<Iy>[1,Ix])
-					Ix = Index(Line, SearchString, Count(Line,SearchString))
+					Ix = Index(Line, Word, Count(Line,Word))
 					If Ix Then
 						If Not(Y = Iy And X <= Ix) Then
 							Y = Iy
@@ -7319,7 +7325,7 @@ Search.Core:
 			End Else
 				Ix = X + 1
 				For Iy = Y To Lines
-					idx = Index(UpCase(Rec<Iy>[Ix,HUGE]), SearchString, 1)
+					idx = Index(UpCase(Rec<Iy>[Ix,HUGE]), Word, 1)
 					If idx Then
 						Ix += idx - 1
 						If Not(Y = Iy And X >= Ix) Then
@@ -7337,32 +7343,51 @@ Search.Core:
 			If searchReverse Then
 				Ix = X - 1
 				For Iy = Y To 1 Step -1
-					Line = Rec<Iy>[1,Ix]
-					Ix = Index(Line, SearchString, Count(Line,SearchString))
-					If Ix>0 And (Ix=1 Or Convert(PUNCS:".":@fm:@vm:@svm,"",Line[Ix-1,1])="") Then
-						If Not(Y = Iy And X <= Ix) Then
-							Y = Iy
-							X = Ix
-							isFound = @TRUE
+					Line = Rec<Iy>
+					Loop
+						Line = Line[1,Ix]
+						Ix = Index(Line, SearchString, Count(Line,SearchString))
+						If Ix=0 Then
+							Ix = HUGE
 							Exit
+						End Else
+							If (Ix=1 Or Convert(PUNCS:".":@fm:@vm:@svm,"",Line[Ix-1,1])="") Then
+								If Not(Y = Iy And X <= Ix) Then
+									Y = Iy
+									X = Ix
+									isFound = @TRUE
+									GoTo Search.Found
+								End
+							End
+							Ix -= 1
 						End
-					End
-					Ix = HUGE
+					Repeat
 				Next
 			End Else
-				SPos = Len(Rec[@fm, 1, Y-1]) + X + 2
-				Ix = Index(Rec[SPos,HUGE], SearchString, 1)
-				If Ix Then
-					Ox = SPos + Ix - 1
-					If Convert(PUNCS:".":@fm:@vm:@svm,"",Rec[Ox-1,1])="" Then
-						Y = DCount(Rec[1, Ox], @fm)
-						X = Len(Rec[1, Ox][@fm, Y,1])
-						isFound = @TRUE
-					End
-				End
+				Ix = X + 1
+				For Iy = Y To Lines
+					Line = Rec<Iy>
+					Loop
+						idx = Index(Line[Ix,HUGE], SearchString, 1)
+						If idx=0 Then
+							Ix = 1
+							Exit
+						End Else
+							Ix += idx - 1
+							If (Ix=1 Or Convert(PUNCS:".":@fm:@vm:@svm,"",Line[Ix-1,1])="") Then
+								Y = Iy
+								X = Ix
+								isFound = @TRUE
+								GoTo Search.Found
+							End
+							Ix += 1
+						End
+					Repeat
+				Next
 			End
 		End
 		
+Search.Found:
 		!! 見つかった
 		If isFound Then
 			!! 検索単語を選択する
@@ -7481,9 +7506,15 @@ Act.ShowOutline:
 		
 		If SWord#"" Then
 			!! 検索ハイライトの行を含める
-			If Index((If ignoreCase Then UpCase(Line) Else Line),SWord) Then
-				choiceList<-1> = Line:@VM:I
-				Continue
+			If ignoreCase Then
+				If Index(UpCase(Line),UpCase(SWord)) Then
+					choiceList<-1> = Line:@VM:I
+				End
+			End Else
+				Ix = Index(Line,SWord)
+				If Ix And Convert(PUNCS:".":@fm:@vm:@svm,"",Line[Ix-1,1])="" Then
+					choiceList<-1> = Line:@VM:I
+				End
 			End
 		End
 		
@@ -7524,6 +7555,23 @@ Act.ShowOutline:
 	choiceParse = @True
 	Stack.XOffSet = XOffSet
 	
+	!! カーソルがちょうど検索ハイライト文字の上なら初期値に入れる
+	If SWord#"" Then
+		!! 検索ハイライトの行を含める
+		Line = Rec<Y>
+		If ignoreCase Then
+			If Upcase(Line[X,Len(SWord)])=UpCase(SWord) Then
+				filter = SWord
+			End
+		End Else
+			If Line[X,Len(SWord)]=SWord Then
+				If Convert(PUNCS:".":@fm:@vm:@svm,"",Line[X-1,1])="" Then
+					filter = " ":SWord
+				End
+			End
+		End
+	End
+	
 	Loop
 		
 		!! 選択リストボックス処理共通
@@ -7547,7 +7595,7 @@ Act.ShowOutline:
 					X = 1
 					!! ハイライト単語があればそのX位置にする
 					If ignoreCase Then
-						Ix = Index(UpCase(Rec<Y>),Word)
+						Ix = Index(UpCase(Rec<Y>),UpCase(Word))
 						If Ix Then X = Ix
 					End Else
 						Ix = Index(Rec<Y>,Word)
@@ -7667,7 +7715,7 @@ Core.ShowWordHokan:
 	title = SBOLD:FG.BASE03:BG.YELLOW:" Words"
 	GoSub InitChoiceList
 	
-	filter = " ":currentWord
+	filter = If currentWord#"" Then " ":currentWord Else ""
 	
 	Loop
 		
@@ -7810,7 +7858,7 @@ Act.GoLine:
 			!! バリュー固定モード
 			If fldCnt = 1 Then
 				!! フィールド数が１つ
-				PromptLine = BG.GREEN:FG.BASE02:"SubValue No ->"
+				PromptLine = BG.GREEN:FG.BASE2:"SubValue No ->"
 				GoSub PromptLine
 				inputBox = ""
 				GoSub InputBox
@@ -7818,7 +7866,7 @@ Act.GoLine:
 				vno = Ok<1>
 			End Else
 				!! フィールド数が複数
-				PromptLine = BG.GREEN:FG.BASE02:"Value No : fno,svno ->"
+				PromptLine = BG.GREEN:FG.BASE2:"Value No : fno,svno ->"
 				inputBox = ""
 				GoSub InputBox
 				Ok = TrimS(Convert(",",@FM,inputBox))
@@ -7831,7 +7879,7 @@ Act.GoLine:
 			If fldCnt = 1 Then
 				!! フィールド数が１つ
 				fno = TgtFld<1,1>
-				PromptLine = BG.GREEN:FG.BASE02:"Value No : vno[,svno] -> "
+				PromptLine = BG.GREEN:FG.BASE2:"Value No : vno[,svno] -> "
 				GoSub PromptLine
 				inputBox = ""
 				GoSub InputBox
@@ -7840,7 +7888,7 @@ Act.GoLine:
 				vno = Ok<1>
 				svno = Ok<2>
 			End Else
-				PromptLine = BG.GREEN:FG.BASE02:"Value No : fno,vno[,svno] -> "
+				PromptLine = BG.GREEN:FG.BASE2:"Value No : fno,vno[,svno] -> "
 				inputBox = ""
 				GoSub InputBox
 				Ok = TrimS(Convert(",",@FM,inputBox))
@@ -7871,7 +7919,7 @@ Act.GoLine:
 		End
 		
 	End Else
-		PromptLine = BG.GREEN:FG.BASE02:"Line No : fno[,vno[,svno]] -> "
+		PromptLine = BG.GREEN:FG.BASE2:"Line No : fno[,vno[,svno]] -> "
 		GoSub PromptLine
 		inputBox = ""
 		GoSub InputBox

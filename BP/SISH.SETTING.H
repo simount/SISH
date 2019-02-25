@@ -16,9 +16,13 @@ EQU SCROLLMERGINE To 3             ; * Line number to start the scroll when the 
 !! EQU OVERLAY.MODE.SEQ Lit "ESC:'[2=c'"  ;* Overlay Mode Cursor
 
 !! For Mintty
-EQU INS.MODE.SEQ Lit "ESC:'[0 q'"      ;* Insert Mode Cursor
-EQU OVERLAY.MODE.SEQ Lit "ESC:'[1 q'"  ;* Overlay Mode Cursor
-
+If @TTY = "console" Then
+	INS.MODE.SEQ = ""      ;* Insert Mode Cursor
+	OVERLAY.MODE.SEQ = ""  ;* Overlay Mode Cursor
+End Else
+	INS.MODE.SEQ = "ESC:'[5 q'"      ;* Insert Mode Cursor
+	OVERLAY.MODE.SEQ = "ESC:'[0 q'"  ;* Overlay Mode Cursor	
+End
 
 **
 ** Keybinding Setting
