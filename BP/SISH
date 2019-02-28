@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.32.0 ]"
+Equ SISH.VERSION To "[ SISH v0.33.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -308,6 +308,7 @@ Shell.Main:
 	EQU BI.PBUFNO To 18
 	EQU BI.INDENTTYPE To 19
 	EQU BI.INDENTSIZE To 20
+	EQU BI.PATHNAME To 21
 	
 	EQU BufInfo To BufInfos(CurBuf)
 	EQU Changed To BufInfo<BI.CHANGED>
@@ -628,7 +629,7 @@ AutocommanLoop.Start:
 		
 		!! インクリメンタルサーチ
 		If bIncSearch Then
-			prmptStr := "(":bIncSearch:"-iSearch)`":iSearchText:"`"
+			prmptStr := " ":bIncSearch:"`":iSearchText:"'"
 		End
 		
 		!! コマンドスタック位置表示
@@ -681,17 +682,21 @@ AutocommanLoop.Start:
 		cmdlineRows = tmpY ;** 行数を格納
 		
 		* カーソル表示
-		If IS.CONSOLE Then
-			If cmdlineRows - curY > 0 Then
-				crtBuff := @(curX,cmdlineRows - curY)
-			End Else
-				crtBuff := @(curX)
-			End
+		If bIncSearch Then
+			crtBuff := CSI:"G":CSI:5+Len(iSearchText):"C"
 		End Else
-			crtBuff := CSI:"G":CSI:curX:"C"
-			If cmdlineRows - curY > 0 Then
-				* @(IT$CUU)が正しいエスケープシーケンスを出力しないので、VT100のシーケンス直書き
-				crtBuff := CSI:(cmdlineRows - curY):'A'
+			If IS.CONSOLE Then
+				If cmdlineRows - curY > 0 Then
+					crtBuff := @(curX,cmdlineRows - curY)
+				End Else
+					crtBuff := @(curX)
+				End
+			End Else
+				crtBuff := CSI:"G":CSI:curX:"C"
+				If cmdlineRows - curY > 0 Then
+					* @(IT$CUU)が正しいエスケープシーケンスを出力しないので、VT100のシーケンス直書き
+					crtBuff := CSI:(cmdlineRows - curY):'A'
+				End
 			End
 		End
 		
@@ -786,7 +791,8 @@ Shell.KeyLoop.Bef.GetKey:
 				!! コマンド履歴逆順インクリメンタルサーチ
 				If bIncSearch <> "R" Then
 					If bIncSearch = "" Then
-						iSearchText = cmdline[1,curPos-1]
+						GoSub GET.SELECTION.STRING
+						iSearchText = selString
 					End
 					bIncSearch = "R"
 				End
@@ -796,7 +802,8 @@ Shell.KeyLoop.Bef.GetKey:
 				!! コマンド履歴正順インクリメンタルサーチ
 				If bIncSearch <> "F" Then
 					If bIncSearch = "" Then
-						iSearchText = cmdline[1,curPos-1]
+						GoSub GET.SELECTION.STRING
+						iSearchText = selString
 					End
 					bIncSearch = "F"
 				End
@@ -2294,7 +2301,8 @@ ACTION.CMDSTACK.LIST:
 	cmdStackList.DispCnt<2> = Minimum(cmdStackList.DispCnt<2>:@FM:(@CRTHIGH-2))
 	
 	filterWord = cmdline[' ',2,999]
-	filterWordU = UpCase(filterWord)
+	Dim filterWordU(9)
+	MatParse filterWordU From Trim(UpCase(filterWord))," " Setting filterCnt
 	
 	result = ""
 	cnt = 0
@@ -2309,7 +2317,14 @@ ACTION.CMDSTACK.LIST:
 		End
 		If cmd = "" Then Exit
 		If filterWord >< "" Then
-			If Not(Index(UpCase(cmd),filterWordU,1) Or cmd Matches filterWord) Then Continue
+			flg = @True
+			For j = 1 To filterCnt
+				If Index(cmd,filterWordU(j))=0 Then
+					flg = @False
+					Exit ;** １つでも一致しなければ抜ける
+				End
+			Next j
+			If Not(flg) Then Continue
 		End
 		result<-1> = (i-1):@VM:cmd:@VM:modify
 		cnt += 1
@@ -2360,7 +2375,7 @@ ACTION.CMDSTACK.INC.SEARCH:
 			!! 履歴遡り
 			Loop
 				GoSub ACTION.CMDSTACK.NEXT
-				If cmdline Matches "...":iSearchText:"..." Then Exit
+				If UpCase(cmdline) Matches "...":UpCase(iSearchText):"..." Then Exit
 				If DCount(cmdStack,@FM) <= cmdStackPos Then
 					!! 見つからなかった
 					cmdStackPos = stackPos
@@ -2372,7 +2387,7 @@ ACTION.CMDSTACK.INC.SEARCH:
 			!! 履歴遡り
 			Loop
 				GoSub ACTION.CMDSTACK.BACK
-				If cmdline Matches "...":iSearchText:"..." Then Exit
+				If UpCase(cmdline) Matches "...":UpCase(iSearchText):"..." Then Exit
 				If 1 >= cmdStackPos Then
 					!! 見つからなかった
 					cmdStackPos = stackPos
@@ -3465,13 +3480,19 @@ Return
 *-----------------------------------------------------------------------
 ReadItem:
 
+	PathName = ""
 	If ParentBufNo Then
 		!! 親バッファからコピー
 		Rec = Bufs(ParentBufNo)
 	End Else
 		!! ファイルから開く
 		GoSub Common.OpenFile
-		Read Rec From FL,ItemName Else
+		Read Rec From FL,ItemName Then
+			IF FILEINFO(FL,3)=4 THEN
+				!! DIRECTORYファイルからパス名を取得
+				PathName = FILEINFO(FL,2):(IF SYSTEM(91) THEN "\" ELSE "/"):ItemName
+			END
+		End Else
 			Rec = ""
 			IsNew = True
 		End
@@ -3806,9 +3827,9 @@ InitChoiceList: ;** 選択リストボックス初期化
 	
 	For i = 1 To choiceList.length
 $IFDEF U2__UNIVERSE
-		choiceList<i,1> = choiceList<i,1>[1,Len(FoldDP(Convert(" ","-",choiceList<i,1>),winWidth-3,"UTF8")<1>)]
+		choiceList<i,1> = choiceList<i,1>[1,Len(FoldDP(Convert(" ","-",choiceList<i,1>),winWidth,"UTF8")<1>)]
 $ELSE
-		choiceList<i,1> = choiceList<i,1>[1,Len(FoldDW(Convert(" ","-",choiceList<i,1>),winWidth-3)<1>)]
+		choiceList<i,1> = choiceList<i,1>[1,Len(FoldDW(Convert(" ","-",choiceList<i,1>),winWidth)<1>)]
 $ENDIF
 	Next
 	winX += 1
@@ -3928,7 +3949,7 @@ ProcChoiceList:
 	End
 	
 	!! タイトルに件数
-	crtBuff = @(winX,0):title:" (":choiceOutList.length:")":@(-4)
+	crtBuff = @(winX-1,0):title:" (":choiceOutList.length:")":@(-4)
 
 	crtBuff := SGR.ALL.OFF
 	listLen = choiceOutList.length - winTop
@@ -3944,6 +3965,7 @@ ProcChoiceList:
 			If choiceParse Then
 				XOffSet = 1
 				selection = 1:@FM:BIG
+				LineWidth = winWidth
 				GoSub ParseLine2
 				Gyo = Fmt(choiceList<no,2>,"4R"):" "
 				PLine = FG.BASE1:Gyo:PLine:HI.SELECT.ON
@@ -3954,6 +3976,7 @@ ProcChoiceList:
 			If choiceParse Then
 				XOffSet = 1
 				selection = ""
+				LineWidth = winWidth
 				GoSub ParseLine2
 				Gyo = Fmt(choiceList<no,2>,"4R"):" "
 				PLine = FG.BASE1:Gyo:PLine
@@ -4800,6 +4823,8 @@ ParseLine:
 			selection = 1:@FM:BIG
 		End
 	End
+	
+	LineWidth = Width ;** 行幅はウィンドウサイズ
 
 ParseLine2: ;** (Outline用、呼び出す前に必ず selection に値を入れること)
 
@@ -5083,7 +5108,7 @@ ParseLine2: ;** (Outline用、呼び出す前に必ず selection に値を入れ
 			Line := char
 			tmpMask := Mask[iX,1]
 		End
-	While rX <= (XOffSet + Width - 2)
+	While rX <= (XOffSet + LineWidth - 2)
 		iX += 1
 	Repeat
 	Mask = tmpMask
@@ -5315,7 +5340,8 @@ PrintStatus:
 			If BufInfo<BI.PBUFNO> Then fileSentence := " (pno=":BufInfo<BI.PBUFNO>:")"
 			If BufInfo<BI.FIELDFIX> Then fileSentence := " {":BufInfo<BI.FIELDFIX>:"}"
 			If BufInfo<BI.VALUEFIX> Then fileSentence := ",V":BufInfo<BI.VALUEFIX>
-			If BufInfo<BI.ACCOUNT> >< @PATH Then fileSentence := " [":BufInfo<BI.ACCOUNT>:"]"
+			If BufInfo<BI.ACCOUNT> >< @PATH and BufInfo<BI.ACCOUNT> >< @WHO Then fileSentence := " (":BufInfo<BI.ACCOUNT>:")"
+			If BufInfo<BI.PATHNAME> >< "" Then fileSentence := " [ ":BufInfo<BI.PATHNAME>:" ]"
 		End Else
 			If BufInfo<BI.CAPTURE> <> "" Then
 				fileSentence := BufInfo<BI.CAPTURE>
@@ -5331,12 +5357,12 @@ PrintStatus:
 		SLine := " | ":BufInfo<BI.PARSETYPE>:" ":IndentType:":":STDTAB:" "
 		
 		crtBuff := @(0, PY):HI.STATUS.ON
-		crtBuff := FMTDP(fileSentence,"L#":@CRTWIDE-21-Len(SLine))
+		crtBuff := FMTDP(fileSentence,"L#":@CRTWIDE-17-Len(SLine))
 		crtBuff := SLine:"| "
 		
 		Redraw.StatusLine = @FALSE
 	End Else
-		crtBuff := @(@CRTWIDE-19,PY): HI.STATUS.ON
+		crtBuff := @(@CRTWIDE-15,PY): HI.STATUS.ON
 	End
 
 	!! 文字コード情報
@@ -5359,7 +5385,7 @@ PrintStatus:
 	End Else
 		curInfo := Y:".":DP_X
 	End
-	crtBuff := curInfo "L#12"
+	crtBuff := curInfo "L#8"
 	crtBuff := HI.STATUS.OFF
 	
 	!! ステータスメッセージ
@@ -5964,6 +5990,7 @@ StartBuf:
 	BufInfo<BI.BLOCKSTART> = False
 	BufInfo<BI.READONLY> = False
 	BufInfo<BI.CAPTURE> = ""
+	BufInfo<BI.PATHNAME> = PathName
 
 	!! アカウントの設定
 	!! ショートネームがあればそちらを採用なければフルパス
@@ -7546,7 +7573,7 @@ Act.ShowOutline:
 		End
 	Next
 
-	title = FG.BASE03:BG.YELLOW:" Outline"
+	title = SBOLD:FG.BASE02:BG.YELLOW:" Outline"
 	tmpList = Fields(Convert(@VM,char(1),choiceList),char(1),2)
 	Locate Y In tmpList By "AR" Setting choiceNo Else choiceNo -= 1
 	
@@ -7712,7 +7739,7 @@ Core.ShowWordHokan:
 
 	!! 選択リストボックス初期化
 	choiceNo = 1
-	title = SBOLD:FG.BASE03:BG.YELLOW:" Words"
+	title = SBOLD:FG.BASE02:BG.YELLOW:" Words"
 	GoSub InitChoiceList
 	
 	filter = If currentWord#"" Then " ":currentWord Else ""
@@ -8350,12 +8377,12 @@ Act.ShowBuffList:
 				dispStr := " ":If info<BI.ITEM> >< "" Then info<BI.ITEM> Else "[":(If Bufs(no)<1>#"" Then Bufs(no)<1> Else info<BI.CAPTURE>):"]"
 				If info<BI.FIELDFIX> Then dispStr:= " {":info<BI.FIELDFIX>:"}"
 				If info<BI.VALUEFIX> Then dispStr:= ",V":info<BI.VALUEFIX>
-				If info<BI.FILE> >< "" And @PATH >< info<BI.ACCOUNT> Then dispStr:= " [":info<BI.ACCOUNT>:"]"
+				If info<BI.FILE> >< "" And @PATH >< info<BI.ACCOUNT> And @WHO >< info<BI.ACCOUNT> Then dispStr:= " (":info<BI.ACCOUNT>:")"
 				If info<BI.LOCKED> Then dispStr:= " <Locked>"
 		End Case
 		choiceList<-1> = dispStr
 	Next
-	title = SBOLD:FG.BASE03:BG.BLUE:" Buffers"
+	title = SBOLD:FG.BASE02:BG.BLUE:" Buffers"
 	choiceNo = If DCount(choiceList,@FM) < 2 Then 1 Else 2 ;**   !! 初期値は１つ前のものにする
 	
 	!! 選択リストボックス初期化
