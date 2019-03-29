@@ -1359,14 +1359,16 @@ $ENDIF
 				Close fpACCOUNT
 			End
 			
-			GoSub Prev.Match.Filter
-			GoSub AUTO.COMPLATE
-			If nowWord = commonWord Then
-				!! 候補表示モード
-				dispType = "ACCOUNT ":tgtAccFile
-				GoSub DispCandidate.Common
-			End Else
-				GoSub Disp.NokoriKouho
+			If slist#"" Then
+				GoSub Prev.Match.Filter
+				GoSub AUTO.COMPLATE
+				If nowWord = commonWord Then
+					!! 候補表示モード
+					dispType = "ACCOUNT ":tgtAccFile
+					GoSub DispCandidate.Common
+				End Else
+					GoSub Disp.NokoriKouho
+				End
 			End
 			Return
 		End
@@ -1751,6 +1753,11 @@ $ENDIF
 							candidateMode = "FILE"
 						End Else If dispType="FILE" Then
 							candidateMode = "FIELD"
+						End
+						If dispType MATCH "ACCOUNT..." Then
+							choice.HI = SGR.ALL.OFF
+							GoSub ProcChoiceList
+							Exit
 						End
 						Crt @(winX,0):
 						GoTo TAB.HOKAN
