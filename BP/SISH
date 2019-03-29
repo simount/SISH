@@ -350,6 +350,7 @@ Shell.Main:
 	EQU PARSE.BASIC To "Basic"
 	EQU PARSE.PROC To "Proc"
 	EQU PARSE.PARA To "PA"
+	EQU PARSE.PDUMP To "PDUMP"
 
 	MY_COMMAND = Trim(@COMMAND[' ',1,1]) ;** 自コマンド名(SISH)
 	KAKKO.CHAR.LIST = \()[]<>{}''""\:"\\" ;** 対応する括弧定義
@@ -501,7 +502,6 @@ $ELSE
 	END
 $ENDIF
 
-	bDispCandidate = @FALSE
 	candidateMode = ""
 	candidateFilter = ""
 	slistCacheType = ""
@@ -544,10 +544,7 @@ $ENDIF
 $IFNDEF U2__UNIVERSE
 		logname = @HOSTNAME:"\":logname
 $ENDIF
-		title = "QM ":account['/',DCount(account,'/'),1]:" @ ":logname:" (":System(18):")"
-		If NOT(IS.CONSOLE) Then
-			Crt CHAR(27):"]2;":title:CHAR(7):
-		End
+		act.title = "QM ":account['/',DCount(account,'/'),1]:" @ ":logname:" (":System(18):")"
 		
 		** コマンドスタック保存ファイルから復元を試みる
 $IFDEF U2__UNIVERSE
@@ -618,94 +615,17 @@ AutocommanLoop.Start:
 		!!
 		!! 表示
 		!!
-		!! カーソルを先頭に持ってきてクリア
 		crtBuff = ""
-		GoSub Clear.Cmdline.Crt
-		crtBuff := HI.SHELL.ON
-
-		!! プロンプト部分の構築
-		prmptStr = "si"
-		If bInvert Then prmptStr = UpCase(prmptStr)
-		
-		!! インクリメンタルサーチ
-		If bIncSearch Then
-			prmptStr := " ":bIncSearch:"`":iSearchText:"'"
+		If NOT(IS.CONSOLE) Then
+			crtBuff := CHAR(27):"]2;":act.title:CHAR(7)
 		End
-		
-		!! コマンドスタック位置表示
-		If cmdStackPos > 1 Then
-			no = cmdStackPos-1
-			prmptStr := " ":Fmt(no,"R%":Maximum(Len(no):@FM:2))
-		End
-		prmptStr := PROMPT.STR
-		If System(11) Then prmptStr := PROMPT.STR ;** アクティブな選択リストあり
-		
-		!! コマンド行表示 (Auto Wrap) 
-		cl = prmptStr : cmdline<1>
-		curIndex = Len(prmptStr) + curPos - 1
-		tmpX = 0
-		tmpY = 0
-		clLen = Len(cl)
-		For i = 1 To clLen 
-			c = cl[i,1]
-			dispLen = LenDP(c)
-			nextX = tmpX + dispLen
-			If nextX > @CRTWIDE-1 Then
-				* 改行
-				tmpY += 1
-				tmpX = 0
-				crtBuff := ESC.CRT.MOVE_NEXT_LINE
-			End
-			crtBuff := c
-			tmpX += dispLen
-			
-			If i = Len(prmptStr) Then crtBuff := HI.SHELL.OFF
-			
-			!! カーソル位置
-			If i = curIndex Then curX=tmpX; curY=tmpY
-			
-			!! 選択範囲
-			If BufInfo<BI.BLOCKSTART> Then
-				blockSt = BufInfo<BI.BLOCKSTART,2>
-				If BufInfo<BI.BLOCKSTART,1> < BufInfo<BI.BLOCKEND,1> THEN
-					blockEd = clLen
-				END ELSE
-					blockEd = BufInfo<BI.BLOCKEND,2>
-				END
-				If blockSt > blockEd Then tmp = blockSt; blockSt = blockEd; blockEd = tmp
-				i2 = i - Len(prmptStr) + 1
-				If i2 = blockSt Then crtBuff := HI.SELECT.ON
-				If i2 = blockEd Then crtBuff := SGR.ALL.OFF
-			END
-			
-		Next
-		cmdlineRows = tmpY ;** 行数を格納
-		
-		* カーソル表示
-		If bIncSearch Then
-			crtBuff := CSI:"G":CSI:5+Len(iSearchText):"C"
-		End Else
-			If IS.CONSOLE Then
-				If cmdlineRows - curY > 0 Then
-					crtBuff := @(curX,cmdlineRows - curY)
-				End Else
-					crtBuff := @(curX)
-				End
-			End Else
-				crtBuff := CSI:"G":CSI:curX:"C"
-				If cmdlineRows - curY > 0 Then
-					* @(IT$CUU)が正しいエスケープシーケンスを出力しないので、VT100のシーケンス直書き
-					crtBuff := CSI:(cmdlineRows - curY):'A'
-				End
-			End
-		End
-		
-		** CRTフラッシュ処理
+		GoSub Draw.Cmdline
 		GoSub CRT.BUFF.FLUSH
 		
 		!! 自動的にコマンドを実行するモード
 		If bAutoCommand Then GoTo Run.Command
 		If bAutoEditor Then bAutoEditor = @FALSE; GoTo Launch.Editor
+		NokoriKouho = @FALSE
 		
 Shell.KeyLoop.Bef.GetKey:
 		
@@ -734,55 +654,7 @@ Shell.KeyLoop.Bef.GetKey:
 				GoSub ACTION.CMDSTACK.NEXT
 		** 文字入力系  
 			Case actNo = A.TAB
-				
-				startCandidateMode = ""
-				
-				* 補完候補表示
-				If bDispCandidate Then
-					
-					pageNum = 0
-					
-					If candidateMode = "FLATREC" Then
-						candidateMode = "FIELD"
-					End Else If candidateMode = "FIELD" Then
-						candidateMode = "FILE"
-					End Else If candidateMode = "FILE" Then
-						candidateMode = "VOC"
-					End Else If candidateMode = "VOC" Then
-						candidateMode = ""
-					End
-					
-				End Else
-					candidateMode = "FLATREC"
-					!! 連続でタブが押された
-					If bFirstCurTop Then
-						If prevC = C Then
-							!! 前回の入力がTABなら候補表示へ
-							bDispCandidate = @TRUE
-						End
-					End Else
-						bDispCandidate = @TRUE
-					End
-				End
-				
 				GoSub TAB.HOKAN
-				
-			Case actNo = A.NEXTHALF Or actNo = A.NEXTPAGE
-				pageNum += 1
-				GoSub TAB.HOKAN
-				
-			Case actNo = A.PREVHALF Or actNo = A.PREVPAGE
-				pageNum -= 1
-				GoSub TAB.HOKAN
-				
-			Case actNo = A.REPEAT ;** F3 (filter)
-				If Not(bFirstCurTop) Then
-					PromptLine = "Input Filter (Word or Pattern)->" ; GoSub PromptLine
-					inputBox = candidateFilter
-					GoSub InputBox
-					candidateFilter = inputBox
-					GoSub TAB.HOKAN
-				End
 				
 			Case C = CTRL.T
 				GoSub ACTION.INPUT.PREV.FILENAME
@@ -842,7 +714,6 @@ Shell.KeyLoop.Bef.GetKey:
 					GoSub BackAltScreenBuf
 					Crt crtBuff:
 					bFirstCurTop = @TRUE
-					bDispCandidate = @FALSE
 				End
 				editerCmd = ""
 Launch.Editor:
@@ -856,7 +727,6 @@ Launch.Editor:
 					GoSub BackAltScreenBuf
 					Crt crtBuff:
 					bFirstCurTop = @TRUE
-					bDispCandidate = @FALSE
 				End
 				If bIncSearch Then
 					bIncSearch = "" ;** 終了
@@ -894,15 +764,10 @@ Launch.Editor:
 					GoSub ACTION.CMDSTACK.INC.SEARCH
 				End Else
 					GoSub Input.Actions
-					If Not(bFirstCurTop) Then
-						!! 入力補完処理
-						GoSub TAB.HOKAN
-					End Else
-						If actNo = A.INSCHAR And UniSeq(C) < 127 And BufInfo<BI.BLOCKSTART> = "" Then
-							!! 半角文字なら描画高速化
-							CRT (IF IS.CONSOLE AND @TERM.TYPE # 'msvt' THEN @(-19) ELSE CSI:"1@"):C:
-							GoTo Shell.KeyLoop.Bef.GetKey
-						End
+					If actNo = A.INSCHAR And UniSeq(C) < 127 And BufInfo<BI.BLOCKSTART> = "" Then
+						!! 半角文字なら描画高速化
+						CRT (IF IS.CONSOLE AND @TERM.TYPE # 'msvt' THEN @(-19) ELSE CSI:"1@"):C:
+						GoTo Shell.KeyLoop.Bef.GetKey
 					End
 				End
 			
@@ -948,6 +813,93 @@ AutoTermSize:
 	End
 	
 	Return
+
+*---------------------
+* コマンドライン描画
+*---------------------
+Draw.Cmdline:
+	!! カーソルを先頭に持ってきてクリア
+	crtBuff := SGR.ALL.OFF
+	GoSub Clear.Cmdline.Crt
+	crtBuff := HI.SHELL.ON
+
+	!! プロンプト部分の構築
+	prmptStr = "si"
+	If bInvert Then prmptStr = UpCase(prmptStr)
+	
+	!! インクリメンタルサーチ
+	If bIncSearch Then
+		prmptStr := " ":bIncSearch:"`":iSearchText:"'"
+	End
+	
+	!! コマンドスタック位置表示
+	If cmdStackPos > 1 Then
+		no = cmdStackPos-1
+		prmptStr := " ":Fmt(no,"R%":Maximum(Len(no):@FM:2))
+	End
+	prmptStr := PROMPT.STR
+	If System(11) Then prmptStr := PROMPT.STR ;** アクティブな選択リストあり
+	
+	!! コマンド行表示 (Auto Wrap) 
+	cl = prmptStr : cmdline<1>
+	curIndex = Len(prmptStr) + curPos - 1
+	tmpX = 0
+	tmpY = 0
+	clLen = Len(cl)
+	For i = 1 To clLen 
+		c = cl[i,1]
+		dispLen = LenDP(c)
+		nextX = tmpX + dispLen
+		If nextX > @CRTWIDE-1 Then
+			* 改行
+			tmpY += 1
+			tmpX = 0
+			crtBuff := ESC.CRT.MOVE_NEXT_LINE
+		End
+		crtBuff := c
+		tmpX += dispLen
+		
+		If i = Len(prmptStr) Then crtBuff := HI.SHELL.OFF
+		
+		!! カーソル位置
+		If i = curIndex Then curX=tmpX; curY=tmpY
+		
+		!! 選択範囲
+		If BufInfo<BI.BLOCKSTART> Then
+			blockSt = BufInfo<BI.BLOCKSTART,2>
+			If BufInfo<BI.BLOCKSTART,1> < BufInfo<BI.BLOCKEND,1> THEN
+				blockEd = clLen
+			END ELSE
+				blockEd = BufInfo<BI.BLOCKEND,2>
+			END
+			If blockSt > blockEd Then tmp = blockSt; blockSt = blockEd; blockEd = tmp
+			i2 = i - Len(prmptStr) + 1
+			If i2 = blockSt Then crtBuff := HI.SELECT.ON
+			If i2 = blockEd Then crtBuff := SGR.ALL.OFF
+		END
+		
+	Next
+	cmdlineRows = tmpY ;** 行数を格納
+	
+	* カーソル表示
+	If bIncSearch Then
+		crtBuff := CSI:"G":CSI:5+Len(iSearchText):"C"
+	End Else
+		If IS.CONSOLE Then
+			If cmdlineRows - curY > 0 Then
+				crtBuff := @(curX,cmdlineRows - curY)
+			End Else
+				crtBuff := @(curX)
+			End
+		End Else
+			crtBuff := CSI:"G":CSI:curX:"C"
+			If cmdlineRows - curY > 0 Then
+				* @(IT$CUU)が正しいエスケープシーケンスを出力しないので、VT100のシーケンス直書き
+				crtBuff := CSI:(cmdlineRows - curY):'A'
+			End
+		End
+	End
+Return
 
 *---------------------
 * コマンドラインクリア
@@ -1241,59 +1193,73 @@ TAB.HOKAN:
 	tgtAccFile = ACCOUNT.FILE
 	
 $IFNDEF U2__UNIVERSE
-	If bDispCandidate Or actNo = A.TAB Then
-		!! OSディレクトリ補完
-		path = Convert('\','/',nowWord)
-		If (Count(path,'/') AND Count(path,":")=0) Or nowWord[1,5] = "PATH:" Or path[1,2] Matches "1A:" Then
-			If path[1,5] = "PATH:" Then
-				path = path[6,99]
-				nowWord = nowWord[6,99]
-			End
-			filter = UpCase(Last(path,'/'))
-			filter.len = Len(filter)
-			parent = path[1,Len(path)-filter.len]
-			dirPath = parent
-			If dirPath = "" Then dirPath = "./"
-	
-			GoSub GetDirList
+	!! OSディレクトリ補完
+	path = Convert('\','/',nowWord)
+	If (Count(path,'/') AND Count(path,":")=0) Or nowWord[1,5] = "PATH:" Or Convert('"','',path)[1,2] Matches "1A:" Then
+		If path[1,5] = "PATH:" Then
+			path = path[6,99]
+			nowWord = nowWord[6,99]
+		End
+		filter = UpCase(Last(path,'/'))
+		filter.len = Len(filter)
+		parent = path[1,Len(path)-filter.len]
+		dirPath = parent
+		If dirPath = "" Then dirPath = "./"
+		GoSub GetDirList
+		
+		If list Then
+			slist = ""
+			slistU = ""
+			dlist = ""
+			a = Index(nowWord,'/')
+			If a = 0 Then a = 9999
+			b = Index(nowWord,'\')
+			If b = 0 Then b = 9999
+			pdelim = If a < b Then '/' Else '\'
+			For Each line In list Delimiter @FM
+				If UpCase(line[1,filter.len]) = filter Then
+					id = line<1,1>:(If line<1,2>="D" Then pdelim Else " ")
+					slist<-1> = id
+					slistU<-1> = UpCase(id)
+					dlist<-1> = ""
+				End
+			Next line
 			
-			If list Then
-				slist = ""
-				slistU = ""
-				dlist = ""
-				a = Index(nowWord,'/')
-				If a = 0 Then a = 9999
-				b = Index(nowWord,'\')
-				If b = 0 Then b = 9999
-				pdelim = If a < b Then '/' Else '\'
-				For Each line In list Delimiter @FM
-					If UpCase(line[1,filter.len]) = filter Then
-						id = line<1,1>:(If line<1,2>="D" Then pdelim Else " ")
-						slist<-1> = id
-						slistU<-1> = UpCase(id)
-						dlist<-1> = ""
+			nowWord = nowWord[Len(parent)+1,99]
+			GoSub Setting.WordInfo2
+			
+			dispType = "OS Path"
+			
+			If NokoriKouho Then
+				GoSub Disp.NokoriKouho
+			End Else
+				GoSub Prev.Match.Filter
+				GoSub AUTO.COMPLATE
+				If nowWord = commonWord Then
+					If bFirstCurTop Then
+						!! 次の候補を出力だけする
+						GoSub CUR.TOP.OF.SCREEN
+						crtBuff = ""
+						GoSub Draw.Cmdline
+						GoSub CRT.BUFF.FLUSH
+						NokoriKouho = @TRUE
+						GoTo TAB.HOKAN
+					End Else
+						!! 候補表示モード
+						GoSub DispCandidate.Common
 					End
-				Next line
-				
-				nowWord = nowWord[Len(parent)+1,99]
-				GoSub Setting.WordInfo2
-				
-				dispType = "OS Path"
-				
-				If bDispCandidate Then
-					!! 候補表示モード
-					candidateMode = startCandidateMode
-					GoSub DispCandidate.Common
 				End Else
-					If actNo = A.TAB Then
-						!! タブキーによりオートコンプリートする
-						GoSub Prev.Match.Filter
-						GoSub AUTO.COMPLATE
+					If slist="" Then
+						!! 次の候補を出力だけする
+						NokoriKouho = @TRUE
+						GoTo TAB.HOKAN
+					End Else
+						GoSub Disp.NokoriKouho
 					End
 				End
-				
-				Return
 			End
+			
+			Return
 		End
 	End
 $ENDIF
@@ -1346,16 +1312,14 @@ $ENDIF
 			Ins desc Before dlist<no>
 		End
 		
-		If bDispCandidate Then
+		!! タブキーによりオートコンプリートする
+		GoSub Prev.Match.Filter
+		GoSub AUTO.COMPLATE
+		If nowWord = commonWord Then
 			!! 候補表示モード
-			candidateMode = startCandidateMode
 			GoSub DispCandidate.Common
 		End Else
-			If actNo = A.TAB Then
-				!! タブキーによりオートコンプリートする
-				GoSub Prev.Match.Filter
-				GoSub AUTO.COMPLATE
-			End
+			GoSub Disp.NokoriKouho
 		End
 		
 	End Else
@@ -1394,20 +1358,17 @@ $ENDIF
 				Repeat
 				Close fpACCOUNT
 			End
-			If bDispCandidate Then
 			
-				candidateMode = startCandidateMode
+			GoSub Prev.Match.Filter
+			GoSub AUTO.COMPLATE
+			If nowWord = commonWord Then
+				!! 候補表示モード
 				dispType = "ACCOUNT ":tgtAccFile
 				GoSub DispCandidate.Common
-			
 			End Else
-				If actNo = A.TAB Then
-					!! タブキーによりオートコンプリートする
-					GoSub Prev.Match.Filter
-					GoSub AUTO.COMPLATE
-				End
+				GoSub Disp.NokoriKouho
 			End
-			GoTo TAB.HOKAN.END
+			Return
 		End
 		
 		** -- 特殊補完の前処理 --
@@ -1516,40 +1477,29 @@ $IFNDEF U2__UNIVERSE
 $ENDIF
 		
 		* 補完候補表示
-		If bDispCandidate Then
-			
+		* オートコンプリート
+		GoSub Get.SList.VOC
+		GoSub Prev.Match.Filter
+		slistAll = slist
+		
+		GoSub Get.SList.FILE
+		GoSub Marge.SlistAll
+		
+		GoSub Get.SList.FIELD
+		GoSub Marge.SlistAll
+		
+		GoSub Get.SList.FLATFILE
+		GoSub Marge.SlistAll
+		
+		* オートコンプリート
+		slist = slistAll
+		GoSub AUTO.COMPLATE
+		If nowWord = commonWord Then
 			* 状態別候補表示処理
 			Begin Case
 			
 			** 特殊補完
 			Case candidateMode="FLATREC"
-				
-				** 直前の単語がマルチパートファイルか調べる
-				prevWord = words<nowWordPos-1>
-				Read rec From VOC,prevWord Then
-					If rec<1>[1,1] = "F" And rec<4>[1,1] = "M" Then
-						slist = ""
-						slistU = ""
-						dlist = ""
-
-						mpFile = prevWord
-						nowWord = mpFile:",":nowWord
-						nowWord.length = Len(nowWord)
-						list = Splice(Reuse(mpFile),",",Convert(@VM,@FM,rec<7>))
-						Loop
-							v = Remove(list,sep)
-							If v[1,nowWord.length] = nowWord Then
-								slist<-1> = v
-								slistU<-1> = UpCase(v)
-							End
-						While sep Do Repeat
-						
-						dispType = "MultiPart ":mpFile
-						GoSub DispCandidate.Common
-						
-						GoTo TAB.HOKAN.END
-					End
-				End
 				
 				GoSub Get.SList.FLATFILE
 				
@@ -1564,50 +1514,58 @@ $ENDIF
 				
 			* FILE補完
 			Case candidateMode="FILE"
+
+				** 直前の単語がマルチパートファイルか調べる
+				prevWord = words<nowWordPos-1>
+				Read rec From VOC,prevWord Then
+$IFNDEF U2__UNIVERSE
+					If rec<1>[1,1] = "Q" Then
+						!! QFileを辿る
+						Loop
+							rec = RTRANS(rec<2>:":VOC",rec<3>,-1,"X")
+						While rec<1>[1,1] = "Q"
+						Repeat
+					End
+$ENDIF
+					If rec<1>[1,1] = "F" And rec<4> >< "" Then
+						slist = ""
+						slistU = ""
+						dlist = ""
+$IFDEF U2__UNIVERSE
+						list = Convert(@VM,@FM,rec<7>)
+$ELSE
+						list = Convert(@VM,@FM,rec<4>)
+$ENDIF
+						Loop
+							v = Remove(list,sep)
+							slist<-1> = v:" "
+							slistU<-1> = UpCase(v):" "
+						While sep Do Repeat
+						
+						dispType = "MultiPart ":prevWord
+						GoSub DispCandidate.Common
+						
+						GoTo TAB.HOKAN.END
+					End
+				End
 				
 				GoSub Get.SList.FILE
 				
 				dispType = "FILE"
 
 			* VOC補完
-			Case candidateMode="VOC"
+			Case 1
 				
 				GoSub Get.SList.VOC
 				
 				dispType = "VOC"
-
-			Case candidateMode=""
-				
-				slist = ""
-				dispType = ""
-				bDispCandidate = @FALSE
 				
 			End Case
 		
 			GoSub DispCandidate.Common
 			
 		End Else
-			If actNo = A.TAB Then
-				* オートコンプリート
-				
-				GoSub Get.SList.VOC
-				GoSub Prev.Match.Filter
-				slistAll = slist
-				
-				GoSub Get.SList.FILE
-				GoSub Marge.SlistAll
-				
-				GoSub Get.SList.FIELD
-				GoSub Marge.SlistAll
-				
-				GoSub Get.SList.FLATFILE
-				GoSub Marge.SlistAll
-				
-				* オートコンプリート
-				slist = slistAll
-				GoSub AUTO.COMPLATE
-				
-			End
+			GoSub Disp.NokoriKouho
 		End
 		
 		Close fpDICT
@@ -1615,6 +1573,22 @@ $ENDIF
 
 TAB.HOKAN.END:
 
+Return
+
+Disp.NokoriKouho:
+	If slist#"" And Not(bFirstCurTop) Then
+		!! 残りの候補を画面出力
+		nowWord = commonWord
+		GoSub Setting.WordInfo2
+		choiceList = slist
+		title = ""
+		choiceOrgY = cmdlineRows + 1
+		crtBuff = ""
+		GoSub InitChoiceList
+		choice.HI = SGR.ALL.OFF
+		GoSub ProcChoiceList
+		Crt @(winX,0):
+	End
 Return
 
 Marge.SlistAll:
@@ -1631,29 +1605,9 @@ Return
 DispCandidate.Common:
 
 	GoSub Prev.Match.Filter
-	If candidateFilter Then
-		!! フィルタによる絞り込み
-		GoSub Match.CancidateFilter
-	End
-	
-	If actNo = A.INSCHAR Then
-		actNo = 0
-		!! 文字入力により自動的にオートコンプリートする
-		commonWord = ""
-		GoSub AUTO.COMPLATE
-		If (commonWord And nowWord <> commonWord) OR slist = "" Then
-			GoSub Setting.WordInfo
-			GoSub Prev.Match.Filter
-			bDispCandidate = @TRUE
-			candidateMode = "FLATREC"
-			startCandidateMode = ""
-			GoTo TAB.HOKAN ;** 連続で候補表示する
-		End
-	End
 
 	!! 0件なら次のモードを試してみる
-	If slist = "" And bDispCandidate And startCandidateMode <> candidateMode Then
-		If Not(startCandidateMode) Then startCandidateMode = candidateMode
+	If slist = "" Then
 		If candidateMode = "FLATREC" Then
 			candidateMode = "FIELD"
 		End Else If candidateMode = "FIELD" Then
@@ -1661,24 +1615,24 @@ DispCandidate.Common:
 		End Else If candidateMode = "FILE" Then
 			candidateMode = "VOC"
 		End Else If candidateMode = "VOC" Then
-			candidateMode = ""
+			candidateMode = "FIELD"
 		End
 		GoTo TAB.HOKAN
 	End
 	
 	!! 描画
 	GoSub CUR.TOP.OF.SCREEN
+	
+	crtBuff = ""
+	GoSub Draw.Cmdline
+	GoSub CRT.BUFF.FLUSH
 
 	dispRowNum = @CRTHIGH - cmdlineRows - 2
 	
-	crtBuff = ""
-	crtBuff := @(0,1)
-	allNum = DCount(slist,@FM)
-	If allNum = 0 Then
+	IF candidateMode = "HELP" THEN
+	
 		!! 候補なし
 		dispType = ""
-		allNum = 1
-		allPageNum = 0
 
 		!! TODO ヘルプファイルがあればヘルプ表示する
 		
@@ -1697,222 +1651,131 @@ $IFNDEF U2__UNIVERSE
  					lines<-1> = "  ":Fmt(i,"R%":maxLen):": ":@RECORD<i>
 				Next i
 			End Else If type = "V" Then
-				If @RECORD<2> = "CS" Then
-					!! Localカタログ
-					srcPath = Change(Convert("\","/",@RECORD<3>),".OUT/","/")
-					id = Last(srcPath,'/')
-					path = srcPath[1,Len(srcPath)-Len(id)]
-					rec = ""
-					OpenPath path Encoding "UTF8.A" To fp Then
-						Read rec From fp,id Then
-							maxCnt = DCount(rec,@FM)
-							bDoc = @FALSE
-							For i = 1 To maxCnt
-								line = rec<i>
-								If line Matches "...**...==..." Then ;** "** ==========" ~ "** ==========" まで
-									lines<-1> = "  ":line[Index(line,"**",1)+2,999] ;** 先頭の"**"を省く
-									If Not(bDoc) Then bDoc = @TRUE Else Exit
-								End Else
-									line = line[Index(line,"**",1)+2,999] ;** 先頭の"**"を省く
-									xpos = Index(line,"**",1)
-									If xpos Then
-										line = line[1,xpos-1] ;** 次の"**"移行はコメントとして省く
-									End
-									line = Change(line,CHAR(9),Space(DEFAULT.INDENT)) ;** Tab -> space
-									If bDoc Then lines<-1> = "  ":line
+				!! Localカタログ
+				srcPath = Change(Convert("\","/",@RECORD<3>),".OUT/","/")
+				id = Last(srcPath,'/')
+				path = srcPath[1,Len(srcPath)-Len(id)]
+				rec = ""
+				OpenPath path Encoding "UTF8.A" To fp Then
+					Read rec From fp,id Then
+						maxCnt = DCount(rec,@FM)
+						bDoc = @FALSE
+						For i = 1 To maxCnt
+							line = rec<i>
+							If line Matches "...**...==..." Then ;** "** ==========" ~ "** ==========" まで
+								lines<-1> = "  ":line[Index(line,"**",1)+2,999] ;** 先頭の"**"を省く
+								If Not(bDoc) Then bDoc = @TRUE Else Exit
+							End Else
+								line = line[Index(line,"**",1)+2,999] ;** 先頭の"**"を省く
+								xpos = Index(line,"**",1)
+								If xpos Then
+									line = line[1,xpos-1] ;** 次の"**"移行はコメントとして省く
 								End
-							Next i
+								line = Change(line,CHAR(9),Space(DEFAULT.INDENT)) ;** Tab -> space
+								If bDoc Then lines<-1> = "  ":line
+							End
+						Next i
+					End
+					Close fp
+				End Else
+					Open "SW_HANYO" To fp Then
+						Read rec From fp,id:".TXT" Then
+							lines = rec
 						End
 						Close fp
 					End
-					If @RECORD Matches "...SW_HANYO..." Then
-						!! SMVヘルプ
-						Open "SW_HANYO" To fp Then
-							Read rec From fp,id:".TXT" Then
-								lines = rec
-							End
-							Close fp
-						End
+					IF lines="" And @RECORD<2> = "CA" Then
+						lines<2> = "  コマンドの詳細は以下を参照"
+						lines<3> = "  http://downloads.openqm.com/help/":DownCase(Convert('.','_',@ID)):".htm"
 					End
-				End Else
-					lines<1> = "  コマンドの詳細は以下を参照"
-					lines<2> = "  http://downloads.openqm.com/help/":DownCase(Convert('.','_',@ID)):".htm"
 				End
 			End
 			
-			!! VOCの説明を表示
-			crtBuff := @(0,2):"  ":@ID:" : ":iType(descIType)
-			
-			!! ページング
-			allNum = DCOUNT(lines,@FM)
-			allPageNum = INT(allNum / (dispRowNum-4))
-			If allPageNum < pageNum Then pageNum = 0
-			If pageNum < 0 Then pageNum = allPageNum
-			st = pageNum * (dispRowNum-4)
-			off = (dispRowNum-3) - 1
-			lines = lines[@FM,st,off]
-			
-			!! 画面表示(縦センタリング)
-			lines.len = DCount(lines,@FM)
-			startY = 3
-			For i = 1 To lines.len
-				crtBuff := @(0,startY+i+cmdlineRows):lines<i>
-			Next i
-			
-			If allPageNum > 0 Then
-				!! 再描画させる
-				bDispCandidate = @TRUE
-			End
+			!! 候補リスト表示処理
+			choiceNo = 1
+			choiceList = lines
+			title = dispType
+			choiceOrgY = cmdlineRows + 1
+			GoSub InitChoiceList
+			Loop
+				
+				!! 選択リストボックス処理共通
+				GoSub ProcChoiceList
+				
+				!! キー入力待ち
+				GoSub GetKey
+				Begin Case
+					Case actNo = A.CANCEL ;** 抜ける
+						!! 選択を非表示にして画面を残す
+						choice.HI = SGR.ALL.OFF
+						GoSub ProcChoiceList
+						Exit
+					Case actNo = A.NEWLINE ;** 決定
+					Case actNo = A.TAB ;** モード切替
+						candidateMode = "FLATREC"
+						Crt @(winX,0):
+						GoTo TAB.HOKAN
+				End Case
+				
+			Repeat
+			Crt @(winX,0):
 			
 		End
 $ENDIF
 	End Else
 		!! 候補リスト表示処理
-		
-		grpId = ""
-		grpDesc = ""
-		
-		grpCh = nowWord.len + 1 ;** グループ化対象の文字位置
-		prevCh = "" ;** 前回の文字
-		outCnt = 0
-		For i = 1 To allNum
-			ch = slistU<i>[grpCh,1]
-			If ch <> "" Then
-				If ch <> prevCh Then
-					outCnt += 1
-					grpId<outCnt> = slist<i>
-					grpDesc<outCnt> = slist<i>:@SVM:dlist<i>
-				End Else
-					!! 共通化
-					commonId = grpId<outCnt>
-					nowId = slist<i>
-					For j = grpCh To Len(commonId)
-						If UpCase(commonId[j,1]) >< UpCase(nowId[j,1]) Then
-							commonId = commonId[1,j-1]
-							Exit
+		choiceNo = 1
+		col1 = Maximum(LenSDP(slist))
+		choiceList = Splice(CatS(FmtS(slist,col1+2:"T"),dlist),@VM,slist)
+		title = dispType
+		choiceOrgY = cmdlineRows + 1
+		GoSub InitChoiceList
+		Loop
+			
+			!! 選択リストボックス処理共通
+			GoSub ProcChoiceList
+			
+			!! キー入力待ち
+			GoSub GetKey
+			Begin Case
+				Case actNo = A.CANCEL ;** 抜ける
+					!! 選択を非表示にして画面を残す
+					choice.HI = SGR.ALL.OFF
+					GoSub ProcChoiceList
+					Exit
+				Case actNo = A.NEWLINE ;** 決定
+					If choiceSelection Then
+						slist = choiceSelection<1,2>
+						GoSub AUTO.COMPLATE
+						If dispType="Verb" Then
+							candidateMode = "FILE"
+						End Else If dispType="FILE" Then
+							candidateMode = "FIELD"
 						End
-					Next j
-					grpId<outCnt> = commonId
-					grpDesc<outCnt,-1> = slist<i>:@SVM:dlist<i>
-				End
-			End
-			prevCh = ch
-		Next i
-		
-		!! 表示情報の構築
-		keyInfos = ""
-		descInfos = ""
-		
-		If allNum > dispRowNum Then
-			!! 1ページに収まらない場合はグループ化表示
-			For i = 1 To Dcount(grpId,@FM)
-				desc = grpDesc<i>
-				cnt = DCount(desc,@VM)
-				If cnt = 1 Then
-					keyInfos<-1> = grpId<i>
-					descInfos<-1> = Len(grpId<i>):@VM:desc<1,1,2>
-				End Else
-					keyInfos<-1> = grpId<i>:"...(":cnt:")"
-					ids = ""
-					lastDesc = ""
-					Loop
-						id = Remove(desc,sep)
-						non = Remove(desc,s)
-						ids := If id[1] = " " Then id Else id:" "
-					While sep
-						lastDesc = non
-					Repeat
-					descInfos<-1> = Len(grpId<i>):@VM:ids:"# ":lastDesc[' ',5,9999]
-				End
-			Next i
-		End Else
-			prevCh = ""
-			!! 1次元目
-			Loop
-				commonId = Remove(grpId,sep1)
-				!! 2次元目
-				Loop
-					id = Remove(grpDesc,sep2)
-					desc = Remove(grpDesc,s)
-					keyInfos<-1> = id
-					descInfos<-1> = Len(commonId):@VM:desc
-				While sep2 >= 3 ;** VM以上
-				Repeat
-			While sep1
-			Repeat
-		End
-		
-		!! ページング
-		allNum = DCOUNT(keyInfos,@FM)
-		allPageNum = INT(allNum / dispRowNum)
-		If allPageNum < pageNum Then pageNum = 0
-		If pageNum < 0 Then pageNum = allPageNum
-		st = pageNum * dispRowNum
-		off = dispRowNum - 1
-		keyInfos = keyInfos[@FM,st,off]
-		descInfos = descInfos[@FM,st,off]
-		
-		sp = 2
-		col1 = Maximum(LenSDP(keyInfos))
-		col2 = @CRTWIDE - col1
-		col2W = (col2 - sp):"T"
-		
-		!! Header
-		crtBuff := @(0,1+cmdlineRows)
-		crtBuff := Str("-",col1):Str(" ",sp):Str("-",col2)
-		
-		For i = 1 To dispRowNum
-			id = keyInfos<i>
-			If id = "" Then Exit
+						Crt @(winX,0):
+						GoTo TAB.HOKAN
+					End Else
+						Exit
+					End
+				Case actNo = A.TAB ;** モード切替
+					If candidateMode = "FLATREC" Then
+						candidateMode = "FIELD"
+					End Else If candidateMode = "FIELD" Then
+						candidateMode = "FILE"
+					End Else If candidateMode = "FILE" Then
+						candidateMode = "VOC"
+					End Else If candidateMode = "VOC" Then
+						candidateMode = "HELP"
+					End Else
+						candidateMode = "FLATREC"
+					End
+					Crt @(winX,0):
+					GoTo TAB.HOKAN
+			End Case
 			
-			!! id
-			crtBuff := @(0,1+i+cmdlineRows)
-			crtBuff := id[1,nowWord.len]
-			crtBuff := SBOLD:FG.BASE03
-			
-			ch = id[grpCh,1]
-			If prevCh <> ch Then
-				!! アルファベット強調表示
-				crtBuff := FG.RED:ch:FG.BASE03
-			End Else
-				crtBuff := ch
-			End
-			prevCh = ch
-			
-			crtBuff := id[nowWord.len+2,descInfos<i,1>-grpCh]
-			crtBuff := EBOLD:SGR.ALL.OFF
-			crtBuff := id[nowWord.len+2+descInfos<i,1>-grpCh,99]
-			
-			!! desc
-			crtBuff := @(col1+sp,1+i+cmdlineRows)
-			crtBuff := FMTDP(Convert(@VM," ",descInfos<i,2>),col2W)[@TM,1,1]
-		Next
-		
+		Repeat
+		Crt @(winX,0):
 	End
-	
-	crtBuff := @(-3):@(0,@CRTHIGH-1):HI.STATUS.ON:@(-4)
-	
-	!! 右側（優先度低）
-	opDesc = ""
-	If allPageNum > 0 Then opDesc := "[PgDown]-NextPage / [PgUp]-PrevPage / "
-	If dispType And allNum Then opDesc := "[Tab]-NextType / "
-	opDesc := "[F3]-Filter / [Esc]-Back"
-	If @CRTWIDE-LenDP(opDesc)-1 > 5 Then 
-		crtBuff := @(@CRTWIDE-LenDP(opDesc)-1,@CRTHIGH):opDesc
-	End
-	
-	!! 左側（優先度高）
-	crtBuff := @(0,@CRTHIGH-1)
-	If dispType And allNum Then
-		crtBuff := (If dispType <> "Help" Then "Type: " Else " "):dispType
-		If allPageNum > 0 Then crtBuff := " | ":(pageNum+1):" / ":(allPageNum+1)
-		crtBuff := " | "
-	End
-	If candidateFilter Then crtBuff := "Filter: ":candidateFilter:" | "
-	
-	crtBuff := SGR.ALL.OFF
-	crtBuff := @(0,0)
-	Crt crtBuff:
 	
 Return
 
@@ -1985,15 +1848,11 @@ Match.CancidateFilter:
 	Repeat
 Return
 
-Get.SList.From.Voc:
-	slist = ""
-	slistU = ""
-	dlist = ""
-	tgt = Convert(',',@VM,tgtVocTypes)
-	SelectV VOC To sp
+Get.SList.From.Voc.Common:
+	SelectV FP.TMP To sp
 	Loop
 		ReadNext @ID From sp Else Exit
-		Read @RECORD From VOC,@ID Then
+		Read @RECORD From FP.TMP,@ID Then
 			type = iType(typeIType)
 			m1 = type<1,1> Matches tgt
 			m2 = type<1,2> Matches tgt
@@ -2014,33 +1873,26 @@ Get.SList.From.Voc:
 	Repeat
 Return
 
+Get.SList.From.Voc:
+	slist = ""
+	slistU = ""
+	dlist = ""
+	tgt = Convert(',',@VM,tgtVocTypes)
+	FP.TMP = VOC
+	GoSub Get.SList.From.Voc.Common
+	OPEN "PVOC,":@USER TO PVOC THEN
+		FP.TMP = PVOC
+		GoSub Get.SList.From.Voc.Common
+	END
+Return
+
 Get.SList.From.Voc2:
 	slist = ""
 	slistU = ""
 	dlist = ""
 	tgt = Convert(',',@VM,tgtVocTypes)
-	SelectV fpTgtAccVOC To sp
-	Loop
-		ReadNext @ID From sp Else Exit
-		Read @RECORD From fpTgtAccVOC,@ID Then
-			type = iType(typeIType)
-			m1 = type<1,1> Matches tgt
-			m2 = type<1,2> Matches tgt
-			If m1 Or m2 Then
-				@ID := " "
-				idU = UpCase(@ID)
-				Locate idU In slistU By "AL" Setting no Else
-					Ins idU Before slistU<no>
-					Ins @ID Before slist<no>
-					desc = iType(descIType)
-					If m2 Then
-						desc = If m1 Then desc<1,1>:" ":desc<1,2> Else desc<1,2>
-					End
-					Ins desc Before dlist<no>
-				End
-			End
-		End
-	Repeat
+	FP.TMP = fpTgtAccVOC
+	GoSub Get.SList.From.Voc.Common
 Return
 
 Get.SList.VOC:
@@ -2108,14 +1960,14 @@ Get.SList.FIELD:
 		Loop
 			ReadNext @ID From sp Else Exit
 			Read @RECORD From fpDICT,@ID Then
-				If Count("DILPCEAS",@RECORD[1,1]) Then
+				If Count("DILPCEASC",@RECORD[1,1]) Then
 					If @RECORD[1,1] = "L" Then
 						@ID := "%"
 						!! ---> Ref Table
 						desc = "---> ":@RECORD<3>
 					End Else
 						@ID := " "
-						If Count("DIE",@RECORD[1,1]) Then
+						If Count("DIEC",@RECORD[1,1]) Then
 							!! Type S/M Assoc Description
 							desc = FMT(@RECORD[1,1],"3L"):FMT(@RECORD<6>,"2L"):@RECORD<7>:" ":@RECORD<4>
 						End Else If @RECORD[1,2] = "PH" Then
@@ -2294,6 +2146,14 @@ ACTION.CMDSTACK.LIST:
 			cmdline = "CT VOC ":id
 			bAutoCommand = @TRUE
 			GoTo Run.Command
+		End Else
+			OPEN "PVOC,":@USER TO PVOC Then
+				Read rec From PVOC,id Then
+					cmdline = "CT PVOC,":@USER:" ":id
+					bAutoCommand = @TRUE
+					GoTo Run.Command
+				End
+			End
 		End
 	End
 	
@@ -2420,10 +2280,24 @@ ACTION.CMDSTACK.APPEND:
 *--------------------------------
 ACTION.CMDSTACK.SAVE:
 	
-	cmd = Trim(cmdline[4,9999])
+	If UpCase(cmdline)[1,3]=".SP" Then
+		!! PVOC
+		cmd = Trim(cmdline[4,9999])
+		OPEN "PVOC,":@USER TO PVOC Else
+			PRINT ""
+			PRINT "Cannot Open PVOC"
+			GoTo Shell.KeyLoop.End
+		End
+		TG.VOC = PVOC
+		VOCNAME = "PVOC"
+	End Else
+		cmd = Trim(cmdline[3,9999])
+		TG.VOC = VOC
+		VOCNAME = "VOC"
+	End
 	
-	startNo = MatchField(UpCase(cmdline),"'.S'0N...",2)
-	endNo   = MatchField(UpCase(cmdline),"'.S'0N'-'0N...",4)
+	startNo = MatchField(UpCase(cmd),"0N...",1)
+	endNo   = MatchField(UpCase(cmd),"0N'-'0N...",3)
 	paName  = Trim(cmdline[' ',2,1])
 	
 	If startNo = "" Then startNo = cmdStackList.DispCnt<1> Else startNo += 1
@@ -2436,8 +2310,8 @@ ACTION.CMDSTACK.SAVE:
 	End
 	
 	Print ""
-	ReadU pa From VOC,paName Then
-		Print 'Item "':paName:'" already exists in VOC.'
+	ReadU pa From TG.VOC,paName Then
+		Print 'Item "':paName:'" already exists in ':VOCNAME:'.'
 		Print " Overwirte (Y)":
 		Input ans
 		If UpCase(Trim(ans)) = "Y" Else GoTo Shell.KeyLoop.End
@@ -2450,8 +2324,8 @@ ACTION.CMDSTACK.SAVE:
 	Next
 	
 	If paName <> "" Then
-		Write pa To VOC,paName On Error Print "Cannot Write to VOC."
-		Print 'Item "':paName:'" Saved in VOC.'
+		Write pa To TG.VOC,paName On Error Print "Cannot Write to ":VOCNAME:"."
+		Print 'Item "':paName:'" Saved in ':VOCNAME:'.'
 	End Else
 		GoSub DoNew
 		Rec = pa
@@ -2469,8 +2343,6 @@ GoTo Shell.Input.Begin ;* キーループに戻る
 ACTION.CMDSTACK.READ:
 
 	cmdline = Trim(cmdline)
-	n = MatchField(UpCase(cmdline),"'.R'0N...",2)
-	m = MatchField(UpCase(cmdline),"'.R'0N'-'0N...",4)
 	
 	cmdlines = ""
 	cmdlines_page = ""
@@ -2478,35 +2350,39 @@ ACTION.CMDSTACK.READ:
 		!! Duplicate Case
 		cmdlines = cmdStack<2>
 		cmdlines_page = cmdlines
-	End Else If cmdline[1,3] = ".R " Then
+	End Else If cmdline[1,3] = ".R " Or cmdline[1,4] = ".RP " Then
 		!! VOCからリード Case
-		name = Trim(cmdline[4])
+		name = Trim(cmdline[' ',2,1])
 		Read rec From VOC,name Then
 			If rec[1,1] = 'P' Or rec[1,1] = 'S' Then
 				cmdlines = rec[@FM,2,9999]
 				cmdlines_page = cmdlines
 			End
 		End
-	End Else If n Then
-		!! Stackからリード Case
-		If m = "" Then m = n ;** 1行にする
-		If Num(n) And Num(m) Then
-			min_no = Minimum(n:@FM:m)
-			max_no = Maximum(n:@FM:m)
-			For i = max_no To min_no Step -1
-				cmd = cmdStack<i+1>
-				If cmdStackPage<i+1> <> "" Then
-					cmdlines_page<-1> = cmdStackPage<i+1>
-					Del cmdStackPage<i+1> ;** 移動の為削除
-				End Else
-					cmdlines_page<-1> = cmd
-				End
-				cmdlines<-1> = cmd
-				Del cmdStack<i+1>
-			Next i
-		End
 	End Else
-		Return
+		n = MatchField(UpCase(cmdline),"'.R'0N...",2)
+		m = MatchField(UpCase(cmdline),"'.R'0N'-'0N...",4)
+		If n Then
+			!! Stackからリード Case
+			If m = "" Then m = n ;** 1行にする
+			If Num(n) And Num(m) Then
+				min_no = Minimum(n:@FM:m)
+				max_no = Maximum(n:@FM:m)
+				For i = max_no To min_no Step -1
+					cmd = cmdStack<i+1>
+					If cmdStackPage<i+1> <> "" Then
+						cmdlines_page<-1> = cmdStackPage<i+1>
+						Del cmdStackPage<i+1> ;** 移動の為削除
+					End Else
+						cmdlines_page<-1> = cmd
+					End
+					cmdlines<-1> = cmd
+					Del cmdStack<i+1>
+				Next i
+			End
+		End Else
+			Return
+		End
 	End
 	
 	!! スタックの先頭に挿入
@@ -2537,7 +2413,23 @@ ACTION.CMDSTACK.DELETE:
 		Read rec From VOC,name Then
 			If rec[1,2] = "PA" Or rec[1,1] = "S" Then
 				Delete VOC,name
+				PRINT ""
 				Print 'Item "':name:'" Deleted From VOC.'
+			End
+		End
+	End Else If UpCase(cmdline)[1,4] = ".DP " Then
+		!! PVOCから削除
+		name = Trim(cmdline[5,BIG])
+		OPEN "PVOC,":@USER TO PVOC Else
+			PRINT ""
+			PRINT "Cannot Open PVOC"
+			GoTo Shell.KeyLoop.End
+		End
+		Read rec From PVOC,name Then
+			If rec[1,2] = "PA" Or rec[1,1] = "S" Then
+				Delete PVOC,name
+				PRINT ""
+				Print 'Item "':name:'" Deleted From PVOC.'
 			End
 		End
 	End Else If n Then
@@ -2622,6 +2514,8 @@ Return
 *--------------------------------
 AUTO.COMPLATE:
 	
+	commonWord = ""
+	
 	* 候補なし
 	If slist = "" Then Return
 	
@@ -2629,9 +2523,13 @@ AUTO.COMPLATE:
 		separator = ""
 		Read rec From VOC,slist Then
 			** マルチパートファイルは','で続ける
-			If rec<1>[1,1]="F" And rec<4>[1,1]="M" Then separator = ","
+			If rec<1>[1,1]="F" And rec<4> >< "" Then
+				slist = TRIMB(slist)
+				separator = ","
+			End
 		End Else If Trans("DICT ":dictName,slist,1,'X')[1,1] = "L" Then
 			** L-Typeなら'%'で続ける
+			slist = TRIMB(slist)
 			separator = "%"
 		End
 		commonWord = slist : separator ;* 候補は１つなので確定
@@ -2661,17 +2559,26 @@ AUTO.COMPLATE:
 	
 	!! 単語置換
 	BufInfo<BI.BLOCKSTART, 1> = Y
-	BufInfo<BI.BLOCKSTART, 2> = X - Len(nowWord)
+	BufInfo<BI.BLOCKSTART, 2> = X - Len(fullWord)
 	BufInfo<BI.BLOCKEND, 1> = Y
 	BufInfo<BI.BLOCKEND, 2> = X
-	InsBuffer = commonWord
+	InsBuffer = fullWord[1,Len(fullWord)-Len(nowWord)]:commonWord
+	If Index(Trim(InsBuffer)," ") Then
+		If InsBuffer[1]=" " Then
+			InsBuffer = DQuote(InsBuffer[1,Len(InsBuffer)-1]):" "
+		End Else
+			InsBuffer = DQuote(InsBuffer)
+		End
+	End
 	GoSub InsertLines
+	BufInfo<BI.BLOCKSTART> = ""
+	BufInfo<BI.BLOCKEND> = ""
 
 	Loop
 		GoSub GetCh.Timeout
 		While ch <> ""
 	Repeat
-
+	
 Return
 
 CLEAR.FOR.PERFORM:
@@ -2712,6 +2619,7 @@ Editor.Main:
 	LastCapture = 0
 	ItemList = ""
 	FileName = ""
+	ItemName = ""
 	FldInfo = ""
 	DiveValuePos = ""
 	ParentBufNo = ""
@@ -2736,46 +2644,57 @@ ParseCommandLine:
 	Begin Case
 		Case CFileName = ""
 		Case 1
-			DICT = ""
-			If CFileName="DICT" Then
-				DICT = "DICT"
-				CFileName = Remove(args,s)
-			End
-			If CFileName <> "" Then
-				Open DICT,CFileName To TempFL Else
-					Crt "Cannot open ":CFileName
-					Return
-				End
-				FileName = CFileName
-				If DICT><"" Then FileName = "DICT ":CFileName
-			End
-			
-			dictFileName = If DICT Then "DICT.DICT" Else "DICT ":FileName
+			OpenSeq CFileName To TFL Then
+				!! パスから開く
+				CloseSeq TFL
+$IFNDEF U2__UNIVERSE
+				FileName = "PATH:":CFileName[@DS,1,DCOUNT(CFileName,@DS)-1]
+				IF FileName MATCHES "'PATH:'1A':'" THEN FileName := "\"
+				ItemList = LAST(CFileName,@DS)
+$ENDIF
+			End Else
 
-			!! アクティブな選択リストから取得      
-			If System(11) Then
-				ReadList tmp Then ItemList<-1> = tmp
-			End
-			
-			Loop
-				arg = Trim(Remove(args,s))
-				If arg = "*" Then
-					Select TempFL
-					ReadList tmp Then ItemList<-1> = tmp
-				End Else If arg >< "" Then
-					If Not(DICT) And (Trans(dictFileName,arg,0,'X') Or arg Matches "F1N0N") Then
-						!! 辞書にある引数はフィールドとみなす(F1 F2 等は特別)
-						FldInfo<-1> = arg
-					End Else
-						ItemList<-1> = arg
-					End
+				DICT = ""
+				If CFileName="DICT" Then
+					DICT = "DICT"
+					CFileName = Remove(args,s)
 				End
-			While s Do
-			Repeat
-			
-			Convert @FM To " " In FldInfo
-			
-			Close TempFL
+				If CFileName <> "" Then
+					Open DICT,CFileName To TempFL Else
+						Crt "Cannot open ":CFileName
+						Return
+					End
+					FileName = CFileName
+					If DICT><"" Then FileName = "DICT ":CFileName
+				End
+				
+				dictFileName = If DICT Then "DICT.DICT" Else "DICT ":FileName
+
+				!! アクティブな選択リストから取得      
+				If System(11) Then
+					ReadList tmp Then ItemList<-1> = tmp
+				End
+				
+				Loop
+					arg = Trim(Remove(args,s))
+					If arg = "*" Then
+						Select TempFL
+						ReadList tmp Then ItemList<-1> = tmp
+					End Else If arg >< "" Then
+						If Not(DICT) And (Trans(dictFileName,arg,0,'X') Or arg Matches "F1N0N") Then
+							!! 辞書にある引数はフィールドとみなす(F1 F2 等は特別)
+							FldInfo<-1> = arg
+						End Else
+							ItemList<-1> = arg
+						End
+					End
+				While s Do
+				Repeat
+				
+				Convert @FM To " " In FldInfo
+				
+				Close TempFL
+			End
 	End Case
 
 	If FileName = "" And ItemList = "" Then
@@ -3415,14 +3334,18 @@ DoRead.Without.Jump:
 		no = lruBuffList<I>
 		info = BufInfos(no)
 		If info<BI.USED> Then
-			If @PATH = info<BI.ACCOUNT> And info<BI.ITEM> = ItemName And info<BI.FILE> = FileName And info<BI.FIELDFIX> = FldInfo And info<BI.PBUFNO> = ParentBufNo And info<BI.VALUEFIX> = DiveValuePos Then
-				Found = no
-				GoSub ChangeBuf
-				Return
+			If @PATH = info<BI.ACCOUNT> Or @WHO = info<BI.ACCOUNT> Then
+				If info<BI.ITEM> = ItemName And info<BI.FILE> = FileName Then
+					If info<BI.FIELDFIX> = FldInfo And info<BI.PBUFNO> = ParentBufNo And info<BI.VALUEFIX> = DiveValuePos Then
+						Found = no
+						GoSub ChangeBuf
+						Return
+					End
+				End
 			End
 		End
 	Next
-
+	
 	If FileName = "" And ItemName = "" Then
 		!! 新規作成
 		GoSub DoNew
@@ -3449,25 +3372,19 @@ Return
 ** ファイルを開くの共通化
 Common.OpenFile:
 	
-$IFDEF U2__UNIVERSE
-	Open FileName To FL Else
-		StatusMessage = "Cannot Open ":FileName
-		Return
-	End
-$ELSE
-	If FileName[1,5] = "PATH:" Then
+$IFNDEF U2__UNIVERSE
+	If Upcase(FileName[1,5]) = "PATH:" Then
 		!! PATH:なら READ:自動認識 WRITE:UTF8
 		Open FileName ENCODING "UTF8.A" To FL Else
 			StatusMessage = "Cannot Open ":FileName
 			Return
 		End
-	End Else
-		Open FileName To FL Else
-			StatusMessage = "Cannot Open ":FileName
-			Return
-		End
 	End
 $ENDIF
+	Open FileName To FL Else
+		StatusMessage = "Cannot Open ":FileName
+		Return
+	End
 
 Return
 
@@ -3669,6 +3586,7 @@ DoList:
 DoNew:  
 	FileName = ""
 	ItemName = ""
+	PathName = ""
 	GoSub GetFreeBuf
 	If Not(Found) Then Return
 	GoSub StackJumpHistory
@@ -3782,8 +3700,6 @@ DoShowDictInfo:
 				Next
 			End
 			Close fpDict
-		End Else
-			StatusMessage = "Cannot Open DICT ":FileName
 		End
 	End
 	
@@ -3806,24 +3722,34 @@ DoHideDictInfo:
 *      title - ウィンドウの色とタイトル
 *-----------------------------------------------------------------------
 InitChoiceList: ;** 選択リストボックス初期化
-
-	choiceList.length = DCount(choiceList,@FM)
-	tmp = ""
-	For i = 1 To choiceList.length
-		tmp<-1> = LenDP(choiceList<i,1>)
-	Next
-	winWidth = Maximum("20":@FM:tmp)
-	If winWidth > Width*2/3 Then winWidth = Int(Width*2/3)
-	winX = Width - winWidth
-	winHeight = Depth - 2
-	winTop = 0
 	
-	crtBuff = @(winX,0):title:@(-4)
-	crtBuff := @(winX,1):" "
-	For i = 1 To winHeight
-		crtBuff := @(winX,i+1):" "
-	Next
-	Crt crtBuff:
+	choiceList.length = DCount(choiceList,@FM)
+	
+	If choiceOrgY=0 Then
+		!! 右側モード
+		winHeight = Depth - 2 - choiceOrgY
+		tmp = ""
+		For i = 1 To choiceList.length
+			tmp<-1> = LenDP(choiceList<i,1>)
+		Next
+		winWidth = Maximum("20":@FM:tmp)
+		If winWidth > Width*2/3 Then winWidth = Int(Width*2/3)
+		winX = Width - winWidth
+		winTop = 0
+		
+		crtBuff = @(winX,0):title:@(-4)
+		crtBuff := @(winX,1):" "
+		For i = 1 To winHeight
+			crtBuff := @(winX,i+1):" "
+		Next
+		Crt crtBuff:
+		winX += 1
+	End Else
+		!! 下側モード
+		winWidth = Width - 1
+		winX = 1
+		winHeight = Depth - choiceOrgY + 1
+	End
 	
 	For i = 1 To choiceList.length
 $IFDEF U2__UNIVERSE
@@ -3832,19 +3758,21 @@ $ELSE
 		choiceList<i,1> = choiceList<i,1>[1,Len(FoldDW(Convert(" ","-",choiceList<i,1>),winWidth)<1>)]
 $ENDIF
 	Next
-	winX += 1
+	
 	filter = ""
 	filterPrev = "@"
 	choiceSelNo = choiceNo
 	choiceOutList.length = choiceList.length
 	C = ""
 	choiceParse = @False
+	choice.HI = HI.SELECT.ON
 	
 Return
 *-----------------------------------------------------------------------
 *  ProcChoiceList
 *    In :
 *      C - キーコード
+*      choice.HI - 選択行のハイライトカラー
 *    Out :
 *      choiceSelection - 選択された物 choiceList<choiceNo>
 *      filter - フィルタ
@@ -3860,11 +3788,17 @@ ProcChoiceList:
 				filter := C
 			Case actNo = A.BACKSPACE
 				filter = filter[1,Len(filter)-1]
+			Case actNo = A.DELETE_BACKWORD
+				filter = ""
 				
 		!! リストの操作
-			Case actNo = A.UP or actNo = A.SHIFT_TAB
+			Case actNo = A.UP
 				choiceNo -= 1
-			Case actNo = A.DOWN Or actNo = A.TAB
+			Case choiceOrgY=0 And actNo = A.SHIFT_TAB
+				choiceNo -= 1
+			Case actNo = A.DOWN
+				choiceNo += 1
+			Case choiceOrgY=0 And actNo = A.TAB
 				choiceNo += 1
 			Case actNo = A.PREVSTMT
 				choiceNo -= 4
@@ -3948,9 +3882,15 @@ ProcChoiceList:
 		End
 	End
 	
-	!! タイトルに件数
-	crtBuff = @(winX-1,0):title:" (":choiceOutList.length:")":@(-4)
-
+	If choiceOrgY=0 Then
+		!! タイトルに件数
+		crtBuff = @(winX-1,0):title:" (":choiceOutList.length:")":@(-4)
+		winY = 1
+	End Else
+		crtBuff = ""
+		winY = choiceOrgY
+	End
+	
 	crtBuff := SGR.ALL.OFF
 	listLen = choiceOutList.length - winTop
 	If listLen > winHeight Then listLen = winHeight
@@ -3959,16 +3899,16 @@ ProcChoiceList:
 		no = choiceOutList<winTop+i,1>
 		selected = (choiceNo = winTop+i) ;** 選択行か？
 		Line = choiceList<no,1>
-		crtBuff := @(winX,i+1)
+		crtBuff := @(winX,i+winY)
 		If selected Then
-			crtBuff := HI.SELECT.ON
+			crtBuff := choice.HI
 			If choiceParse Then
 				XOffSet = 1
 				selection = 1:@FM:BIG
 				LineWidth = winWidth
 				GoSub ParseLine2
 				Gyo = Fmt(choiceList<no,2>,"4R"):" "
-				PLine = FG.BASE1:Gyo:PLine:HI.SELECT.ON
+				PLine = FG.BASE1:Gyo:PLine:choice.HI
 				Line = Gyo:Line
 			End Else PLine = Line
 		End Else
@@ -3995,7 +3935,7 @@ ProcChoiceList:
 					p = Index(li,fi)
 				While p
 					If p=1 Or Convert(PUNCS:".","",li[p-1,1])="" Then
-						If p>1 Then crtBuff := CSI:(p-1):"C"
+						If p>1 Then crtBuff := CSI:(LenDP(li[1,p])-1):"C"
 						crtBuff := FG.RED
 						crtBuff := li[p,fi.len]
 					End
@@ -4008,7 +3948,7 @@ ProcChoiceList:
 					Loop
 						p = Index(UpCase(li),filterUpcase(j))
 					While p
-						If p>1 Then crtBuff := CSI:(p-1):"C"
+						If p>1 Then crtBuff := CSI:(LenDP(li[1,p])-1):"C"
 						crtBuff := FG.RED
 						crtBuff := li[p,Len(filterUpcase(j))]
 						li = li[p+Len(filterUpcase(j)),9999]
@@ -4020,12 +3960,17 @@ ProcChoiceList:
 	Repeat
 	crtBuff := BG.BASE3
 	Loop While i <= winHeight
-		crtBuff := @(winX,i+1):@(-4)
+		crtBuff := @(winX,i+winY):@(-4)
 		i += 1
 	Repeat
 	
 	!! フィルター入力欄表示
-	crtBuff := @(winX,1):FG.BASE03:BG.BASE2:@(-4):filter
+	If choiceOrgY=0 Then
+		crtBuff := @(winX,1):FG.BASE03:BG.BASE2:@(-4):filter
+	End Else
+		crtBuff := @(winX,winY):FG.BLUE:BG.BASE2:@(-4):Fmt(choiceOutList.length,Len(choiceList.length)+2:"L")
+		If title#"" Then crtBuff := title:" :":FG.BASE03:filter
+	End
 	GoSub CRT.BUFF.FLUSH
 	
 	choiceSelNo = choiceOutList<choiceNo>
@@ -4739,8 +4684,6 @@ InsMenu:
 *--------------------------------------------------------------------------
 InsertLines: 
 	
-!! 	If InsBuffer = "" Then Return
-
 	InsBuffer = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),InsBuffer)
 	
 	editCmd = ""
@@ -4992,8 +4935,7 @@ ParseLine2: ;** (Outline用、呼び出す前に必ず selection に値を入れ
 				Repeat
 				
 			End
-			
-
+		
 		** --------------------
 		** Data
 		** --------------------
@@ -5011,6 +4953,41 @@ ParseLine2: ;** (Outline用、呼び出す前に必ず selection に値を入れ
 				End Case
 			Next
 			
+		Case ParseType = PARSE.PDUMP
+			Mask = Space(Len(OldLine))
+			i1 = Index(OldLine,'"')
+			If i1 Then
+				i2 = Index(OldLine[i1,BIG],'"')
+				If i2 Then
+					NewLine = ""
+					For i = i1+1 To L
+						C = OldLine[i,1]
+						IF C = "\" THEN
+							i+=1
+							IF OldLine[i,1] # "\" Then
+								A = OldLine[i,4]
+								B = XTD(A)
+								If A#B Then
+									C = ECHAR(B)
+									i += 3
+								End Else
+									A = OldLine[i,2]
+									B = XTD(A)
+									If A#B Then
+										C = CHAR(B)
+										i += 1
+									End
+								End
+							End
+						END
+						NewLine := C
+					Next
+					!Mask[i1,Len(NewLine)+1] = Str(SI.STRING,Len(NewLine)+1)
+					Line = OldLine[1,i1]:NewLine
+					OldLine = Line
+				End
+			End
+
 		Case 1
 			Mask = Space(Len(OldLine))
 	End Case
@@ -5305,7 +5282,11 @@ PrintLine:
 		End
 	End Else
 		biInfoWide.lineNo = 5
-		crtBuff := (Row "4R"):" " ;* 行番号
+		If Row > 9999 Then
+			crtBuff := (Rem(Row,10000) "R%4"):" " ;* 行番号
+		End Else
+			crtBuff := (Row "4R"):" " ;* 行番号
+		End
 		If DIRec Then
 			!! 辞書表示
 			crtBuff := FMTDP(DIRec<Row>,biInfoWide.dict:"L")
@@ -5330,25 +5311,26 @@ GetDAPos:
 * PrintStatus
 *--------------------------------------------------------------------------
 PrintStatus:
+
 	If Redraw.StatusLine Then
 		
 		fileSentence = CurBuf:" > "
 		If Changed Then fileSentence := "*"
-		If BufInfo<BI.FILE> <> "" Then
+		If BufInfo<BI.PATHNAME> >< "" And UpCase(BufInfo<BI.FILE>[1,5])="PATH:" Then
+			fileSentence := BufInfo<BI.PATHNAME>
+		End Else If BufInfo<BI.FILE> <> "" Then
 			fileSentence := BufInfo<BI.FILE>
 			fileSentence := " ":BufInfo<BI.ITEM>
-			If BufInfo<BI.PBUFNO> Then fileSentence := " (pno=":BufInfo<BI.PBUFNO>:")"
-			If BufInfo<BI.FIELDFIX> Then fileSentence := " {":BufInfo<BI.FIELDFIX>:"}"
-			If BufInfo<BI.VALUEFIX> Then fileSentence := ",V":BufInfo<BI.VALUEFIX>
-			If BufInfo<BI.ACCOUNT> >< @PATH and BufInfo<BI.ACCOUNT> >< @WHO Then fileSentence := " (":BufInfo<BI.ACCOUNT>:")"
 			If BufInfo<BI.PATHNAME> >< "" Then fileSentence := " [ ":BufInfo<BI.PATHNAME>:" ]"
+		End Else If BufInfo<BI.CAPTURE> <> "" Then
+			fileSentence := BufInfo<BI.CAPTURE>
 		End Else
-			If BufInfo<BI.CAPTURE> <> "" Then
-				fileSentence := BufInfo<BI.CAPTURE>
-			End Else
-				fileSentence := "(Untitled)" 
-			End
+			fileSentence := "(Untitled)" 
 		End
+		If BufInfo<BI.PBUFNO> Then fileSentence := " (pno=":BufInfo<BI.PBUFNO>:")"
+		If BufInfo<BI.FIELDFIX> Then fileSentence := " {":BufInfo<BI.FIELDFIX>:"}"
+		If BufInfo<BI.VALUEFIX> Then fileSentence := ",V":BufInfo<BI.VALUEFIX>
+		If BufInfo<BI.ACCOUNT> >< @PATH and BufInfo<BI.ACCOUNT> >< @WHO Then fileSentence := " (":BufInfo<BI.ACCOUNT>:")"
 		If IsNew Then fileSentence := "(New)"
 		
 		SLine = ""
@@ -5505,7 +5487,7 @@ SaveItem:
 		!! アカウント違いの警告
 		If BufInfo<BI.ACCOUNT> >< "" Then
 			If Not(BufInfo<BI.ACCOUNT> Matches Quote(@ACCOUNT):@VM:Quote(@PATH)) Then 
-				PromptLine = "This Item Read from Different Account! - Save in This Account (Y) :":@(-4) ; GoSub PromptLine 
+				PromptLine = BG.RED:FG.BASE3:"This Item Read from Different Account! - Save in This Account (Y) :":@(-4) ; GoSub PromptLine 
 				GoSub GetKey
 				If TrimF(UpCase(C))[1,1] = "Y" Else Return
 			End
@@ -5667,7 +5649,7 @@ SaveItem:
 	BufInfo<BI.FILE> = FileName
 	BufInfo<BI.ITEM> = ItemName
 	BufInfo<BI.CAPTURE> = ""
-	BufInfo<BI.ACCOUNT> = @PATH
+	GoSub Set.BI.ACCOUNT
 	Changed = False
 	IsNew = False
 	StartRec = saveRec
@@ -5822,6 +5804,7 @@ SetupTokens:
 	KEYWORDS = ""
 	AddKeyWord "ABORT"
 	AddKeyWord "AND"
+	AddKeyWord "BEFORE"
 	AddKeyWord "BEGIN"
 	AddKeyWord "BY"
 	AddKeyWord "CALL"
@@ -5838,6 +5821,7 @@ SetupTokens:
 	AddKeyWord "CONTINUE"
 	AddKeyWord "CONVERT"
 	AddKeyWord "CREATE"
+	AddKeyWord "CREATING"
 	AddKeyWord "CREATING.SEQKEY"
 	AddKeyWord "CRT"
 	AddKeyWord "DEFFUN"
@@ -5851,6 +5835,7 @@ SetupTokens:
 	AddKeyWord "DO"
 	AddKeyWord "EACH"
 	AddKeyWord "ELSE"
+	AddKeyWord "ENCODING"
 	AddKeyWord "END"
 	AddKeyWord "ENTER"
 	AddKeyWord "EQU"
@@ -5874,8 +5859,10 @@ SetupTokens:
 	AddKeyWord "LOCATE"
 	AddKeyWord "LOCKED"
 	AddKeyWord "LOOP"
-	AddKeyWord "MATCHES"
 	AddKeyWord "MAT"
+	AddKeyWord "MATBUILD"
+	AddKeyWord "MATCHES"	
+	AddKeyWord "MATPARSE"
 	AddKeyWord "NEXT"
 	AddKeyWord "ON"
 	AddKeyWord "OPEN"
@@ -5915,6 +5902,9 @@ SetupTokens:
 	AddKeyWord "TRANSACTION"
 	AddKeyWord "TRY"
 	AddKeyWord "UNTIL"
+	AddKeyWord "USING"
+	AddKeyWord "VOID"
+	AddKeyWord "WEOFSEQ"
 	AddKeyWord "WHILE"
 	AddKeyWord "WRITE"
 	AddKeyWord "WRITEBLK"
@@ -5977,6 +5967,18 @@ ShowWindow:
 	Crt crtBuff:
 	Return
 *-----------------------------------------------------------------------
+*  Set.BI.ACCOUNT
+*-----------------------------------------------------------------------
+Set.BI.ACCOUNT:
+	BufInfo<BI.ACCOUNT> = @PATH
+	Open ACCOUNT.FILE To fpAcc Then
+		Read rec From fpAcc,@ACCOUNT Then
+			BufInfo<BI.ACCOUNT> = @ACCOUNT
+		End
+	End
+	Close fpAcc
+	Return
+*-----------------------------------------------------------------------
 *  StartBuf
 *-----------------------------------------------------------------------
 StartBuf: 
@@ -5994,13 +5996,7 @@ StartBuf:
 
 	!! アカウントの設定
 	!! ショートネームがあればそちらを採用なければフルパス
-	BufInfo<BI.ACCOUNT> = @PATH
-	Open ACCOUNT.FILE To fpAcc Then
-		Read rec From fpAcc,@ACCOUNT Then
-			BufInfo<BI.ACCOUNT> = @ACCOUNT
-		End
-	End
-	Close fpAcc
+	GoSub Set.BI.ACCOUNT
 	
 	Changed = False
 	BufInfo<BI.LOCKED> = @FALSE
@@ -6031,6 +6027,11 @@ $ENDIF
 	End
 	** Paragraph
 	If Rec[1,2] = "PA" Then ParseType = PARSE.PARA
+	**
+	If Rec[1,15] = "QM PROCESS DUMP" Then
+		ParseType = PARSE.PDUMP
+		BufInfo<BI.READONLY> = True
+	End
 	BufInfo<BI.PARSETYPE> = ParseType
 	BufInfo<BI.INDENTTYPE> = If ParseType = PARSE.DATA Then "Tab" Else DEFAULT.INDENT.TYPE
 	BufInfo<BI.INDENTSIZE> = DEFAULT.INDENT
@@ -7573,6 +7574,7 @@ Act.ShowOutline:
 		End
 	Next
 
+	choiceOrgY = 0
 	title = SBOLD:FG.BASE02:BG.YELLOW:" Outline"
 	tmpList = Fields(Convert(@VM,char(1),choiceList),char(1),2)
 	Locate Y In tmpList By "AR" Setting choiceNo Else choiceNo -= 1
@@ -7738,6 +7740,7 @@ Core.ShowWordHokan:
 	End
 
 	!! 選択リストボックス初期化
+	choiceOrgY = 0
 	choiceNo = 1
 	title = SBOLD:FG.BASE02:BG.YELLOW:" Words"
 	GoSub InitChoiceList
@@ -8373,8 +8376,19 @@ Act.ShowBuffList:
 			Case 1
 				If info<BI.CHANGED> Then dispStr := "*"
 				If info<BI.NEW> Then dispStr := "(New)"
-				If info<BI.FILE> >< "" Then dispStr := info<BI.FILE>
-				dispStr := " ":If info<BI.ITEM> >< "" Then info<BI.ITEM> Else "[":(If Bufs(no)<1>#"" Then Bufs(no)<1> Else info<BI.CAPTURE>):"]"
+				If info<BI.PATHNAME> >< "" And UpCase(info<BI.FILE>[1,5])="PATH:" Then
+					dispStr := info<BI.PATHNAME>
+				End Else If info<BI.FILE> <> "" Then
+					dispStr := info<BI.FILE>
+					dispStr := " ":info<BI.ITEM>
+					If info<BI.PATHNAME> >< "" Then fileSentence := " [ ":info<BI.PATHNAME>:" ]"
+				End Else If info<BI.CAPTURE> >< "" Then
+					dispStr := "[":info<BI.CAPTURE>:"]"
+				End Else If Bufs(no)<1>#"" Then
+					dispStr := "[":Bufs(no)<1>:"]"
+				End Else
+					dispStr := "(Untitled)" 
+				End
 				If info<BI.FIELDFIX> Then dispStr:= " {":info<BI.FIELDFIX>:"}"
 				If info<BI.VALUEFIX> Then dispStr:= ",V":info<BI.VALUEFIX>
 				If info<BI.FILE> >< "" And @PATH >< info<BI.ACCOUNT> And @WHO >< info<BI.ACCOUNT> Then dispStr:= " (":info<BI.ACCOUNT>:")"
@@ -8382,6 +8396,7 @@ Act.ShowBuffList:
 		End Case
 		choiceList<-1> = dispStr
 	Next
+	choiceOrgY = 0
 	title = SBOLD:FG.BASE02:BG.BLUE:" Buffers"
 	choiceNo = If DCount(choiceList,@FM) < 2 Then 1 Else 2 ;**   !! 初期値は１つ前のものにする
 	
@@ -8503,7 +8518,9 @@ Act.AutoIndent:
 	GoSub GetIndentCnt
 	
 	!! インデント数が同じならスキップ
-	If adjustIndentCnt = indentCnt Then Return
+	If adjustIndentCnt = indentCnt Then
+ Return
+	End
 	
 	!! インデント挿入
 	editCmd = ""
@@ -8536,12 +8553,14 @@ Act.AutoIndent:
 			End
 		Next iY
 		
+		nokoriStr = Rec<Y>[X,BIG]
+		
 		cmd = ""
 		cmd<1> = Y
 		cmd<2> = X
-		cmd<3> = ""
-		cmd<4> = ""
-		cmd<5> = Char(10):Str(IndentCh,adjustIndentCnt-1):autoClosing
+		cmd<3> = Y
+		cmd<4> = X+Len(nokoriStr)
+		cmd<5> = nokoriStr:Char(10):Str(IndentCh,adjustIndentCnt-1):autoClosing
 		cmd<6> = "1"
 		editCmd = cmd
 		GoSub StackEditCmd
@@ -8920,7 +8939,7 @@ Act.Reload:
 		!! 初めのレコードと違いがある
 		If Changed Then
 			!! 変更ありなら自分の変更を破棄するか判断させる
-			PromptLine = "Record previously Changed by Another, Are you sure you want to destroy your modification? (Y) :"
+			PromptLine = BG.YELLOW:FG.BASE3:"Record previously Changed by Another, Are you sure you want to destroy your modification? (Y) :"
 			GoSub PromptLine
 			GoSub GetKey
 			If UpCase(C) = "Y" Else Return
@@ -8950,7 +8969,7 @@ Act.Compile:
 $IFDEF U2__UNIVERSE
 	cmdline = "BASIC ":FileName:" ":ItemName
 $ELSE
-	cmdline = "BASIC ":FileName:" ":ItemName:" CHANGED DEBUGGING"
+	cmdline = "BASIC ":FileName:" ":ItemName:" DEBUGGING CHANGED"
 $ENDIF
 	bAutoCommand = @TRUE
 	bAutoEditor = @TRUE
