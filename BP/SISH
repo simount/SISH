@@ -29,7 +29,7 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.33.0 ]"
+Equ SISH.VERSION To "[ SISH v0.33.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
