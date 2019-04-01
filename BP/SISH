@@ -5,7 +5,7 @@ PROGRAM SISH
 **
 **    SImount Shell (Beta)
 **    
-**    Operate like UnixShell when edit commandline and Screen Editor
+**    Operate like Unix Shell and modern Screen Editor
 **
 **    Please read the "README.adoc" for more information
 **
@@ -1247,6 +1247,9 @@ $IFNDEF U2__UNIVERSE
 					End Else
 						!! 候補表示モード
 						GoSub DispCandidate.Common
+						If commonWord[1]#" " Then
+							GoTo TAB.HOKAN
+						End
 					End
 				End Else
 					If slist="" Then
@@ -1606,20 +1609,22 @@ Return
 
 DispCandidate.Common:
 
-	GoSub Prev.Match.Filter
+	GoSub Prev.Match.Filter	
 
 	!! 0件なら次のモードを試してみる
 	If slist = "" Then
-		If candidateMode = "FLATREC" Then
-			candidateMode = "FIELD"
-		End Else If candidateMode = "FIELD" Then
+		If candidateMode = "FIELD" Then
 			candidateMode = "FILE"
+			GoTo TAB.HOKAN
 		End Else If candidateMode = "FILE" Then
 			candidateMode = "VOC"
+			GoTo TAB.HOKAN
 		End Else If candidateMode = "VOC" Then
+			candidateMode = "HELP"
+		End Else
 			candidateMode = "FIELD"
+			GoTo TAB.HOKAN
 		End
-		GoTo TAB.HOKAN
 	End
 	
 	!! 描画
@@ -1744,26 +1749,14 @@ $ENDIF
 					!! 選択を非表示にして画面を残す
 					choice.HI = SGR.ALL.OFF
 					GoSub ProcChoiceList
-					Exit
+					Crt @(winX,0):
+					GoTo Shell.KeyLoop.Start
 				Case actNo = A.NEWLINE ;** 決定
-					If choiceSelection Then
-						slist = choiceSelection<1,2>
-						GoSub AUTO.COMPLATE
-						If dispType="Verb" Then
-							candidateMode = "FILE"
-						End Else If dispType="FILE" Then
-							candidateMode = "FIELD"
-						End
-						If dispType MATCH "ACCOUNT..." Then
-							choice.HI = SGR.ALL.OFF
-							GoSub ProcChoiceList
-							Exit
-						End
-						Crt @(winX,0):
-						GoTo TAB.HOKAN
-					End Else
-						Exit
-					End
+					slist = choiceSelection<1,2>
+					GoSub AUTO.COMPLATE
+					choice.HI = SGR.ALL.OFF
+					GoSub ProcChoiceList
+					Exit
 				Case actNo = A.TAB ;** モード切替
 					If candidateMode = "FLATREC" Then
 						candidateMode = "FIELD"
