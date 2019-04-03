@@ -661,6 +661,9 @@ Shell.KeyLoop.Bef.GetKey:
 				candidateMode = "FLATREC"
 				GoSub TAB.HOKAN
 				
+			Case actNo = A.HELP
+				GoSub COMMAND.HELP
+				
 			Case C = CTRL.T
 				GoSub ACTION.INPUT.PREV.FILENAME
 				
@@ -1188,6 +1191,113 @@ $ENDIF
 	
 	GoTo Shell.Input.Begin ;* キーループに戻る
 
+
+*---------------------
+* コマンドヘルプ表示
+*---------------------
+COMMAND.HELP:
+	
+	!! 候補なし
+	dispType = ""
+
+	!! TODO ヘルプファイルがあればヘルプ表示する
+$IFNDEF U2__UNIVERSE
+	@ID = Field(Trim(cmdline),' ',1)
+	Read @RECORD From VOC,@ID Then
+		!! Verb決定済み
+		dispType = "Help"
+		lines = ""
+		type = @RECORD[1,1]
+		If type Matches "P":@VM:"S" Then
+			!! PH PQ S
+			maxCnt = DCount(@RECORD,@FM)
+			maxLen = Len(maxCnt)
+			For i = 2 To maxCnt
+ 					lines<-1> = "  ":Fmt(i,"R%":maxLen):": ":@RECORD<i>
+			Next i
+		End Else If type = "V" Then
+			!! Localカタログ
+			srcPath = Change(Convert("\","/",@RECORD<3>),".OUT/","/")
+			id = Last(srcPath,'/')
+			path = srcPath[1,Len(srcPath)-Len(id)]
+			rec = ""
+			OpenPath path Encoding "UTF8.A" To fp Then
+				Read rec From fp,id Then
+					maxCnt = DCount(rec,@FM)
+					bDoc = @FALSE
+					For i = 1 To maxCnt
+						line = rec<i>
+						If line Matches "...**...==..." Then ;** "** ==========" ~ "** ==========" まで
+							lines<-1> = "  ":line[Index(line,"**",1)+2,999] ;** 先頭の"**"を省く
+							If Not(bDoc) Then bDoc = @TRUE Else Exit
+						End Else
+							line = line[Index(line,"**",1)+2,999] ;** 先頭の"**"を省く
+							xpos = Index(line,"**",1)
+							If xpos Then
+								line = line[1,xpos-1] ;** 次の"**"移行はコメントとして省く
+							End
+							line = Change(line,CHAR(9),Space(DEFAULT.INDENT)) ;** Tab -> space
+							If bDoc Then lines<-1> = "  ":line
+						End
+					Next i
+				End
+				Close fp
+			End Else
+				Open "SW_HANYO" To fp Then
+					Read rec From fp,id:".TXT" Then
+						lines = rec
+					End
+					Close fp
+				End
+				IF lines="" And @RECORD<2> = "CA" Then
+					lines<2> = "  コマンドの詳細は以下を参照"
+					lines<3> = "  http://downloads.openqm.com/help/":DownCase(Convert('.','_',@ID)):".htm"
+				End
+			End
+		End
+		
+		!! 描画
+		GoSub CUR.TOP.OF.SCREEN
+		
+		crtBuff = ""
+		GoSub Draw.Cmdline
+		GoSub CRT.BUFF.FLUSH
+		
+		!! 候補リスト表示処理
+		choiceNo = 1
+		choiceList = lines
+		title = dispType
+		choiceOrgY = cmdlineRows + 1
+		GoSub InitChoiceList
+		
+		Loop
+			
+			!! 選択リストボックス処理共通
+			GoSub ProcChoiceList
+			
+			!! キー入力待ち
+			GoSub GetKey
+			Begin Case
+				Case actNo = A.CANCEL ;** 抜ける
+					!! 選択を非表示にして画面を残す
+					choiceActive = @False
+					GoSub ProcChoiceList
+					Exit
+				Case actNo = A.NEWLINE ;** 決定
+				Case actNo = A.TAB ;** モード切替
+					candidateMode = "FLATREC"
+					Crt @(winX,0):
+					GoTo TAB.HOKAN
+			End Case
+			
+		Repeat
+		Crt @(winX,0):
+		
+	End
+$ENDIF
+
+Return
+
 *---------------------
 * TAB補完 Action
 *---------------------
@@ -1201,8 +1311,8 @@ TAB.HOKAN:
 	
 $IFNDEF U2__UNIVERSE
 	!! OSディレクトリ補完
-	path = Convert('\','/',nowWord)
-	If (Count(path,'/') AND Count(path,":")=0) Or nowWord[1,5] = "PATH:" Or Convert('"','',path)[1,2] Matches "1A:" Then
+	path = Convert('\"','/',nowWord)
+	If (Count(path,'/') AND Count(path,":")=0) Or nowWord[1,5] = "PATH:" Or path[1,2] Matches "1A:" Then
 		If path[1,5] = "PATH:" Then
 			path = path[6,99]
 			nowWord = nowWord[6,99]
@@ -1214,7 +1324,7 @@ $IFNDEF U2__UNIVERSE
 		If dirPath = "" Then dirPath = "./"
 		GoSub GetDirList
 		
-		If list Then
+		If list#"" Then
 			slist = ""
 			slistU = ""
 			dlist = ""
@@ -1232,14 +1342,16 @@ $IFNDEF U2__UNIVERSE
 				End
 			Next line
 			
-			nowWord = nowWord[Len(parent)+1,99]
+			nowWord = path[Len(parent)+1,99]
 			GoSub Setting.WordInfo2
-			
 			GoSub Prev.Match.Filter
-			candidateMode = ""
-			dispType = "OS Path"
-			GoTo Complate.Common
+			If slist#"" Then
+				candidateMode = ""
+				dispType = "OS Path"
+				GoTo Complate.Common
+			End
 		End
+		Return
 	End
 $ENDIF
 
@@ -1638,184 +1750,99 @@ DispCandidate.Common:
 	GoSub Draw.Cmdline
 	GoSub CRT.BUFF.FLUSH
 
-	dispRowNum = @CRTHIGH - cmdlineRows - 2
-	
-	IF candidateMode = "HELP" THEN
-	
-		!! 候補なし
-		dispType = ""
-
-		!! TODO ヘルプファイルがあればヘルプ表示する
+	!! 候補リスト表示処理
+	choiceNo = 1
+	col1 = Maximum(LenSDP(slist))
+	slist.cnt = DCount(slist,@FM)
+	choiceList = ""
+	For i=1 To slist.cnt
+		choiceList<-1> = FMTDP(slist<i>,col1+2:"T"):dlist<i>:@VM:slist<i>
+	Next i
+	title = dispType
+	choiceOrgY = cmdlineRows + 1
+	GoSub InitChoiceList
+	Loop
 		
-$IFNDEF U2__UNIVERSE
-		@ID = Field(Trim(cmdline),' ',1)
-		Read @RECORD From VOC,@ID Then
-			!! Verb決定済み
-			dispType = "Help"
-			lines = ""
-			type = @RECORD[1,1]
-			If type Matches "P":@VM:"S" Then
-				!! PH PQ S
-				maxCnt = DCount(@RECORD,@FM)
-				maxLen = Len(maxCnt)
-				For i = 2 To maxCnt
- 					lines<-1> = "  ":Fmt(i,"R%":maxLen):": ":@RECORD<i>
-				Next i
-			End Else If type = "V" Then
-				!! Localカタログ
-				srcPath = Change(Convert("\","/",@RECORD<3>),".OUT/","/")
-				id = Last(srcPath,'/')
-				path = srcPath[1,Len(srcPath)-Len(id)]
-				rec = ""
-				OpenPath path Encoding "UTF8.A" To fp Then
-					Read rec From fp,id Then
-						maxCnt = DCount(rec,@FM)
-						bDoc = @FALSE
-						For i = 1 To maxCnt
-							line = rec<i>
-							If line Matches "...**...==..." Then ;** "** ==========" ~ "** ==========" まで
-								lines<-1> = "  ":line[Index(line,"**",1)+2,999] ;** 先頭の"**"を省く
-								If Not(bDoc) Then bDoc = @TRUE Else Exit
-							End Else
-								line = line[Index(line,"**",1)+2,999] ;** 先頭の"**"を省く
-								xpos = Index(line,"**",1)
-								If xpos Then
-									line = line[1,xpos-1] ;** 次の"**"移行はコメントとして省く
-								End
-								line = Change(line,CHAR(9),Space(DEFAULT.INDENT)) ;** Tab -> space
-								If bDoc Then lines<-1> = "  ":line
-							End
-						Next i
-					End
-					Close fp
-				End Else
-					Open "SW_HANYO" To fp Then
-						Read rec From fp,id:".TXT" Then
-							lines = rec
-						End
-						Close fp
-					End
-					IF lines="" And @RECORD<2> = "CA" Then
-						lines<2> = "  コマンドの詳細は以下を参照"
-						lines<3> = "  http://downloads.openqm.com/help/":DownCase(Convert('.','_',@ID)):".htm"
-					End
-				End
-			End
-			
-			!! 候補リスト表示処理
-			choiceNo = 1
-			choiceList = lines
-			title = dispType
-			choiceOrgY = cmdlineRows + 1
-			GoSub InitChoiceList
-			Loop
-				
-				!! 選択リストボックス処理共通
+		!! 選択リストボックス処理共通
+		GoSub ProcChoiceList
+		
+		!! キー入力待ち
+		GoSub GetKey
+		Begin Case
+			Case actNo = A.CANCEL ;** 抜ける
+				!! 選択を非表示にして画面を残す
+				choiceActive = @False
 				GoSub ProcChoiceList
-				
-				!! キー入力待ち
-				GoSub GetKey
-				Begin Case
-					Case actNo = A.CANCEL ;** 抜ける
-						!! 選択を非表示にして画面を残す
-						choiceActive = @False
-						GoSub ProcChoiceList
-						Exit
-					Case actNo = A.NEWLINE ;** 決定
-					Case actNo = A.TAB ;** モード切替
-						candidateMode = "FLATREC"
-						Crt @(winX,0):
-						GoTo TAB.HOKAN
-				End Case
-				
-			Repeat
-			Crt @(winX,0):
-			
-		End
-$ENDIF
-	End Else
-		!! 候補リスト表示処理
-		choiceNo = 1
-		col1 = Maximum(LenSDP(slist))
-		slist.cnt = DCount(slist,@FM)
-		choiceList = ""
-		For i=1 To slist.cnt
-			choiceList<-1> = FMTDP(slist<i>,col1+2:"T"):dlist<i>:@VM:slist<i>
-		Next i
-		title = dispType
-		choiceOrgY = cmdlineRows + 1
-		GoSub InitChoiceList
-		Loop
-			
-			!! 選択リストボックス処理共通
-			GoSub ProcChoiceList
-			
-			!! キー入力待ち
-			GoSub GetKey
-			Begin Case
-				Case actNo = A.CANCEL ;** 抜ける
-					!! 選択を非表示にして画面を残す
+				Crt @(winX,0):
+				GoTo Shell.KeyLoop.Start
+			Case actNo = A.NEWLINE ;** 決定
+				slist = choiceSelection<1,2>
+				GoSub AUTO.COMPLATE
+				IF C = CTRL.J THEN ;** Ctrl+Enterで連続選択
+					fullWord.st = X
+					fullWord.Len = 0
+					crtBuff = ""
+					Crt @(winX,0):
+					GoSub Draw.Cmdline
+					GoSub CRT.BUFF.FLUSH
+				END ELSE
 					choiceActive = @False
 					GoSub ProcChoiceList
-					Crt @(winX,0):
-					GoTo Shell.KeyLoop.Start
-				Case actNo = A.NEWLINE ;** 決定
-					slist = choiceSelection<1,2>
-					GoSub AUTO.COMPLATE
-					IF C = CTRL.J THEN ;** Ctrl+Enterで連続選択
-						If fullWord#nowWord Then
-							BufInfo<BI.BLOCKSTART, 1> = Y
-							BufInfo<BI.BLOCKSTART, 2> = X
-							BufInfo<BI.BLOCKEND, 1> = Y
-							BufInfo<BI.BLOCKEND, 2> = X
-							InsBuffer = fullWord
-							GoSub InsertLines
-						End
-						crtBuff = ""
-						Crt @(winX,0):
-						GoSub Draw.Cmdline
-						GoSub CRT.BUFF.FLUSH
-					END ELSE
-						choiceActive = @False
-						GoSub ProcChoiceList
-						Exit
-					END
-				Case actNo = A.TAB ;** モード切替
-					If candidateMode = "FLATREC" Then
-						candidateMode = "FIELD"
-					End Else If candidateMode = "FIELD" Then
-						candidateMode = "FILE"
-					End Else If candidateMode = "FILE" Then
-						candidateMode = "VOC"
-					End Else If candidateMode = "VOC" Then
-						candidateMode = "FLATREC"
-					End
-					Crt @(winX,0):
-					GoTo TAB.HOKAN
-			End Case
-			
-		Repeat
-		Crt @(winX,0):
-	End
+					Exit
+				END
+			Case actNo = A.TAB ;** モード切替
+				If candidateMode = "FLATREC" Then
+					candidateMode = "FIELD"
+				End Else If candidateMode = "FIELD" Then
+					candidateMode = "FILE"
+				End Else If candidateMode = "FILE" Then
+					candidateMode = "VOC"
+				End Else If candidateMode = "VOC" Then
+					candidateMode = "FLATREC"
+				End
+				Crt @(winX,0):
+				GoTo TAB.HOKAN
+		End Case
+		
+	Repeat
+	Crt @(winX,0):
 	
 Return
 
 Setting.WordInfo:
 	fullLine = Convert(',',' ',cmdline)
+	words = ""
 	If actNo = A.INSCHAR And C = Char(32) Then
-		!! SPが入力された
-		nowLine = fullLine[1,curPos-2]          ;** カーソルまでのコマンドライン
-		nowWordPos = DCount(nowLine, ' ')       ;** カーソル上の単語位置
-		nowWord = nowLine[' ',nowWordPos,1]:" " ;** カーソル上の単語（カーソル位置まで）
+		nowLine = fullLine[1,curPos-2]
 	End Else
-		nowLine = fullLine[1,curPos-1]          ;** カーソルまでのコマンドライン
-		nowWordPos = DCount(nowLine, ' ')       ;** カーソル上の単語位置
-		nowWord = nowLine[' ',nowWordPos,1]     ;** カーソル上の単語（カーソル位置まで）
+		nowLine = fullLine[1,curPos-1]		
+	End
+	a = nowLine
+	b = fullLine
+	Loop
+		epos = If a[1,1]='"' Then Index(a,'"',2) Else Index(a,' ')-1
+		If epos<=0 or a[epos+1,1]="" Then
+			nowWord = a[1,9999]
+			epos = If b[1,1]='"' Then Index(b,'"',2) Else Index(b,' ')-1
+			words<-1> = If epos<=0 Then b[1,9999] Else b[1,epos]
+			Exit ;** 最後
+		End
+		words<-1> = a[1,epos]
+		a = TRIMF(a[epos+2,9999])
+		b = TRIMF(b[epos+2,9999])
+	Repeat
+	
+	nowWordPos = DCount(words,@FM)
+	fullWord = words<nowWordPos>
+	fullWord.st = X - Len(nowWord)
+	fullWord.Len = Len(fullWord)
+	fullWord = nowWord
+	If actNo = A.INSCHAR And C = Char(32) Then
+		nowWord := " "
 	End
 Setting.WordInfo2:
 	nowWordU = UpCase(nowWord)             ;** カーソル上の単語大文字（カーソル位置まで）
 	nowWord.len = Len(nowWord)             ;** カーソル上の単語長（カーソル位置まで）
-	fullWord = fullLine[' ',nowWordPos,1]  ;** カーソル上のフル単語
 Return
 
 ExecCmd:
@@ -2582,15 +2609,24 @@ AUTO.COMPLATE:
 	
 	!! 単語置換
 	BufInfo<BI.BLOCKSTART, 1> = Y
-	BufInfo<BI.BLOCKSTART, 2> = X - Len(fullWord)
+	BufInfo<BI.BLOCKSTART, 2> = fullWord.st
 	BufInfo<BI.BLOCKEND, 1> = Y
-	BufInfo<BI.BLOCKEND, 2> = X
-	InsBuffer = fullWord[1,Len(fullWord)-Len(nowWord)]:commonWord
-	If Index(Trim(InsBuffer)," ") Then
-		If InsBuffer[1]=" " Then
-			InsBuffer = DQuote(InsBuffer[1,Len(InsBuffer)-1]):" "
+	BufInfo<BI.BLOCKEND, 2> = fullWord.st +  fullWord.Len
+	If fullWord[1,1]='"' Then
+		a = Convert('"','',fullWord)
+		If commonWord[1]=" " Then
+			InsBuffer = DQuote(a[1,Len(a)-Len(nowWord)]:commonWord[1,Len(commonWord)-1]):" "
 		End Else
-			InsBuffer = DQuote(InsBuffer)
+			InsBuffer = DQuote(a[1,Len(a)-Len(nowWord)]:commonWord)
+		End
+	End Else
+		InsBuffer = fullWord[1,Len(fullWord)-Len(nowWord)]:commonWord
+		If Index(Trim(InsBuffer)," ") Then
+			If InsBuffer[1]=" " Then
+				InsBuffer = DQuote(InsBuffer[1,Len(InsBuffer)-1]):" "
+			End Else
+				InsBuffer = DQuote(InsBuffer)
+			End
 		End
 	End
 	GoSub InsertLines
@@ -9326,7 +9362,7 @@ $IFNDEF U2__UNIVERSE
 	
 	batch = ""
 	If OS.GATES Then
-		d = Convert("/","\",dirPath)
+		d = DQuote(Convert('/"','\',dirPath))
 		batch<-1> = "chcp 65001"
 		batch<-1> = "dir /b /a:d ":d:" > ":TEMP.PATH.OUT
 		batch<-1> = "echo : >> ":TEMP.PATH.OUT
