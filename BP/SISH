@@ -29,7 +29,8 @@ PROGRAM SISH
 **    MIT License
 **
 **========================================================================================
-Equ SISH.VERSION To "[ SISH v0.33.2 ]"
+$MODE DEBUG.EQUATES
+Equ SISH.VERSION To "[ SISH v0.34.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -253,7 +254,7 @@ Shell.Main:
 	Equ bTimer To ShInfo(5) ;** 時間計測機能 ON/OFF
 	Equ theme To ShInfo(6) ;** テーマNo
 	Equ HAS.PASTE.EXE To ShInfo(7) ;** paste.exe存在するか
-	Equ bChain To ShInfo(8) ;** Chainから来た
+	Equ bChain To ShInfo(8) ;** 未使用
 	Equ bAutoTermSize To ShInfo(9) ;** 端末サイズ自動設定機能 ON/OFF
 	Equ clipboard To ShInfo(10) ;** クリップボード
 	Equ bOverlay To ShInfo(11) ;** Insert/Overlay Mode
@@ -266,6 +267,9 @@ Shell.Main:
 	Equ prevFileName To ShInfo(18) ;** 直前のコマンドのファイル名
 	Equ bAutoCommand To ShInfo(19) ;** コマンドを実行してエディタに戻る
 	Equ bAutoEditor To ShInfo(20) ;** 自動でエディタ起動
+	Equ FileName To ShInfo(21) ;** 直前のエディタファイル名
+	Equ ItemName To ShInfo(22) ;** 直前のエディタアイテム名
+	Equ PathName To ShInfo(23) ;** 直前のエディタパス名
 
 *--------------------------------------------------------------------------
 *   Full Screen Editor System
@@ -388,6 +392,9 @@ Shell.Main:
 		cmdStackList.DispCnt = "2":@FM:"19" ;** コマンドスタックリスト表示のデフォルト値
 		prevListStackCmd = ".L" ;** 直前のstack一覧コマンド
 		prevFileName = "" ;** 直前のコマンドのファイル名
+		FileName = ""
+		ItemName = ""
+		PathName = ""
 		
 		Crt SISH.VERSION
 		
@@ -465,13 +472,12 @@ $ENDIF
 	inputBox = ""         ;** １行入力用バッファ
 	crtBuff = ""
 	moveChar = "" ;** Move To Char モード
+	filter = ""
 	
 	EQU REDRAW.ALL To -1
 	Redraw = 0
 
 	!! Editor用変数の初期化
-	ItemList = ""
-	FileName = ""
 	FldInfo = ""
 	DiveValuePos = ""
 	ParentBufNo = ""
@@ -479,7 +485,6 @@ $ENDIF
 
 Shell.Input.Begin:
 
-	bChain = @FALSE
 	bFirstCurTop = @TRUE ;** カーソルを画面の最上部に初めての移動か
 
 	** Ctrl+C のIntruputを @28(Ctrl+\ or Break) に変更
@@ -588,14 +593,9 @@ $ENDIF
 
 	cmdline = ""
 	CurBuf = CMD_BUF
-	
-	Y = 1
-	X = 1
-	Top = 1
-	XOffSet = 0
-	Lines = If Rec = "" Then 1 Else DCount(Rec,@fm)
-	EditCmdStack = "SAVED_POINT"
-	EditCmdPos = 1
+
+	GoSub InitBuf
+
 	crtBuff = ""
 	C = "" ;** 入力文字
 	nowC = ""
@@ -658,14 +658,25 @@ Shell.KeyLoop.Bef.GetKey:
 				GoSub ACTION.CMDSTACK.NEXT
 		** 文字入力系  
 			Case actNo = A.TAB
-				candidateMode = "FLATREC"
-				GoSub TAB.HOKAN
+				If bIncSearch Then
+					GoSub CmdHist.Candidate
+				End Else
+					candidateMode = "FLATREC"
+					filter = ""
+					GoSub TAB.HOKAN
+				End
 				
 			Case actNo = A.HELP
 				GoSub COMMAND.HELP
 				
 			Case C = CTRL.T
 				GoSub ACTION.INPUT.PREV.FILENAME
+				
+			Case C = CTRL.N
+				GoSub ACTION.INPUT.PREV.EDITITEM
+				
+			Case C = CTRL.P
+				GoSub ACTION.INPUT.PREV.EDITPATH
 				
 			Case C = CTRL.R
 				!! コマンド履歴逆順インクリメンタルサーチ
@@ -1268,6 +1279,7 @@ $IFNDEF U2__UNIVERSE
 		choiceList = lines
 		title = dispType
 		choiceOrgY = cmdlineRows + 1
+		filter = ""
 		GoSub InitChoiceList
 		
 		Loop
@@ -1610,6 +1622,9 @@ Complate.Common:
 				End
 			End Else
 				If prevC = CHAR(9) Then
+					If nowWord#commonWord Then
+						GoSub Setting.WordInfo
+					End
 					
 					* 状態別候補表示処理
 					Begin Case
@@ -1723,6 +1738,56 @@ Marge.SlistAll:
 	Repeat
 Return
 
+CmdHist.Candidate:
+	
+	!! 描画
+	GoSub CUR.TOP.OF.SCREEN
+	
+	crtBuff = ""
+	GoSub Draw.Cmdline
+	GoSub CRT.BUFF.FLUSH
+
+	!! 候補リスト表示処理
+	choiceList = ""
+	cmdStack.len = DCount(cmdStack,@FM)
+	For i = cmdStack.len To 2 Step -1
+		choiceList<-1> = Fmt((i-1),Len(cmdStack.len):"R"):"  ":cmdStack<i>:@VM:i
+	Next i
+	choiceNo = cmdStack.len - cmdStackPos
+	filter = iSearchText
+	title = "Cmd Hist"
+	choiceOrgY = cmdlineRows + 1
+	GoSub InitChoiceList
+	Loop
+		
+		!! 選択リストボックス処理共通
+		GoSub ProcChoiceList
+		
+		!! キー入力待ち
+		GoSub GetKey
+		Begin Case
+			Case actNo = A.CANCEL ;** 抜ける
+				!! 選択を非表示にして画面を残す
+				bIncSearch = "" ;** 終了
+				iSearchText = ""
+				choiceActive = @False
+				GoSub ProcChoiceList
+				Exit
+			Case actNo = A.NEWLINE ;** 決定
+				bIncSearch = "" ;** 終了
+				iSearchText = ""
+				GoSub CUR.TOP.OF.SCREEN
+				Crt @(winX,0):
+				no = choiceSelection<1,2>-1
+				GoTo ACTION.CMDSTACK.GOTO.impl
+		End Case
+		
+	Repeat
+	Crt @(winX,0):
+	GoTo Shell.KeyLoop.Start
+	
+Return
+
 DispCandidate.Common:
 
 	GoSub Prev.Match.Filter	
@@ -1779,6 +1844,7 @@ DispCandidate.Common:
 				slist = choiceSelection<1,2>
 				GoSub AUTO.COMPLATE
 				IF C = CTRL.J THEN ;** Ctrl+Enterで連続選択
+					C = ""
 					fullWord.st = X
 					fullWord.Len = 0
 					crtBuff = ""
@@ -1786,6 +1852,11 @@ DispCandidate.Common:
 					GoSub Draw.Cmdline
 					GoSub CRT.BUFF.FLUSH
 				END ELSE
+					If bComprate And commonWord[1]#" " Then
+						Crt @(winX,0):
+						GoTo TAB.HOKAN ;** 続きあり
+					End
+					C = ""
 					choiceActive = @False
 					GoSub ProcChoiceList
 					Exit
@@ -2259,8 +2330,8 @@ GoTo Run.Command.Ending
 * コマンドスタックジャンプ Action
 *--------------------------------
 ACTION.CMDSTACK.GOTO:
-	
 	no = MatchField(UpCase(cmdline),"'.G'0N...",2)
+ACTION.CMDSTACK.GOTO.impl:
 	cmdline = ""
 	curPos = 1
 	If no <> "" And DCount(cmdStack,@FM) > no + 1 Then
@@ -2544,11 +2615,39 @@ CmdStack.Push:
 	Return
 
 *--------------------------------
-* 直前のファイル名を入力
+* 直前のファイル名を挿入
 *--------------------------------
 ACTION.INPUT.PREV.FILENAME:
 	If prevFileName><"" Then
 		InsBuffer = prevFileName
+		head = cmdline[1,curPos]
+		tail = cmdline[curPos+1,9999]
+		If head[1] >< " " Then InsBuffer = " ":InsBuffer ;** headの末端が空白でないなら空白を挿入
+		If tail[1,1] >< " " Then InsBuffer = InsBuffer:" " ;** tailの先頭が空白でないなら空白を挿入
+		GoSub InsertLines
+	End
+Return
+
+*--------------------------------
+* 直前の編集アイテム名を挿入
+*--------------------------------
+ACTION.INPUT.PREV.EDITITEM:
+	If FileName><"" Then
+		InsBuffer = FileName:" ":ItemName
+		head = cmdline[1,curPos]
+		tail = cmdline[curPos+1,9999]
+		If head[1] >< " " Then InsBuffer = " ":InsBuffer ;** headの末端が空白でないなら空白を挿入
+		If tail[1,1] >< " " Then InsBuffer = InsBuffer:" " ;** tailの先頭が空白でないなら空白を挿入
+		GoSub InsertLines
+	End
+Return
+
+*--------------------------------
+* 直前の編集アイテムのパスを挿入
+*--------------------------------
+ACTION.INPUT.PREV.EDITPATH:
+	If PathName><"" Then
+		InsBuffer = If Index(PathName," ") Then DQUOTE(PathName) Else PathName
 		head = cmdline[1,curPos]
 		tail = cmdline[curPos+1,9999]
 		If head[1] >< " " Then InsBuffer = " ":InsBuffer ;** headの末端が空白でないなら空白を挿入
@@ -2606,12 +2705,13 @@ AUTO.COMPLATE:
 	End
 
 	If nowWord = commonWord Then Return
-	
+
+
 	!! 単語置換
 	BufInfo<BI.BLOCKSTART, 1> = Y
 	BufInfo<BI.BLOCKSTART, 2> = fullWord.st
 	BufInfo<BI.BLOCKEND, 1> = Y
-	BufInfo<BI.BLOCKEND, 2> = fullWord.st +  fullWord.Len
+	BufInfo<BI.BLOCKEND, 2> = fullWord.st + fullWord.Len
 	If fullWord[1,1]='"' Then
 		a = Convert('"','',fullWord)
 		If commonWord[1]=" " Then
@@ -2620,7 +2720,12 @@ AUTO.COMPLATE:
 			InsBuffer = DQuote(a[1,Len(a)-Len(nowWord)]:commonWord)
 		End
 	End Else
-		InsBuffer = fullWord[1,Len(fullWord)-Len(nowWord)]:commonWord
+		If nowWord#"" And fullWord[1,Len(nowWord)]=nowWord Then
+			BufInfo<BI.BLOCKEND, 2> = fullWord.st + Len(nowWord)
+			InsBuffer = commonWord
+		End Else
+			InsBuffer = fullWord[1,fullWord.Len-Len(nowWord)]:commonWord
+		End
 		If Index(Trim(InsBuffer)," ") Then
 			If InsBuffer[1]=" " Then
 				InsBuffer = DQuote(InsBuffer[1,Len(InsBuffer)-1]):" "
@@ -3791,7 +3896,7 @@ InitChoiceList: ;** 選択リストボックス初期化
 		For i = 1 To choiceList.length
 			tmp<-1> = LenDP(choiceList<i,1>)
 		Next
-		winWidth = Maximum("20":@FM:tmp)
+		winWidth = Maximum("20":@FM:tmp) + 1
 		If winWidth > Width*2/3 Then winWidth = Int(Width*2/3)
 		winX = Width - winWidth
 		winTop = 0
@@ -3808,6 +3913,11 @@ InitChoiceList: ;** 選択リストボックス初期化
 		winWidth = Width - 1
 		winX = 1
 		winHeight = Depth - choiceOrgY + 1
+		crtBuff = @(0,choiceOrgY):BG.BASE2:@(-4)
+		For i = choiceOrgY To choiceOrgY+winHeight
+			crtBuff := @(0,i):" "
+		Next
+		Crt crtBuff:
 	End
 	
 	For i = 1 To choiceList.length
@@ -3818,14 +3928,33 @@ $ELSE
 $ENDIF
 	Next
 	
-	filter = ""
-	filterPrev = "@"
+	filterPrev = char(0)
 	choiceSelNo = choiceNo
 	choiceOutList.length = choiceList.length
 	C = ""
 	choiceParse = @False
 	choiceActive = @TRUE
 	
+	prevCurBuf = CurBuf
+	CurBuf = MAXWINDOWS + 1
+	
+	GoSub InitBuf
+	
+	!! フィルター初期値全選択置換
+	GoSub Act.SelAll
+	InsBuffer = filter
+	GoSub InsertLines
+
+	!! 選択範囲の描画
+	Line = filter
+	Row = 1
+	HI.OFF = FG.BASE03:BG.BASE2
+	GoSub ParseLine.Impl
+	PFilter = PLine
+	PFilter.X = If Len(Rec) >= X Then LenDP(Rec[X,HUGE]) Else ""
+	
+	CurBuf = prevCurBuf
+
 Return
 *-----------------------------------------------------------------------
 *  ProcChoiceList
@@ -3837,20 +3966,12 @@ Return
 *      filter - フィルタ
 *-----------------------------------------------------------------------
 ProcChoiceList:
-
+	
 	!! キーイベント共通
 	If C >< "" Then
 		Begin Case
 		
-		!! インクリメンタルサーチ
-			Case actNo = A.INSCHAR
-				filter := C
-			Case actNo = A.BACKSPACE
-				filter = filter[1,Len(filter)-1]
-			Case actNo = A.DELETE_BACKWORD
-				filter = ""
-				
-		!! リストの操作
+			!! リストの操作
 			Case actNo = A.UP
 				choiceNo -= 1
 			Case choiceOrgY=0 And actNo = A.SHIFT_TAB
@@ -3875,6 +3996,37 @@ ProcChoiceList:
 				choiceNo = 1
 			Case actNo = A.END
 				choiceNo = choiceOutList.length
+				
+			!! 共通アクション
+			Case 1
+				prevCurBuf = CurBuf
+				CurBuf = MAXWINDOWS + 1
+				
+				keepSelection = @False
+				GoSub Input.Actions
+				
+				** --------------------------
+				** 選択範囲調整
+				** --------------------------
+				If keepSelection Then
+					** 選択終了位置
+					If Not(BufInfo<BI.BLOCKEND>) Then BufInfo<BI.BLOCKEND> = Y:@VM:X
+				End Else
+					** 選択範囲が外れた
+					BufInfo<BI.BLOCKSTART> = ""
+					BufInfo<BI.BLOCKEND> = ""
+				End
+				filter = Rec
+
+				!! 選択範囲の描画
+				Line = filter
+				Row = 1
+				HI.OFF = FG.BASE03:BG.BASE2
+				GoSub ParseLine.Impl
+				PFilter = PLine
+				PFilter.X = If Len(Rec) >= X Then LenDP(Rec[X,HUGE]) Else ""
+				
+				CurBuf = prevCurBuf	
 		End Case
 		C = ""
 	End
@@ -3950,7 +4102,8 @@ ProcChoiceList:
 		winY = choiceOrgY
 	End
 	
-	crtBuff := SGR.ALL.OFF
+	HI.OFF = SGR.ALL.OFF
+	crtBuff := HI.OFF
 	listLen = choiceOutList.length - winTop
 	If listLen > winHeight Then listLen = winHeight
 	i = 1
@@ -4025,22 +4178,24 @@ ProcChoiceList:
 	Repeat
 	
 	!! フィルター入力欄表示
+	
 	If choiceOrgY=0 Then
-		crtBuff := @(winX,1):FG.BASE03:BG.BASE2:@(-4):filter
+		crtBuff := @(winX,1):FG.BASE03:BG.BASE2:PFilter:@(-4)
 	End Else
 		crtBuff := @(winX,winY)
 		If choiceActive Then crtBuff := FG.BLUE
-		crtBuff := BG.BASE2:@(-4)
+		crtBuff := BG.BASE2
 		If title#"" Then crtBuff := title
 		crtBuff := " ":Fmt("(":choiceOutList.length:")",Len(choiceList.length)+2:"L")
-		If choiceActive Then crtBuff := " :":FG.BASE03
-		crtBuff := filter
+		crtBuff := If choiceActive Then " :":FG.BASE03:PFilter Else filter
+		crtBuff := @(-4)
 	End
+	If PFilter.X#"" Then crtBuff := @(-9,PFilter.X) ;** 実際のカーソル位置に戻す
 	GoSub CRT.BUFF.FLUSH
 	
 	choiceSelNo = choiceOutList<choiceNo>
 	choiceSelection = choiceList<choiceSelNo>
-	
+
 Return
 
 *--------------------------------------------------------------------------
@@ -4807,6 +4962,9 @@ Return
 *   PLine [out]
 *--------------------------------------------------------------------------
 ParseLine:
+	HI.OFF = SGR.ALL.OFF ;** デフォルトのBG Coler
+
+ParseLine.Impl:
 	
 	** 選択領域がある
 	selection = ""
@@ -5159,7 +5317,6 @@ ParseLine2: ;** (Outline用、呼び出す前に必ず selection に値を入れ
 		selection<1> = iXOffSet
 	End
 
-	HI.OFF = SGR.ALL.OFF
 	PLine = ""
 	Old = ""
 	IX = 0
@@ -5357,7 +5514,7 @@ PrintLine:
 			crtBuff := FMTDP(DIRec<Row>,biInfoWide.dict:"L")
 		End
 	End
-	crtBuff := SGR.ALL.OFF ;* 行情報部の色指定解除
+	crtBuff := HI.OFF ;* 行情報部の色指定解除
 	!! TABの可視化
 	crtBuff := PLine:@(-4) ;** 内容の描画
 	Return
@@ -5376,6 +5533,8 @@ GetDAPos:
 * PrintStatus
 *--------------------------------------------------------------------------
 PrintStatus:
+	StLine.Y = PY
+PrintStatus.Impl:
 
 	If Redraw.StatusLine Then
 		
@@ -5403,13 +5562,13 @@ PrintStatus:
 		If ReadOnly Then SLine := " | R/Only"
 		SLine := " | ":BufInfo<BI.PARSETYPE>:" ":IndentType:":":STDTAB:" "
 		
-		crtBuff := @(0, PY):HI.STATUS.ON
+		crtBuff := @(0, StLine.Y):HI.STATUS.ON
 		crtBuff := FMTDP(fileSentence,"L#":@CRTWIDE-17-Len(SLine))
 		crtBuff := SLine:"| "
 		
 		Redraw.StatusLine = @FALSE
 	End Else
-		crtBuff := @(@CRTWIDE-15,PY): HI.STATUS.ON
+		crtBuff := @(@CRTWIDE-15,StLine.Y): HI.STATUS.ON
 	End
 
 	!! 文字コード情報
@@ -5437,10 +5596,10 @@ PrintStatus:
 	
 	!! ステータスメッセージ
 	If StatusMessage >< "" Then
-		crtBuff := @(0, PY+1):BG.RED:FG.BASE3:StatusMessage:SGR.ALL.OFF:@(-4)
+		crtBuff := @(0, StLine.Y+1):BG.RED:FG.BASE3:StatusMessage:SGR.ALL.OFF:@(-4)
 		StatusMessage = ""
 	End Else
-		crtBuff := @(0, PY+1):@(-4)
+		crtBuff := @(0, StLine.Y+1):@(-4)
 	End
 	Return
 
@@ -6105,6 +6264,15 @@ $ENDIF
 		BufInfo<BI.CAPTURE> = "Create At ":OConv(Date(),"D-YMD[,2]"):" ":OConv(Time(),"MTS")
 	End
 
+	GoSub InitBuf
+	StartRec = Rec
+	
+	Return
+	
+*-----------------------------------------------------------------------
+*  InitBuf
+*-----------------------------------------------------------------------
+InitBuf:
 	Y = 1
 	X = 1
 	DP_X = 1
@@ -6114,9 +6282,8 @@ $ENDIF
 	Lines = If Rec = "" Then 1 Else DCount(Rec,@fm)
 	EditCmdStack = "SAVED_POINT"
 	EditCmdPos = 1
-	StartRec = Rec
-	
 	Return
+	
 *-----------------------------------------------------------------------
 *  ChangeBuf
 *-----------------------------------------------------------------------
@@ -6128,9 +6295,11 @@ ChangeBuf:
 	End
 	CurBuf = Found
 	
+	FileName = BufInfo<BI.FILE>
+	ItemName = BufInfo<BI.ITEM>
+	PathName = BufInfo<BI.PATHNAME>
+
 	If Not(IsNew) And @PATH = BufInfo<BI.ACCOUNT> Then
-		FileName = BufInfo<BI.FILE>
-		ItemName = BufInfo<BI.ITEM>
 
 		GoSub Act.Reload
 		
@@ -6290,20 +6459,20 @@ InputBox:
 
 	prevCurBuf = CurBuf
 	CurBuf = MAXWINDOWS + 1
-		
-	Rec = inputBox
-	Y = 1
-	X = Len(Rec)+1
-	Top = 1
-	XOffSet = 1
-	Lines = If Rec = "" Then 1 Else DCount(Rec,@fm)
-	EditCmdStack = "SAVED_POINT"
-	EditCmdPos = 1
-	crtBuff = ""
+	
+	GoSub InitBuf
+	
+	!! 全選択置換
+	GoSub Act.SelAll
+	InsBuffer = inputBox
+	GoSub InsertLines
+
 	If inputBox >< "" Then
 		BufInfo<BI.BLOCKSTART> = Y:@VM:1
 		BufInfo<BI.BLOCKEND> = Y:@VM:X
 	End
+	
+	crtBuff = ""
 
 	!! カーソル位置を保存
 	Crt ESC:"[s":
@@ -6398,11 +6567,11 @@ Draw.InputBox:
 	!! 選択範囲の描画
 	Line = Rec
 	Row = 1
-	GoSub ParseLine
+	GoSub ParseLine.Impl
 	
 	!! 表示
 	crtBuff = ESC:"[u" ;** カーソル位置を復元
-	crtBuff := PLine:@(-4) ;** 文字列の描画
+	crtBuff := SGR.ALL.OFF:PLine:@(-4) ;** 文字列の描画
 	If Len(Rec) >= X Then crtBuff := @(-9,LenDP(Rec[X,HUGE])) ;** 実際のカーソル位置に戻す
 	 
 	** CRTフラッシュ処理
@@ -6635,7 +6804,7 @@ Act.NextWord:
 		!! 次の行へ
 		If Y < Lines Then Y += 1; X = 1
 	End Else
-		If Line[1,X] = Space(X) Then
+		If Line[1,X] = Space(X) And STDINDENT#0 Then
 			!! インデント部
 			
 			X = Int((X-1) / STDINDENT) * STDINDENT + STDINDENT + 1
@@ -6673,7 +6842,7 @@ Act.PrevWord:
 		If Y > 1 Then Y -= 1; X = Len(Rec<Y>)+1
 	End Else
 	
-		If Line[1,X-1] = Space(X-1) Then
+		If Line[1,X-1] = Space(X-1) And STDINDENT#0 Then
 			!! インデント部
 			
 			X = Int((X-1) / STDINDENT) * STDINDENT - STDINDENT + 1
@@ -7363,7 +7532,8 @@ Search.Core:
 			inputBox = Rec<Y>[startX, endX-startX]
 			If Convert(PUNCS:".":@fm:@vm:@svm,"",Rec<Y>[startX-1,1])="" Then inputBox = " ":inputBox
 		End
-		PromptLine = HI.SEARCH.ON:"Enter Search Text -> " ; GoSub PromptLine
+		HI.OFF = BG.BASE2
+		PromptLine = FG.YELLOW:BG.BASE2:"Enter Search Text :" ; GoSub PromptLine
 		GoSub InputBox
 		SearchString = inputBox
 		!! スペースで始まる場合は厳格モード
@@ -7496,11 +7666,13 @@ Search.Found:
 				
 				If firstFound Then
 					firstFound = @FALSE
-					PromptLine = HI.SEARCH.ON:"Enter Replacement -> "; GoSub PromptLine
+					HI.OFF = BG.BASE2
+					PromptLine = FG.YELLOW:BG.BASE2:"Enter Replacement :" ; GoSub PromptLine
 					inputBox = ""
 					GoSub InputBox
 					Replacement = inputBox
-					PromptLine = HI.SEARCH.ON:"(All or Verify) :"; GoSub PromptLine
+					HI.OFF = BG.BASE2
+					PromptLine = FG.YELLOW:BG.BASE2:"(All or Verify) :"; GoSub PromptLine
 					GoSub GetKey
 					Ok = TrimF(UpCase(C[1,1]))
 					If Ok = "A" Then
@@ -7516,7 +7688,8 @@ Search.Found:
 				If skipVerify Then
 					Ok = "Y"
 				End Else 
-					PromptLine = HI.SEARCH.ON:"Replace This Selection (Y/N/All) :"; GoSub PromptLine
+					HI.OFF = BG.BASE2
+					PromptLine = FG.YELLOW:BG.BASE2:"Replace This Selection (Y/N/All) :"; GoSub PromptLine
 					GoSub GetKey
 					Ok = UpCase(TrimF(C)[1,1])
 				End
@@ -7581,10 +7754,18 @@ Search.Found:
 Act.ShowOutline:
 	
 	blockStart = ""
+	blockEnd = ""
 	If BufInfo<BI.BLOCKSTART> Then
 		GoSub GetSelBlock
 	End
-	SWord = BufInfo<BI.HIWORD> ;** 検索ハイライトの単語
+	
+	If blockStart And blockStart<1> = blockEnd<1> Then
+		!! 単語選択なら選択単語を含む行を抽出する
+		a = blockStart<1>
+		SWord = Rec<a>[blockStart<2>,blockEnd<2>-blockStart<2>]
+	End Else
+		SWord = BufInfo<BI.HIWORD> ;** 検索ハイライトの単語
+	End
 	choiceList = "" ;** アウトライン出力対象
 	For I = 1 to Lines
 		Line = Convert(char(9)," ",Rec<I>) ;** インデントはSP1とする
@@ -7602,11 +7783,187 @@ Act.ShowOutline:
 			If ignoreCase Then
 				If Index(UpCase(Line),UpCase(SWord)) Then
 					choiceList<-1> = Line:@VM:I
+					Continue
 				End
 			End Else
 				Ix = Index(Line,SWord)
 				If Ix And Convert(PUNCS:".":@fm:@vm:@svm,"",Line[Ix-1,1])="" Then
 					choiceList<-1> = Line:@VM:I
+					Continue
+				End
+			End
+		End
+		
+		!! Label
+		word = Line[";",1,1][" ",1,1]["*",1,1]["!",1,1]
+		If word Matches "1n0n":@VM:"1A0X':'" Then
+			choiceList<-1> = Line:@VM:I
+		End
+
+		!! PROGRAM, SUBROUTINE, $INCLUDE
+		lists = ""
+		lists<-1> = "PROGRAM"
+		lists<-1> = "SUBROUTINE"
+		lists<-1> = "FUNCTION"
+		lists<-1> = "CLASS"
+		lists<-1> = "$INCLUDE"
+		Convert @FM To @VM In lists
+		a = CatS(lists,Reuse("..."))
+
+		!! 修飾子を削る
+		b = UpCase(Line)
+		b = Change(b,"LOCAL","")
+		b = Change(b,"PUBLIC","")
+		b = Change(b,"PRIVATE","")
+		b = Change(b,"SHARE","")
+		b = Trimf(b)
+		If b Matches a Then
+			choiceList<-1> = Line:@VM:I
+		End
+	Next
+
+	choiceOrgY = Int(Depth / 2) + 1
+	title = SBOLD:FG.BASE02:BG.YELLOW:" Outline"
+	tmpList = Fields(Convert(@VM,char(1),choiceList),char(1),2)
+	Locate Y In tmpList By "AR" Setting choiceNo Else choiceNo -= 1
+	
+	!! カーソルがちょうど検索ハイライト文字の上なら初期値に入れる
+	If SWord#"" Then
+		If blockStart And blockStart<1> = blockEnd<1> Then
+			filter = " ":SWord
+		End Else
+			!! 検索ハイライトの行を含める
+			Line = Rec<Y>
+			If ignoreCase Then
+				If Upcase(Line[X,Len(SWord)])=UpCase(SWord) Then
+					filter = SWord
+				End
+			End Else
+				If Line[X,Len(SWord)]=SWord Then
+					If Convert(PUNCS:".":@fm:@vm:@svm,"",Line[X-1,1])="" Then
+						filter = " ":SWord
+					End
+				End
+			End
+		End
+	End
+	
+	crtBuff = ""
+	StLine.Y = choiceOrgY-1
+	Redraw.StatusLine = @True
+	GoSub PrintStatus.Impl
+	GoSub CRT.BUFF.FLUSH
+	
+	!! 選択リストボックス初期化
+	GoSub InitChoiceList
+	choiceParse = @True
+	Stack.XOffSet = XOffSet
+	
+	title = FG.YELLOW:" Outline"
+	Loop
+		
+		prevChoiceNo = choiceNo
+		
+		!! 選択リストボックス処理共通
+		GoSub ProcChoiceList
+		
+		If choiceSelection#"" And prevChoiceNo#choiceNo Then
+			!! 選択が切り替わったらプレビュー表示
+			crtBuff = ESC:"[s" ;** カーソル位置の保存
+			Top = choiceSelection<1,2> - Int(choiceOrgY/2) + 1
+			If Top <= 0 Then Top = 1
+			For I = 0 To choiceOrgY-2
+				Row = Top+I
+				Line = Rec<Row>
+				GoSub ParseLine
+				GoSub PrintLine
+			Next
+			crtBuff := ESC:"[u" ;** カーソル位置の復元
+			GoSub CRT.BUFF.FLUSH
+		End
+		
+		!! キー入力待ち
+		GoSub GetKey
+		Begin Case
+			Case actNo = A.OUTLINE
+				GoSub ShowWindow
+				GoTo Act.ShowOutline2
+			
+			!! Cancel
+			Case actNo = A.CANCEL
+				CurBuf = prevCurBuf
+				actNo = 0
+				XOffSet = Stack.XOffSet
+				Exit
+			
+			!!決定
+			Case actNo = A.NEWLINE
+				CurBuf = prevCurBuf
+				If choiceSelection Then
+					GoSub StackJumpHistory
+					Y = choiceSelection<1,2>
+					Line = Rec<Y>
+					If Len(Line) > X Then X = 1
+					!! ハイライト単語があればそのX位置にする
+					If ignoreCase Then
+						Ix = Index(UpCase(Line),UpCase(Word))
+						If Ix Then X = Ix
+					End Else
+						Ix = Index(Line,Word)
+						If Ix And Convert(PUNCS:".":@fm:@vm:@svm,"",Line[Ix-1,1])="" Then X = Ix
+					End
+					keepDP_X = X
+					XOffSet = 1
+				End
+				Exit
+		End Case
+		
+	Repeat
+
+	prevY = "" ;** Yスクロール位置強制調整
+	Redraw = REDRAW.ALL
+	
+	Return
+
+Act.ShowOutline2:
+	
+	blockStart = ""
+	blockEnd = ""
+	If BufInfo<BI.BLOCKSTART> Then
+		GoSub GetSelBlock
+	End
+	
+	If blockStart And blockStart<1> = blockEnd<1> Then
+		!! 単語選択なら選択単語を含む行を抽出する
+		a = blockStart<1>
+		SWord = Rec<a>[blockStart<2>,blockEnd<2>-blockStart<2>]
+	End Else
+		SWord = BufInfo<BI.HIWORD> ;** 検索ハイライトの単語
+	End
+	choiceList = "" ;** アウトライン出力対象
+	For I = 1 to Lines
+		Line = Convert(char(9)," ",Rec<I>) ;** インデントはSP1とする
+		
+		If blockStart Then
+			!! 選択範囲内の行を含める
+			If blockStart<1> <= I And I <= blockEnd<1> Then
+				choiceList<-1> = Line:@VM:I
+				Continue
+			End
+		End
+		
+		If SWord#"" Then
+			!! 検索ハイライトの行を含める
+			If ignoreCase Then
+				If Index(UpCase(Line),UpCase(SWord)) Then
+					choiceList<-1> = Line:@VM:I
+					Continue
+				End
+			End Else
+				Ix = Index(Line,SWord)
+				If Ix And Convert(PUNCS:".":@fm:@vm:@svm,"",Line[Ix-1,1])="" Then
+					choiceList<-1> = Line:@VM:I
+					Continue
 				End
 			End
 		End
@@ -7644,27 +8001,31 @@ Act.ShowOutline:
 	tmpList = Fields(Convert(@VM,char(1),choiceList),char(1),2)
 	Locate Y In tmpList By "AR" Setting choiceNo Else choiceNo -= 1
 	
-	!! 選択リストボックス初期化
-	GoSub InitChoiceList
-	choiceParse = @True
-	Stack.XOffSet = XOffSet
-	
 	!! カーソルがちょうど検索ハイライト文字の上なら初期値に入れる
 	If SWord#"" Then
-		!! 検索ハイライトの行を含める
-		Line = Rec<Y>
-		If ignoreCase Then
-			If Upcase(Line[X,Len(SWord)])=UpCase(SWord) Then
-				filter = SWord
-			End
+		If blockStart And blockStart<1> = blockEnd<1> Then
+			filter = " ":SWord
 		End Else
-			If Line[X,Len(SWord)]=SWord Then
-				If Convert(PUNCS:".":@fm:@vm:@svm,"",Line[X-1,1])="" Then
-					filter = " ":SWord
+			!! 検索ハイライトの行を含める
+			Line = Rec<Y>
+			If ignoreCase Then
+				If Upcase(Line[X,Len(SWord)])=UpCase(SWord) Then
+					filter = SWord
+				End
+			End Else
+				If Line[X,Len(SWord)]=SWord Then
+					If Convert(PUNCS:".":@fm:@vm:@svm,"",Line[X-1,1])="" Then
+						filter = " ":SWord
+					End
 				End
 			End
 		End
 	End
+	
+	!! 選択リストボックス初期化
+	GoSub InitChoiceList
+	choiceParse = @True
+	Stack.XOffSet = XOffSet
 	
 	Loop
 		
@@ -7674,13 +8035,19 @@ Act.ShowOutline:
 		!! キー入力待ち
 		GoSub GetKey
 		Begin Case
+			Case actNo = A.OUTLINE
+				GoSub ShowWindow
+				GoTo Act.ShowOutline
+			
 			!! Cancel
-			Case actNo = A.CANCEL Or actNo = A.OUTLINE
+			Case actNo = A.CANCEL
+				CurBuf = prevCurBuf
 				actNo = 0
 				XOffSet = Stack.XOffSet
 				Exit
 			!!決定
 			Case actNo = A.NEWLINE
+				CurBuf = prevCurBuf
 				If choiceSelection Then
 					GoSub StackJumpHistory
 					Y = choiceSelection<1,2>
@@ -7808,9 +8175,9 @@ Core.ShowWordHokan:
 	choiceOrgY = 0
 	choiceNo = 1
 	title = SBOLD:FG.BASE02:BG.YELLOW:" Words"
+	filter = If currentWord#"" Then " ":currentWord Else ""
 	GoSub InitChoiceList
 	
-	filter = If currentWord#"" Then " ":currentWord Else ""
 	
 	Loop
 		
@@ -7822,6 +8189,7 @@ Core.ShowWordHokan:
 		Begin Case
 			!! Cancel
 			Case actNo = A.CANCEL Or actNo = A.WORD_HOKAN
+				InsBuffer = ""
 				actNo = 0
 				Exit
 			!! 決定
@@ -7945,6 +8313,7 @@ Get.WordList:
 
 Act.GoLine: 
 	Redraw = REDRAW.ALL
+	HI.OFF = BG.BASE2
 	prevY = Y ;** GoTo前のY位置
 	If TgtFld Then
 		!! フィールド指定モード
@@ -7953,7 +8322,7 @@ Act.GoLine:
 			!! バリュー固定モード
 			If fldCnt = 1 Then
 				!! フィールド数が１つ
-				PromptLine = BG.GREEN:FG.BASE2:"SubValue No ->"
+				PromptLine = FG.GREEN:BG.BASE2:"SubValue No :"
 				GoSub PromptLine
 				inputBox = ""
 				GoSub InputBox
@@ -7961,7 +8330,7 @@ Act.GoLine:
 				vno = Ok<1>
 			End Else
 				!! フィールド数が複数
-				PromptLine = BG.GREEN:FG.BASE2:"Value No : fno,svno ->"
+				PromptLine = FG.GREEN:BG.BASE2:"Value No (fno,svno) :"
 				inputBox = ""
 				GoSub InputBox
 				Ok = TrimS(Convert(",",@FM,inputBox))
@@ -7974,7 +8343,7 @@ Act.GoLine:
 			If fldCnt = 1 Then
 				!! フィールド数が１つ
 				fno = TgtFld<1,1>
-				PromptLine = BG.GREEN:FG.BASE2:"Value No : vno[,svno] -> "
+				PromptLine = FG.GREEN:BG.BASE2:"Value No (vno[,svno]) :"
 				GoSub PromptLine
 				inputBox = ""
 				GoSub InputBox
@@ -7983,7 +8352,7 @@ Act.GoLine:
 				vno = Ok<1>
 				svno = Ok<2>
 			End Else
-				PromptLine = BG.GREEN:FG.BASE2:"Value No : fno,vno[,svno] -> "
+				PromptLine = FG.GREEN:BG.BASE2:"Value No (fno,vno[,svno]) :"
 				inputBox = ""
 				GoSub InputBox
 				Ok = TrimS(Convert(",",@FM,inputBox))
@@ -8014,7 +8383,7 @@ Act.GoLine:
 		End
 		
 	End Else
-		PromptLine = BG.GREEN:FG.BASE2:"Line No : fno[,vno[,svno]] -> "
+		PromptLine = FG.GREEN:BG.BASE2:"Line No (fno[,vno[,svno]]) :"
 		GoSub PromptLine
 		inputBox = ""
 		GoSub InputBox
@@ -8466,6 +8835,7 @@ Act.ShowBuffList:
 	choiceNo = If DCount(choiceList,@FM) < 2 Then 1 Else 2 ;**   !! 初期値は１つ前のものにする
 	
 	!! 選択リストボックス初期化
+	filter = ""
 	GoSub InitChoiceList
 	
 	Loop
@@ -9194,6 +9564,7 @@ Act.SwitchTheme:
 *カーソル位置から単語の先頭までを削除する
 *-----------------------------------------------------------------------------
 Act.DelBackWord:
+
 	GoSub Act.SelPrevWord
 	
 	editCmd = ""
@@ -9206,22 +9577,27 @@ Act.DelBackWord:
 	GoSub StackEditCmd
 	
 	keepSelection = @FALSE
-
+	
 	Return
 
 Act.DelNextWord:
-	GoSub Act.SelNextWord
 	
-	editCmd = ""
-	editCmd<1> = BufInfo<BI.BLOCKSTART, 1>
-	editCmd<2> = BufInfo<BI.BLOCKSTART, 2>
-	editCmd<3> = Y
-	editCmd<4> = X
-	editCmd<5> = ""
-	editCmd<6> = "1" ;** 選択範囲がX=1の時はカーソルX位置をキープする
-	GoSub StackEditCmd
-	
-	keepSelection = @FALSE
+	!! 単語選択
+	GoSub GetWord
+	If BufInfo<BI.BLOCKSTART> Then
+		GoSub GetSelBlock
+		BufInfo<BI.BLOCKSTART,1> = blockStart<1>
+		BufInfo<BI.BLOCKSTART,2> = blockStart<2>
+		BufInfo<BI.BLOCKEND,1> = Y
+		BufInfo<BI.BLOCKEND,2> = EOW
+	End Else
+		BufInfo<BI.BLOCKSTART,1> = Y
+		BufInfo<BI.BLOCKSTART,2> = X
+		BufInfo<BI.BLOCKEND,1> = Y
+		BufInfo<BI.BLOCKEND,2> = EOW
+	End
+
+	GoSub Act.DelCh
 	
   Return
 
@@ -9241,7 +9617,7 @@ Move.NextWord:
 				X += 1
 				ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 			Until ch = ""
-			Until Count("._$%@ =:<>()[]{}/*+-,'\":'"',ch)
+			Until Count("._$%@ =:;<>()[]{}/*+-,'\":'"',ch)
 			Until ch = UpCase(ch) And prev.ch # UpCase(prev.ch)
 				prev.ch = ch
 			Repeat
@@ -9251,7 +9627,7 @@ Move.NextWord:
 			X += 1
 			ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 		Until ch = ""
-		Until Count(" =:<>()[]{}/*+-,'\":'"',ch)
+		Until Count(" =:;<>()[]{}/*+-,'\":'"',ch)
 		Repeat
 	End Else
 		ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
@@ -9261,11 +9637,11 @@ Move.NextWord:
 	If Line[X,1] = "" Then Return
 	X += 1
 	If Line[X,1] = "" Then Return
-	prevKwd = Count("=:<>()[]{}/*+-,'\":'"',ch)
+	prevKwd = Count("=:;<>()[]{}/*+-,'\":'"',ch)
 	Loop
 		ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 		If ch = "" Then X-=1; Exit
-		kwd = Count("=:<>()[]{}/*+-,", ch)
+		kwd = Count("=:;<>()[]{}/*+-,", ch)
 		If prevKwd And kwd Else
 			If ch <> " " Then Exit
 		End
@@ -9308,7 +9684,7 @@ Move.PrevWord:
 		Until X = 0
 			ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 		Until ch = ""
-		Until Count("._$%@ =:<>()[]{}/*+-,'\":'"',ch)
+		Until Count("._$%@ =:;<>()[]{}/*+-,'\":'"',ch)
 			If ch = UpCase(ch) And prev.ch # UpCase(prev.ch) Then
 				X -= 1
 				Exit
