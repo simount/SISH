@@ -1,36 +1,27 @@
 PROGRAM SISH
 **========================================================================================
-**
 **  FUNCTION
-**
 **    SImount Shell (Beta)
-**    
 **    Operate like Unix Shell and modern Screen Editor
+**
+**    See. https://github.com/simount/SISH
 **
 **    Please read the "README.adoc" for more information
 **
-**  Support Platform
-**
-**    * OpenQM 3.2.x or later
-**    * UniVerse 11.2 or later
+**    Support Platform
+**      * OpenQM 3.2.x or later
+**      * UniVerse 11.2 or later
 **
 **  DATE
-**
 **    2018/04/06
-**  
 **  AUTHOR
-**    
 **    Kazuya Kosaku <kosaku@simount.com>
-**  
 **  LICENSE
-**  
 **    Copyright (C) 2017  SImount <info@simount.com>
-**    
 **    MIT License
-**
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.34.0 ]"
+Equ SISH.VERSION To "[ SISH v0.35.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -1023,9 +1014,23 @@ Run.Command:
 				If bTimer Then Print "時間計測ON" Else Print "時間計測OFF"
 				GoTo Run.Command.Ending
 			Case k = "E"
-				If Trim(cmdline) = ".E" Then GoTo Launch.Editor ;** 単純にエディタに切り替える
+				If UpCase(Trim(cmdline)) = ".E" Then GoTo Launch.Editor ;** 単純にエディタに切り替える
 				!! Verbをエディタに置換
-				cmdline = "READ.BUFFER":cmdline[3,9999]
+				If UpCase(Trim(cmdline)[1,3]) = ".EP" Then
+					!! Private VOC
+					OPEN "PVOC,":@USER TO PVOC Then
+						a = Trim(cmdline)[' ',2,9999]
+						cmdline = "READ.BUFFER PVOC,":@USER:" ":a
+					End
+				End Else
+					a = Trim(cmdline)[' ',2,9999]
+					Read rec From VOC,a Then
+						cmdline = "READ.BUFFER VOC ":a
+					End
+				End
+				If cmdline Matches "READ.BUFFER..." Else 
+					cmdline = "READ.BUFFER":cmdline[3,9999]
+				End
 				X += 9
 			Case k = "K"
 				!! KeySeq表示モード
@@ -2419,8 +2424,16 @@ ACTION.CMDSTACK.SAVE:
 	endNo   = MatchField(UpCase(cmd),"0N'-'0N...",3)
 	paName  = Trim(cmdline[' ',2,1])
 	
-	If startNo = "" Then startNo = cmdStackList.DispCnt<1> Else startNo += 1
-	If endNo = "" Then endNo = cmdStackList.DispCnt<2> + startNo Else endNo += 1
+	If startNo:endNo = "" Then
+		startNo = cmdStackList.DispCnt<1>
+		endNo = cmdStackList.DispCnt<2> + startNo
+	End Else If startNo#"" And endNo = "" Then
+		startNo +=1
+		endNo = startNo
+	End Else
+		startNo += 1
+		endNo += 1	
+	End
 	
 	If startNo < endNo Then
 		a = startNo
@@ -2845,9 +2858,22 @@ $ENDIF
 						Select TempFL
 						ReadList tmp Then ItemList<-1> = tmp
 					End Else If arg >< "" Then
-						If Not(DICT) And (Trans(dictFileName,arg,0,'X') Or arg Matches "F1N0N") Then
-							!! 辞書にある引数はフィールドとみなす(F1 F2 等は特別)
-							FldInfo<-1> = arg
+						If Not(DICT) Then
+							a = Trans(dictFileName,arg,-1,'X')
+							If a[1,1]="D" Then
+								!! Dフィールドを拾う
+								FldInfo<-1> = arg
+							End Else If a[1,2]="PH" Then
+								!! フレーズからDフィールドを拾う
+								FldInfo<-1> = Convert(" ",@FM,a<2>)
+							End Else
+								If arg Matches "F1N0N" Then
+									!! F1 F2 等は特別
+									FldInfo<-1> = arg
+								End Else
+									ItemList<-1> = arg
+								End
+							End
 						End Else
 							ItemList<-1> = arg
 						End
@@ -4992,7 +5018,7 @@ ParseLine.Impl:
 	
 	LineWidth = Width ;** 行幅はウィンドウサイズ
 
-ParseLine2: ;** (Outline用、呼び出す前に必ず selection に値を入れること)
+ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れること)
 
 	L = Len(Line)
 	OldLine = Line
@@ -5015,6 +5041,9 @@ ParseLine2: ;** (Outline用、呼び出す前に必ず selection に値を入れ
 					len = Len(Word)
 					Mask := Str(SI.LABEL,len)
 					Line = Line[len+1,BIG]
+					L = Len(Line)
+					Line = TrimF(Convert(Char(9),Space(STDTAB),Line))
+					Word = Line[";",1,1][" ",1,1]["*",1,1]["!",1,1]
 				End
 			End
 			Begin Case   
@@ -5051,7 +5080,7 @@ ParseLine2: ;** (Outline用、呼び出す前に必ず selection に値を入れ
 				St = Col1()+ 1
 				If St > 1 Then
 					If Mask[St-1,1] = " " And OldLine[St-1,1] <> " " Then
-						Mask[St-1,1] = SI.OPERATOR           ; * operators too
+						Mask[St-1,1] = SI.OPERATOR ;* operators too
 					End
 				End
 				Begin Case
@@ -5066,6 +5095,9 @@ ParseLine2: ;** (Outline用、呼び出す前に必ず selection に値を入れ
 						End
 					Case Word Matches "1N0N"
 						If Mask[St,1] = " " Then
+							If OldLine[St-1,1]="-" And Lin[@fm,Q-1,1]="" Then
+								Mask[St-1,1] = SI.NUMBER ;** 負のリテラル
+							End
 							Mask[St, Len(Word)] = Str(SI.NUMBER, Len(Word))
 						End
 					Case 1
@@ -5075,7 +5107,7 @@ ParseLine2: ;** (Outline用、呼び出す前に必ず selection に値を入れ
 							End
 						End Else
 							Locate Word In FUNCS by "AL" Setting Pos Then
-								If Mask[St,1] = " " then
+								If Mask[St,1] = " " Then
 									Mask[St,Len(Word)] = Str(SI.FUNCTION, Len(Word))
 								End
 							End
@@ -8175,7 +8207,7 @@ Core.ShowWordHokan:
 	choiceOrgY = 0
 	choiceNo = 1
 	title = SBOLD:FG.BASE02:BG.YELLOW:" Words"
-	filter = If currentWord#"" Then " ":currentWord Else ""
+	filter = currentWord
 	GoSub InitChoiceList
 	
 	
@@ -8805,7 +8837,7 @@ Act.ShowBuffList:
 		no = lruBuffList<I>
 		info = BufInfos(no)
 		If info<BI.USED> Else Continue
-		dispStr = no:" > "
+		dispStr = Fmt(no,"2R"):" > "
 		Begin Case
 			Case 1
 				If info<BI.CHANGED> Then dispStr := "*"
@@ -8828,7 +8860,7 @@ Act.ShowBuffList:
 				If info<BI.FILE> >< "" And @PATH >< info<BI.ACCOUNT> And @WHO >< info<BI.ACCOUNT> Then dispStr:= " (":info<BI.ACCOUNT>:")"
 				If info<BI.LOCKED> Then dispStr:= " <Locked>"
 		End Case
-		choiceList<-1> = dispStr
+		choiceList<-1> = dispStr:@VM:no
 	Next
 	choiceOrgY = 0
 	title = SBOLD:FG.BASE02:BG.BLUE:" Buffers"
@@ -8851,7 +8883,7 @@ Act.ShowBuffList:
 				Exit
 			Case actNo = A.NEWLINE ;** 決定
 				If choiceSelection Then
-					Found = choiceSelection[' ',1,1]
+					Found = choiceSelection<1,2>
 					GoSub StackJumpHistory
 					GoSub ChangeBuf
 				End
@@ -8860,7 +8892,7 @@ Act.ShowBuffList:
 				actNo = A.DOWN
 			Case actNo = A.CLOSEBUF ;** この場でバッファを閉じる
 				If choiceSelection Then
-					Found = choiceSelection[' ',1,1]
+					Found = choiceSelection<1,2>
 					GoSub StackJumpHistory
 					GoSub ChangeBuf
 					GoSub ShowWindow
