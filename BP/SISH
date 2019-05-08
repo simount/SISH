@@ -8,10 +8,8 @@ PROGRAM SISH
 **
 **    Please read the "README.adoc" for more information
 **
-**    Support Platform
-**      * OpenQM 3.2.x or later
-**      * UniVerse 11.2 or later
-**
+**  VERSION
+**    v0.35.0
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -21,7 +19,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.35.0 ]"
+Equ SISH.VERSION To "[ SISH v0.36.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -39,6 +37,7 @@ $ELSE
 	$CATALOGUE SISH GLOBAL
 
 	$MODE CASE.SENSITIVE,CONDITIONAL.STATEMENTS,UV.LOCATE
+$MODE DEBUG.EQUATES
 	
 	$INCLUDE SYSCOM KEYS.H
 	$INCLUDE SYSCOM TERMINFO.H
@@ -220,8 +219,11 @@ Equ OS.GATES To SYSTEM(91)
   Equ A.WORD_HOKAN To 83
   Equ A.NEWBUF To 84
   Equ A.RUN To 85
+	Equ A.MOUSE To 86
+	Equ A.WHEEL.UP To 87
+	Equ A.WHEEL.DOWN To 88
 * ↑ここに追加していく    
-  Equ ACTION.ENUM.LAST To 86
+  Equ ACTION.ENUM.LAST To 88
 
 ** ================================================================================
 ** Shell Main
@@ -404,6 +406,9 @@ $ENDIF
 	End
 
 	GoSub InitTerminal ;* 初回起動時に１回だけ初期化するもの
+
+	!! Brackets Paste Mode on
+	Crt CSI:"?2004h":
 
 !! 外部設定の読み込み
 $INCLUDE SISH.SETTING.H
@@ -589,6 +594,7 @@ $ENDIF
 
 	crtBuff = ""
 	C = "" ;** 入力文字
+	MOUSE = "" ;** マウスデータ
 	nowC = ""
 
 *
@@ -2174,7 +2180,10 @@ Return
 * シェルの終了
 *--------------------------------
 QUIT.SHELL:
-	
+
+	** Brackets Paste Mode off
+	Crt CSI:"?2004l":
+
 	** 反転入力モードに戻す
 $IFDEF U2__UNIVERSE
 	Ttyget ttys Then
@@ -2830,6 +2839,7 @@ $IFNDEF U2__UNIVERSE
 				ItemList = LAST(CFileName,@DS)
 $ENDIF
 			End Else
+				CloseSeq TFL
 
 				DICT = ""
 				If CFileName="DICT" Then
@@ -2922,11 +2932,8 @@ $ENDIF
 	
 	Redraw = REDRAW.ALL
 	
-	!! Brackets Paste Mode on
-	crtBuff := CSI:"?2004h"
-	
-!! 	** Mouse Tracking on
-!! 	crtBuff := CSI:"?1006h"
+ 	** Mouse Tracking on
+ 	crtBuff := CSI:"?1000h":CSI:"?1006h"
 	
 	Crt crtBuff:
 	
@@ -2943,11 +2950,9 @@ $ENDIF
 	
 	crtBuff = ""
 	
-	** Brackets Paste Mode off
-	crtBuff := CSI:"?2004l"
-	
-!! 	** Mouse Tracking off
-!! 	crtBuff := CSI:"?1006l"
+ 	** Mouse Tracking off
+ 	crtBuff := CSI:"?1006l":CSI:"?1000l"
+	Crt crtBuff:
 	
 	GoSub BackAltScreenBuf ;** 代替画面バッファから戻る
 	Crt crtBuff:
@@ -3466,7 +3471,6 @@ RestoreFromJumpData: ;** jumpDataからカーソル位置を復元
 	XOffSet = jumpData<9>
 	
 	Top = Y - Int(Depth / 2) ;** センタリング
-	If Top < 1 Then Top = 1
 	
 	jumpData = "" ;** JumpできたらjumpDataをクリアする
 
@@ -4342,6 +4346,24 @@ AfterKeyWait:
 							End
 						End
 					End
+				End Else If ch = "<" Then
+					!! Mouse Tracking (SGR)
+					C = ""
+					Loop
+						GoSub GetCh.Timeout
+					While ch <> "M" And ch <> "m" And ch <> ""
+						C := ch
+					Repeat
+					A = C[";",1,1]
+					If A=64 Then
+						actNo = A.WHEEL.UP
+					End Else If A=65 Then
+						actNo = A.WHEEL.DOWN
+					End Else
+						actNo = A.MOUSE
+					End
+					MOUSE = CONVERT(";",@FM,C):@FM:ch
+					Return
 				End Else If ch = "8" Then
 					!! [TBD] 端末サイズの取得
 					If C Matches "'":ESC:"[8'...'t'" Then
@@ -4349,10 +4371,6 @@ AfterKeyWait:
 						Return
 					End
 				End
-!! Mause Tracking (SGR)
-!! 		If C[1,3] = CSI:"<" Then
-!! 			
-!! 		End
 
 			End Else If ch = "]" Then
 				!! OSC
@@ -4439,11 +4457,13 @@ Enters:
 	GoSub PrintCursor
 	
 	** CRTフラッシュ処理
-	GoSub CRT.BUFF.FLUSH
+	If IS.CONSOLE Then
+		Crt @(-32):crtBuff:@(-31):
+	End Else
+		Crt CSI:"?25l":crtBuff:
+	End
 	
 	GoSub GetKey
-	
-!! 	Crt CSI:"?25l":
 	
 	crtBuff = ""
 	
@@ -4517,7 +4537,6 @@ Draw.Editor:
 	If moveX Then
 		If DP_X < XOffSet  Then
 			XOffSet -= Int((@CRTWIDE - 1) / 2)
-			If XOffSet < 1 Then XOffSet = 1
 			Redraw = REDRAW.ALL
 		End Else
 			If DP_X > Width + XOffSet - 2 then
@@ -4526,6 +4545,7 @@ Draw.Editor:
 			End
 		End
 	End
+	If XOffSet < 1 Then XOffSet = 1
 
 	** --------------------------
 	** Yスクロール位置調整
@@ -4534,7 +4554,6 @@ Draw.Editor:
 		tmpY = Top + SCROLLMERGINE
 		If Y < tmpY Then
 			Top -= tmpY - Y
-			If Top < 1 Then Top = 1
 			Redraw = REDRAW.ALL
 		End Else
 			tmpY = Depth + Top - SCROLLMERGINE - 1
@@ -4544,6 +4563,7 @@ Draw.Editor:
 			End
 		End
 	End
+	If Top < 1 Then Top = 1
 
 	** --------------------------
 	** 選択範囲調整
@@ -5096,7 +5116,10 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 					Case Word Matches "1N0N"
 						If Mask[St,1] = " " Then
 							If OldLine[St-1,1]="-" And Lin[@fm,Q-1,1]="" Then
-								Mask[St-1,1] = SI.NUMBER ;** 負のリテラル
+								A = OldLine[St-2,1]
+								If A#")" And A#">" Then
+									Mask[St-1,1] = SI.NUMBER ;** 負のリテラル
+								End
 							End
 							Mask[St, Len(Word)] = Str(SI.NUMBER, Len(Word))
 						End
@@ -5567,9 +5590,10 @@ GetDAPos:
 PrintStatus:
 	StLine.Y = PY
 PrintStatus.Impl:
-
+	
+	crtBuff := HI.STATUS.ON
+	
 	If Redraw.StatusLine Then
-		
 		fileSentence = CurBuf:" > "
 		If Changed Then fileSentence := "*"
 		If BufInfo<BI.PATHNAME> >< "" And UpCase(BufInfo<BI.FILE>[1,5])="PATH:" Then
@@ -5577,7 +5601,7 @@ PrintStatus.Impl:
 		End Else If BufInfo<BI.FILE> <> "" Then
 			fileSentence := BufInfo<BI.FILE>
 			fileSentence := " ":BufInfo<BI.ITEM>
-			If BufInfo<BI.PATHNAME> >< "" Then fileSentence := " [ ":BufInfo<BI.PATHNAME>:" ]"
+			If BufInfo<BI.PATHNAME> >< "" Then fileSentence := "  ":FG.BASE2:"[ ":BufInfo<BI.PATHNAME>:" ]":FG.BASE3
 		End Else If BufInfo<BI.CAPTURE> <> "" Then
 			fileSentence := BufInfo<BI.CAPTURE>
 		End Else
@@ -5589,20 +5613,24 @@ PrintStatus.Impl:
 		If BufInfo<BI.ACCOUNT> >< @PATH and BufInfo<BI.ACCOUNT> >< @WHO Then fileSentence := " (":BufInfo<BI.ACCOUNT>:")"
 		If IsNew Then fileSentence := "(New)"
 		
+		!! 左詰
+		crtBuff := @(0, StLine.Y)
+		crtBuff := fileSentence:@(-4)
+		
+		!! 右詰
 		SLine = ""
 		If BufInfo<BI.LOCKED> Then SLine := " | Locked"
 		If ReadOnly Then SLine := " | R/Only"
 		SLine := " | ":BufInfo<BI.PARSETYPE>:" ":IndentType:":":STDTAB:" "
 		
-		crtBuff := @(0, StLine.Y):HI.STATUS.ON
-		crtBuff := FMTDP(fileSentence,"L#":@CRTWIDE-17-Len(SLine))
+		crtBuff := @(@CRTWIDE-17-Len(SLine),StLine.Y)
 		crtBuff := SLine:"| "
 		
 		Redraw.StatusLine = @FALSE
-	End Else
-		crtBuff := @(@CRTWIDE-15,StLine.Y): HI.STATUS.ON
 	End
 
+	crtBuff := @(@CRTWIDE-15,StLine.Y)
+	
 	!! 文字コード情報
 	cd = UniSeq(Rec<Y>[X,1])
 	If cd = 0 Then cd = 10 ;** 改行コードにする
@@ -5640,7 +5668,10 @@ PrintStatus.Impl:
 *-----------------------------------------------------------------------
 PrintCursor:
 !! 	crtBuff := @(biInfoWide + DP_X - XOffSet, Y - Top):CSI:"?12l":CSI:"?25h"
-	crtBuff := @(biInfoWide + DP_X - XOffSet, Y - Top)
+	A = Y - Top
+	If A >= 0 And A < Depth Then
+		crtBuff := @(biInfoWide + DP_X - XOffSet, A):CSI:"?25h"
+	End
 	Return
 
 *-----------------------------------------------------------------------
@@ -6426,6 +6457,7 @@ Keys:
 	CRT FG.GREEN:"GREEN  ":BG.GREEN:"  ":SGR.ALL.OFF	
 	actNo = 0	
 	strKey = ""
+	
 	Loop
 		a = @(0, PY-2):@(-13):"SHOW Key Sequence When Press Key (Exit->ESC):":@(-14):" "
 		a := strKey
@@ -6707,7 +6739,10 @@ Switch.Actions:
 								Act.Fit.Term,
 								Act.ShowWordHokan,
 								DoNew,
-								Act.Run
+								Act.Run,
+								Act.Mouse,
+								Act.ScrollUp,
+								Act.ScrollDown
 NULL.Action:
 	Return
 
@@ -7126,7 +7161,6 @@ Act.PrevPage:
 	Y -= Depth
 	If Y < 1 Then Y = 1
 	Top = Y - dispY
-	If Top <= 0 Then Top = 1
 	moveY = True
 	Redraw = REDRAW.ALL
 	Return
@@ -7355,7 +7389,6 @@ Act.Cancel:
 Act.ScrollMid:
 	GoSub StackJumpHistory ;** ジャンプ位置も記録しておく
 	Top = Y - Int(Depth / 2)
-	If Top < 1 Then Top = 1
 	Redraw = REDRAW.ALL
 	Return
 
@@ -7899,19 +7932,14 @@ Act.ShowOutline:
 		!! 選択リストボックス処理共通
 		GoSub ProcChoiceList
 		
+		Redraw = @False
+		
 		If choiceSelection#"" And prevChoiceNo#choiceNo Then
 			!! 選択が切り替わったらプレビュー表示
 			crtBuff = ESC:"[s" ;** カーソル位置の保存
 			Top = choiceSelection<1,2> - Int(choiceOrgY/2) + 1
 			If Top <= 0 Then Top = 1
-			For I = 0 To choiceOrgY-2
-				Row = Top+I
-				Line = Rec<Row>
-				GoSub ParseLine
-				GoSub PrintLine
-			Next
-			crtBuff := ESC:"[u" ;** カーソル位置の復元
-			GoSub CRT.BUFF.FLUSH
+			Redraw = @True
 		End
 		
 		!! キー入力待ち
@@ -7920,6 +7948,22 @@ Act.ShowOutline:
 			Case actNo = A.OUTLINE
 				GoSub ShowWindow
 				GoTo Act.ShowOutline2
+				
+			Case actNo = A.WHEEL.UP
+				If Top>1 Then
+					Top -= 1
+					Redraw = @True
+				End
+				
+			Case actNo = A.WHEEL.DOWN
+				If Top < Lines - Depth + SCROLLMERGINE + 1 Then
+					Top += 1
+					Redraw = @True
+				End
+				
+			Case actNo = A.MOUSE
+				GoSub Act.Mouse
+				Exit
 			
 			!! Cancel
 			Case actNo = A.CANCEL
@@ -7949,6 +7993,18 @@ Act.ShowOutline:
 				End
 				Exit
 		End Case
+		
+		!! ソース画面再描画
+		If Redraw Then
+			For I = 0 To choiceOrgY-2
+				Row = Top+I
+				Line = Rec<Row>
+				GoSub ParseLine
+				GoSub PrintLine
+			Next
+			crtBuff := ESC:"[u" ;** カーソル位置の復元
+			GoSub CRT.BUFF.FLUSH
+		End
 		
 	Repeat
 
@@ -8517,6 +8573,29 @@ Act.GoDeclaration:
 							!! かなりあいまいなのではじめに見つかったものでよい
 							
 						End
+					End
+				End
+			End
+		End
+		!!
+		!! DEFFUN
+		!!   TODO CALLING,LOCAL
+		!!
+		If Count(Upcase(Line),"DEFFUN") Then
+			temp = Convert(" ",@FM,Trim(Line))
+			FindStr "DEFFUN" In Upcase(temp) Setting Ps Then
+				len = Len(Word)
+				ItemName = temp<Ps+1>[1,len]
+				If ItemName = Word Then
+					FileName = BufInfo<BI.FILE> ;** 同一ファイルから検索
+					flg = Trans(FileName,ItemName,0,"X")
+					If flg Then
+						GoSub DoRead
+						If Found Then Return
+					End Else
+						!! TODO Buff内からも検索する
+						!! かなりあいまいなのではじめに見つかったものでよい
+						
 					End
 				End
 			End
@@ -9467,6 +9546,56 @@ $ENDIF
 	Return
 
 * **************************************************************************
+* Act.Mouse
+Act.Mouse:
+	If MOUSE<4>="M" Then
+		!! クリックした位置にカーソルを移動
+		Y = Top + MOUSE<3> - 1
+		Line = Rec<Y>
+		keepDP_X = MOUSE<2> - biInfoWide.lineNo
+		GoSub GetX.From.keepDPX
+		X = outX
+		If MOUSE<1>="2" Then
+			keepSelection = @TRUE
+		End
+		moveY = @True
+		Redraw = REDRAW.ALL
+	End
+	Return
+
+* **************************************************************************
+* Act.ScrollUp
+
+Act.ScrollUp:
+	If Top>1 Then
+		Top -= 1
+		If IS.CONSOLE Then
+			crtBuff := @(0,PY):@(-3):@(0,0):@(-17)
+			Redraw.StatusLine = @TRUE
+		End Else
+			crtBuff := ESC:"[1;":Depth:"r":ESC:"[T":ESC:"[1;":@CRTHIGH:"r"
+		End
+		Redraw<-1> = Top
+	End
+	Return
+
+* **************************************************************************
+* Act.ScrollDown
+
+Act.ScrollDown:
+	If Top < Lines - Depth + SCROLLMERGINE + 1 Then
+		Top += 1
+		If IS.CONSOLE Then
+			crtBuff := @(0,PY):@(-3):@(0,0):@(-18)
+			Redraw.StatusLine = @TRUE
+		End Else
+			crtBuff := ESC:"[1;":Depth:"r":ESC:"[S":ESC:"[1;":@CRTHIGH:"r"
+		End
+		Redraw<-1> = Depth + Top - 1
+	End
+	Return
+
+* **************************************************************************
 * Act.Action
 
 Act.Action:
@@ -9543,7 +9672,7 @@ Act.AllCloseBuf:
 		End
 	Next
 	If Found then
-		PromptLine = "There are changed items, Ara you sure Close all Buffer ? : Enter ! to Force ->"; GoSub PromptLine
+		PromptLine = "There are changed items, Are you sure Close all Buffer ? : Enter ! to Force ->"; GoSub PromptLine
 		If C >< "!" Then Return
 		!! 強制的にすべて破棄
 		For I = 1 To MAXWINDOWS
@@ -9802,8 +9931,8 @@ $IFNDEF U2__UNIVERSE
 				list<-1> = Convert("*/","",line):@VM:d
 			End
 		Repeat
-		CloseSeq fp
 	End
+	CloseSeq fp
 $ENDIF
 Return
 
@@ -9854,7 +9983,7 @@ CRT.BUFF.FLUSH:
 	If IS.CONSOLE Then
 		Crt @(-32):crtBuff:@(-31):
 	End Else
-		Crt CSI:'?12l':CSI:'?25l':crtBuff:CSI:'?25h':
+		Crt CSI:'?25l':crtBuff:CSI:'?25h':
 	End
 Return
 End

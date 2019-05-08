@@ -185,6 +185,8 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.DELETECHAR>       = K.DEL:" ":Char(212)
 	keySeq<A.BACKSPACE>        = Char(127)
   keySeq<A.DELETE_BACKWORD>  = K.BACKSPACE
+!	keySeq<A.BACKSPACE>        = K.BACKSPACE
+!	keySeq<A.DELETE_BACKWORD>  = Char(127)
   keySeq<A.DELETE_NEXTWORD>  = K.C_DEL:" ":K.C_S_DEL
 	keySeq<A.TEMPLATE>         = K.C_T
 	keySeq<A.COMMENT>          = K.C_UNDERBAR:" ":K.C_S_1:" ":K.F2
