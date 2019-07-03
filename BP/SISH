@@ -9,7 +9,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.35.0
+**    v0.37.0
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -19,7 +19,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.36.0 ]"
+Equ SISH.VERSION To "[ SISH v0.37.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -1604,6 +1604,9 @@ $ENDIF
 		GoSub Get.SList.FILE
 		GoSub Marge.SlistAll
 		
+		GoSub Get.SList.RECID
+		GoSub Marge.SlistAll
+		
 		GoSub Get.SList.FIELD
 		GoSub Marge.SlistAll
 		
@@ -1653,6 +1656,13 @@ Complate.Common:
 						GoSub Get.SList.FIELD
 						
 						dispType = dictType:" ":dictName
+						
+					** @ID補完
+					Case candidateMode="RECID"
+						
+						GoSub Get.SList.RECID
+						
+						dispType = "@ID ":flatFile
 						
 					* FILE補完
 					Case candidateMode="FILE"
@@ -1806,6 +1816,9 @@ DispCandidate.Common:
 	!! 0件なら次のモードを試してみる
 	If slist = "" Then
 		If candidateMode = "FIELD" Then
+			candidateMode = "RECID"
+			GoTo TAB.HOKAN
+		End Else If candidateMode = "RECID" Then
 			candidateMode = "FILE"
 			GoTo TAB.HOKAN
 		End Else If candidateMode = "FILE" Then
@@ -1876,6 +1889,8 @@ DispCandidate.Common:
 				If candidateMode = "FLATREC" Then
 					candidateMode = "FIELD"
 				End Else If candidateMode = "FIELD" Then
+					candidateMode = "RECID"
+				End Else If candidateMode = "RECID" Then
 					candidateMode = "FILE"
 				End Else If candidateMode = "FILE" Then
 					candidateMode = "VOC"
@@ -2170,6 +2185,37 @@ Get.SList.FLATFILE:
 !! 						Ins "-" Before dlist<no>
 !! 					End
 !! 				End
+			End
+		Repeat
+	End
+	Close fpFlat
+Return
+
+Get.SList.RECID:
+	
+	** 1000件未満のファイルを補完対象とする
+	flatFile = ""
+	For wordPos = nowWordPos - 1 To 1 Step -1
+		Open words<wordPos> To fpFlat Then
+			a = FileInfo(fpFlat,1015)
+			If a > 0 And a < 1000 Then
+				flatFile = words<wordPos>
+				Exit
+			End
+		End
+	Next
+	
+	slist = ""
+	slistU = ""
+	dlist = ""
+	If flatFile Then
+		SelectV fpFlat To sp
+		Loop
+			ReadNext @ID From sp Else Exit
+			idU = UpCase(@ID)
+			Locate idU In slistU By "AL" Setting no Else
+				Ins idU Before slistU<no>
+				Ins @ID:" " Before slist<no>
 			End
 		Repeat
 	End
@@ -2830,7 +2876,9 @@ ParseCommandLine:
 	Begin Case
 		Case CFileName = ""
 		Case 1
-			OpenSeq CFileName To TFL Then
+			IN.OSBS = CFileName
+			GOSUB GET.OSBS
+			OpenSeq OUT.OSBS To TFL Then
 				!! パスから開く
 				CloseSeq TFL
 $IFNDEF U2__UNIVERSE
@@ -3563,16 +3611,40 @@ DoRead.Without.Jump:
 	
 Return
 
+** OS文字列の取得
+GET.OSBS:
+$IFNDEF U2__UNIVERSE
+	If IS.ECS(IN.OSBS) Then
+		IF SYSTEM(91) THEN
+			TEMP.PATH = "TMPSISH":@USERNO
+			OPENSEQ TEMP.PATH ENCODING "UTF16.BL" TO FP ELSE CREATE FP ELSE ABORT "Cannot create temp file ->":TEMP.PATH
+			WRITEBLK IN.OSBS TO FP ELSE ABORT
+			WEOFSeq FP
+			CLOSESEQ FP
+			OS.EXECUTE "type ":TEMP.PATH CAPTURING OUT.OSBS
+			OSDelete TEMP.PATH
+		END ELSE
+			OUT.OSBS = ICONV(IN.OSBS,"XUTF8")
+		END
+	End Else
+		OUT.OSBS = IN.OSBS
+	End
+	Return
+$ENDIF
+
 ** ファイルを開くの共通化
 Common.OpenFile:
 	
 $IFNDEF U2__UNIVERSE
 	If Upcase(FileName[1,5]) = "PATH:" Then
+		IN.OSBS = FileName
+		GOSUB GET.OSBS
 		!! PATH:なら READ:自動認識 WRITE:UTF8
-		Open FileName ENCODING "UTF8.A" To FL Else
+		Open OUT.OSBS ENCODING "UTF8.A" To FL Else
 			StatusMessage = "Cannot Open ":FileName
 			Return
 		End
+		Return
 	End
 $ENDIF
 	Open FileName To FL Else
@@ -3598,24 +3670,32 @@ ReadItem:
 	End Else
 		!! ファイルから開く
 		GoSub Common.OpenFile
-		Read Rec From FL,ItemName Then
-			IF FILEINFO(FL,3)=4 THEN
+		IF FILEINFO(FL,3)=4 THEN
+			IF FileName[1,5]="PATH:" THEN
+				PathName = FileName[6,*]:(IF SYSTEM(91) THEN "\" ELSE "/"):ItemName
+			END ELSE
 				!! DIRECTORYファイルからパス名を取得
 				PathName = FILEINFO(FL,2):(IF SYSTEM(91) THEN "\" ELSE "/"):ItemName
 			END
+			IN.OSBS = ItemName
+			GOSUB GET.OSBS
+		END ELSE
+			OUT.OSBS = ItemName
+		END
+		Read Rec From FL,OUT.OSBS Then
+			!!
+			!! レコードの読み取り
+			!! 更新ロックが取れるか一度試して取れなければReadOnlyにする
+			!!
+			RecordLockU FL,OUT.OSBS Locked
+				StatusMessage = "Record previously Locked by ":Status():", Open as Read Only mode"
+				ReadOnly = True 
+			End
+			Release FL,OUT.OSBS ;** 更新ロックは常時保持はしない
 		End Else
 			Rec = ""
 			IsNew = True
 		End
-		!!
-		!! レコードの読み取り
-		!! 更新ロックが取れるか一度試して取れなければReadOnlyにする
-		!!
-		RecordLockU FL,ItemName Locked
-			StatusMessage = "Record previously Locked by ":Status():", Open as Read Only mode"
-			ReadOnly = True 
-		End
-		Release FL, ItemName ;** 更新ロックは常時保持はしない
 		GoSub Common.CloseFile
 	End
 
@@ -4191,7 +4271,7 @@ ProcChoiceList:
 					Loop
 						p = Index(UpCase(li),filterUpcase(j))
 					While p
-						If p>1 Then crtBuff := CSI:(LenDP(li[1,p])-1):"C"
+						If p>1 Then crtBuff := CSI:(LenDP(li[1,p-1])):"C"
 						If choiceActive Then crtBuff := FG.RED
 						crtBuff := li[p,Len(filterUpcase(j))]
 						li = li[p+Len(filterUpcase(j)),9999]
@@ -4222,7 +4302,6 @@ ProcChoiceList:
 	End
 	If PFilter.X#"" Then crtBuff := @(-9,PFilter.X) ;** 実際のカーソル位置に戻す
 	GoSub CRT.BUFF.FLUSH
-	
 	choiceSelNo = choiceOutList<choiceNo>
 	choiceSelection = choiceList<choiceSelNo>
 
@@ -5601,7 +5680,9 @@ PrintStatus.Impl:
 		End Else If BufInfo<BI.FILE> <> "" Then
 			fileSentence := BufInfo<BI.FILE>
 			fileSentence := " ":BufInfo<BI.ITEM>
-			If BufInfo<BI.PATHNAME> >< "" Then fileSentence := "  ":FG.BASE2:"[ ":BufInfo<BI.PATHNAME>:" ]":FG.BASE3
+!			If BufInfo<BI.PATHNAME> >< "" AND @PATH#BufInfo<BI.PATHNAME>[1,LEN(@PATH)] Then
+!				fileSentence := "  ":FG.BASE2:"[ ":BufInfo<BI.PATHNAME>:" ]":FG.BASE3
+!			End
 		End Else If BufInfo<BI.CAPTURE> <> "" Then
 			fileSentence := BufInfo<BI.CAPTURE>
 		End Else
@@ -5789,7 +5870,13 @@ SaveItem:
 		!!
 		GoSub Common.OpenFile
 		Crt @(0, PY):
-		ReadU prevRec From FL, ItemName On Error Return Locked
+		IF FILEINFO(FL,3)=4 THEN
+			IN.OSBS = ItemName
+			GOSUB GET.OSBS
+		END ELSE
+			OUT.OSBS = ItemName
+		END
+		ReadU prevRec From FL,OUT.OSBS On Error Return Locked
 			StatusMessage = "Record previously Locked by ":Status():", Do Not Saved"
 			GoSub Common.CloseFile
 			Return
@@ -5923,10 +6010,16 @@ SaveItem:
 !!				Return
 !!			End
 			GoSub Common.OpenFile
+			IF FILEINFO(FL,3)=4 THEN
+				IN.OSBS = ItemName
+				GOSUB GET.OSBS
+			END ELSE
+				OUT.OSBS = ItemName
+			END
 			If BufInfo<BI.LOCKED> Then
-				WriteU saveRec On FL, ItemName On Error Return
+				WriteU saveRec On FL,OUT.OSBS On Error Return
 			End Else
-				Write saveRec On FL, ItemName On Error Return
+				Write saveRec On FL,OUT.OSBS On Error Return
 			End
 			GoSub Common.CloseFile
 		End
@@ -5969,7 +6062,13 @@ Delete:
 	
 	GoSub Common.OpenFile
 	Crt @(0, PY):
-	ReadU prevRec From FL, ItemName On Error Return Locked
+	IF FILEINFO(FL,3)=4 THEN
+		IN.OSBS = ItemName
+		GOSUB GET.OSBS
+	END ELSE
+		OUT.OSBS = ItemName
+	END
+	ReadU prevRec From FL,OUT.OSBS On Error Return Locked
 		StatusMessage = "Record previously Locked by ":Status():", Cannot Save"
 		GoSub Common.CloseFile
 		Return
@@ -5984,7 +6083,7 @@ Delete:
 		GoSub Common.CloseFile
 		Return
 	End
-	Delete FL, ItemName
+	Delete FL,OUT.OSBS
 	
 	GoSub Common.CloseFile
 	
@@ -7927,20 +8026,32 @@ Act.ShowOutline:
 	title = FG.YELLOW:" Outline"
 	Loop
 		
-		prevChoiceNo = choiceNo
+		prevChoiceSelection = choiceSelection
 		
 		!! 選択リストボックス処理共通
 		GoSub ProcChoiceList
 		
-		Redraw = @False
-		
-		If choiceSelection#"" And prevChoiceNo#choiceNo Then
+		If choiceSelection#"" And prevChoiceSelection#choiceSelection Then
 			!! 選択が切り替わったらプレビュー表示
-			crtBuff = ESC:"[s" ;** カーソル位置の保存
 			Top = choiceSelection<1,2> - Int(choiceOrgY/2) + 1
 			If Top <= 0 Then Top = 1
 			Redraw = @True
 		End
+		
+		!! ソース画面再描画
+		If Redraw Then
+			crtBuff = ESC:"[s" ;** カーソル位置の保存
+			For I = 0 To choiceOrgY-2
+				Row = Top+I
+				Line = Rec<Row>
+				GoSub ParseLine
+				GoSub PrintLine
+			Next
+			crtBuff := ESC:"[u" ;** カーソル位置の復元
+			GoSub CRT.BUFF.FLUSH
+		End
+		
+		Redraw = @False
 		
 		!! キー入力待ち
 		GoSub GetKey
@@ -7993,18 +8104,6 @@ Act.ShowOutline:
 				End
 				Exit
 		End Case
-		
-		!! ソース画面再描画
-		If Redraw Then
-			For I = 0 To choiceOrgY-2
-				Row = Top+I
-				Line = Rec<Row>
-				GoSub ParseLine
-				GoSub PrintLine
-			Next
-			crtBuff := ESC:"[u" ;** カーソル位置の復元
-			GoSub CRT.BUFF.FLUSH
-		End
 		
 	Repeat
 
@@ -9476,7 +9575,13 @@ Act.Reload:
 	
 	!! レコード格納先ファイルのオープン  
 	GoSub Common.OpenFile
-	Read TempRec From FL, ItemName Else TempRec = ""
+	IF FILEINFO(FL,3)=4 THEN
+		IN.OSBS = ItemName
+		GOSUB GET.OSBS
+	END ELSE
+		OUT.OSBS = ItemName
+	END
+	Read TempRec From FL,OUT.OSBS Else TempRec = ""
 	GoSub Common.CloseFile
 	
 	Convert CHAR(10):CHAR(13) To '' In TempRec ;** 改行コードが残っていたら自動除外
@@ -9491,6 +9596,7 @@ Act.Reload:
 			If UpCase(C) = "Y" Else Return
 		End
 		GoSub ReadItem
+		StatusMessage = "Reloaded, Because updated by others."
 	End
 
 	Redraw = REDRAW.ALL
@@ -9626,7 +9732,13 @@ Act.CloseBuff:
 	!! ロックを外す
 	If BufInfo<BI.LOCKED> And FileName >< "" And ItemName >< "" Then
 		Open FileName To FL Then
-			Release FL,ItemName
+			IF FILEINFO(FL,3)=4 THEN
+				IN.OSBS = ItemName
+				GOSUB GET.OSBS
+			END ELSE
+				OUT.OSBS = ItemName
+			END
+			Release FL,OUT.OSBS
 			Close FL
 		End
 	End
