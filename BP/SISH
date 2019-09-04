@@ -9,7 +9,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.37.0
+**    v0.38.0
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -19,7 +19,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.37.0 ]"
+Equ SISH.VERSION To "[ SISH v0.38.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -30,7 +30,7 @@ $IFDEF U2__UNIVERSE
 	EQU SAVEDLISTS.FILE To "&SAVEDLISTS&"
 	EQU STACK.FILE To "stacks"
 	
-	EREQU IS.CONSOLE Lit "@TTY = 'console'"
+	EQU IS.CONSOLE Lit "@TTY = 'console'"
 $ELSE
 	!! For OpenQM compatibility
 	
@@ -263,6 +263,7 @@ Shell.Main:
 	Equ FileName To ShInfo(21) ;** 直前のエディタファイル名
 	Equ ItemName To ShInfo(22) ;** 直前のエディタアイテム名
 	Equ PathName To ShInfo(23) ;** 直前のエディタパス名
+	Equ LRUOpenList To ShInfo(24) ;** 最近開いたファイルリスト
 
 *--------------------------------------------------------------------------
 *   Full Screen Editor System
@@ -463,7 +464,6 @@ $ENDIF
 	Close fpD.VOC
 
 	!! 共通のテンポラリ変数
-	editerCmd = ""
 	kakko = ""
 	inputBox = ""         ;** １行入力用バッファ
 	crtBuff = ""
@@ -545,7 +545,7 @@ $ENDIF
 $IFNDEF U2__UNIVERSE
 		logname = @HOSTNAME:"\":logname
 $ENDIF
-		act.title = "QM ":account['/',DCount(account,'/'),1]:" @ ":logname:" (":System(18):")"
+		act.title = "QM [":@TTY:"] ":account['/',DCount(account,'/'),1]:" @ ":logname:" (":System(18):")"
 		
 		** コマンドスタック保存ファイルから復元を試みる
 $IFDEF U2__UNIVERSE
@@ -554,7 +554,9 @@ $ELSE
 		OpenPath STACK.FILE ENCODING "UTF8" To fpStack Then
 $ENDIF
 			logFile = @LOGNAME:"$":MY_COMMAND
+			LRUOpenList = ""
 			cmdStack = "<NEWLINE>"
+			cmdStack.cnt = 0
 			Read stack From fpStack,logFile Then
 				stack.cnt = DCount(stack,@FM)
 				If stack.cnt > 10000 Then
@@ -575,9 +577,13 @@ $ENDIF
 						Find cmdline In cmdStack Setting pos Then
 						End Else
 							cmdStack<-1> = cmdline ;** 重複を省いて追加
+							cmdStack.cnt += 1
+							If cmdline[1,11]="READ.BUFFER" Then
+								LRUOpenList<-1> = "0":TrimF(cmdline[" ",2,999])
+							End
 						End
 					End
-				While stack.cnt >= 0 And DCount(cmdStack,@FM) <= CMD.STACK.SIZE
+				While stack.cnt >= 0 And cmdStack.cnt <= CMD.STACK.SIZE
 					stack.cnt -= 1
 				Repeat
 			End Else
@@ -705,7 +711,6 @@ Shell.KeyLoop.Bef.GetKey:
 					cmdline = ".L"
 				End
 				bAutoCommand = @TRUE
-				bAutoEditor = @FALSE
 				
 			Case actNo = A.NEWLINE
 				GoTo Run.Command
@@ -731,7 +736,14 @@ Shell.KeyLoop.Bef.GetKey:
 					Crt crtBuff:
 					bFirstCurTop = @TRUE
 				End
-				editerCmd = ""
+				!! 強制的に端末サイズに合わせる
+				If @TTY = 'console' Then
+					A = "TERM ":@CRTWIDE:",":@CRTHIGH
+					IF @TERM.TYPE = 'msvt' THEN A:=" qmterm":@FM:"TERM msvt"
+					Execute A
+				END ELSE
+					Crt CSI:"8;":@CRTHIGH:";":@CRTWIDE:"t":
+				END
 Launch.Editor:
 				GoSub Editor.Main
 				If bAutoCommand Then GoTo AutocommanLoop.Start
@@ -780,6 +792,12 @@ Launch.Editor:
 					GoSub ACTION.CMDSTACK.INC.SEARCH
 				End Else
 					GoSub Input.Actions
+!					If actNo = A.LEFT Or actNo = A.RIGHT Or actNo = A.PREVWORD Or actNo = A.NEXTWORD Then
+!						!! カーソル移動なら描画高速化
+!						GoSub Draw.Cmdline.Cursor
+!						GoSub CRT.BUFF.FLUSH
+!						GoTo Shell.KeyLoop.Bef.GetKey
+!					End Else If actNo = A.INSCHAR And UniSeq(C) < 127 And BufInfo<BI.BLOCKSTART> = "" Then
 					If actNo = A.INSCHAR And UniSeq(C) < 127 And BufInfo<BI.BLOCKSTART> = "" Then
 						!! 半角文字なら描画高速化
 						CRT (IF IS.CONSOLE AND @TERM.TYPE # 'msvt' THEN @(-19) ELSE CSI:"1@"):C:
@@ -899,6 +917,7 @@ Draw.Cmdline:
 	Next
 	cmdlineRows = tmpY ;** 行数を格納
 	
+Draw.Cmdline.Cursor:
 	* カーソル表示
 	If bIncSearch Then
 		crtBuff := CSI:"G":CSI:5+Len(iSearchText):"C"
@@ -1020,24 +1039,36 @@ Run.Command:
 				If bTimer Then Print "時間計測ON" Else Print "時間計測OFF"
 				GoTo Run.Command.Ending
 			Case k = "E"
-				If UpCase(Trim(cmdline)) = ".E" Then GoTo Launch.Editor ;** 単純にエディタに切り替える
+				If UpCase(Trim(cmdline)) = ".E" Then
+					cmdline = ""
+					GoTo Launch.Editor ;** 単純にエディタに切り替える
+				End
 				!! Verbをエディタに置換
 				If UpCase(Trim(cmdline)[1,3]) = ".EP" Then
 					!! Private VOC
 					OPEN "PVOC,":@USER TO PVOC Then
 						a = Trim(cmdline)[' ',2,9999]
 						cmdline = "READ.BUFFER PVOC,":@USER:" ":a
+						bAutoEditor = @TRUE
 					End
 				End Else
 					a = Trim(cmdline)[' ',2,9999]
 					Read rec From VOC,a Then
 						cmdline = "READ.BUFFER VOC ":a
+						bAutoEditor = @TRUE
 					End
 				End
 				If cmdline Matches "READ.BUFFER..." Else 
 					cmdline = "READ.BUFFER":cmdline[3,9999]
+					bAutoEditor = @TRUE
 				End
 				X += 9
+			Case k = "O" ;** COMO出力
+				IF SYSTEM(1033) THEN
+					cmdline = "COMO OFF"
+				END ELSE
+					cmdline = "COMO ON LOG_":OConv(Date(),'DYMD["",""]'):"_":OConv(Time(),"MTS''")
+				END
 			Case k = "K"
 				!! KeySeq表示モード
 				GoSub Keys
@@ -1089,11 +1120,15 @@ $ENDIF
 
 	GoSub CLEAR.FOR.PERFORM
 
-	If cmdline[1,11] = "READ.BUFFER" Then
-		!! スクリーンエディタの起動
-		editerCmd = cmdline
-		bAutoEditor = @TRUE
+	verb = TRIMF(cmdline[" ",1,1])
+	If verb = "READ.BUFFER" Then
+		!! ファイルをバッファにリードする
+		GoSub READ.BUFFER
 		GoTo After.Perform.Cmd
+	End Else If verb = "WRITE.BUFFER" Then
+		!! バッファの内容をファイルにライトする
+		GoSub WRITE.BUFFER
+		GoTo After.Perform.Cmd		
 	End
 
 	!! 普通のコマンド起動
@@ -1193,16 +1228,19 @@ $ENDIF
 	
 Run.Command.Ending:
 	If bAutoCommand Then
-		If cmdlines # "" Then
+		If cmdlines = "BACK.TO.EDITOR" Then
+			!! エディタに戻る
+			bAutoEditor = @TRUE
+		End Else If cmdlines = "PAUSE.AND.BACK.TO.EDITOR" Then
+			!! エディタに戻る前に停止
+			Print "Back to editor, please press any key. :":
+			GoSub GetKey
+			bAutoEditor = @TRUE
+		End Else If cmdlines # "" Then
 			cmdline = cmdlines
 			GoTo AutocommanLoop.Start ;** まだ続く
 		End
 		bAutoCommand = @FALSE
-		If bAutoEditor Then
-			!! エディタに戻る前に停止
-			Print "Back to the editor, please press any key. :":
-			GoSub GetKey
-		End
 	End
 	
 !! 非同期メッセージの表示
@@ -1243,7 +1281,7 @@ $IFNDEF U2__UNIVERSE
 			id = Last(srcPath,'/')
 			path = srcPath[1,Len(srcPath)-Len(id)]
 			rec = ""
-			OpenPath path Encoding "UTF8.A" To fp Then
+			OpenPath path Encoding "UTF8.AD" To fp Then
 				Read rec From fp,id Then
 					maxCnt = DCount(rec,@FM)
 					bDoc = @FALSE
@@ -1400,6 +1438,8 @@ $ENDIF
 		desc<-1> = ".K | キーシーケンス確認モード"
 		id<-1> = ".L"
 		desc<-1> = ".Ln filter | コマンド履歴の一覧表示"
+		id<-1> = ".O"
+		desc<-1> = ".O | COMO ON/OFF"
 		id<-1> = ".R"
 		desc<-1> = ".Rs-e | コマンドを履歴の先頭に読み込む"
 		id<-1> = ".S "
@@ -1418,6 +1458,15 @@ $ENDIF
 		
 		id = "READ.BUFFER"
 		desc = "エディタのバッファに指定のファイルを読み込む(SISH内部コマンド)"
+		idU = UpCase(id)
+		Locate idU In slistU By "AL" Setting no Else
+			Ins id Before slist<no>
+			Ins idU Before slistU<no>
+			Ins desc Before dlist<no>
+		End
+		
+		id = "WRITE.BUFFER"
+		desc = "エディタのバッファの内容をファイルを書き出す(SISH内部コマンド)"
 		idU = UpCase(id)
 		Locate idU In slistU By "AL" Setting no Else
 			Ins id Before slist<no>
@@ -2517,7 +2566,6 @@ ACTION.CMDSTACK.SAVE:
 		GoSub DoNew
 		Rec = pa
 		GoSub StartBuf
-		editerCmd = ""
 		GoTo Launch.Editor
 	End
 	
@@ -2781,6 +2829,7 @@ AUTO.COMPLATE:
 	BufInfo<BI.BLOCKEND, 1> = Y
 	BufInfo<BI.BLOCKEND, 2> = fullWord.st + fullWord.Len
 	If fullWord[1,1]='"' Then
+		!! ""で囲む
 		a = Convert('"','',fullWord)
 		If commonWord[1]=" " Then
 			InsBuffer = DQuote(a[1,Len(a)-Len(nowWord)]:commonWord[1,Len(commonWord)-1]):" "
@@ -2794,13 +2843,16 @@ AUTO.COMPLATE:
 		End Else
 			InsBuffer = fullWord[1,fullWord.Len-Len(nowWord)]:commonWord
 		End
-		If Index(Trim(InsBuffer)," ") Then
+		If Index(Convert("()"," ",Trim(InsBuffer))," ") Then
+			!! ""で囲む
 			If InsBuffer[1]=" " Then
 				InsBuffer = DQuote(InsBuffer[1,Len(InsBuffer)-1]):" "
 			End Else
 				InsBuffer = DQuote(InsBuffer)
 			End
 		End
+		!! スペースが２つ続くのを防ぐ
+		IF InsBuffer[1]=" " AND cmdline[X,1]=" " THEN InsBuffer = InsBuffer[1,LEN(InsBuffer)-1]
 	End
 	GoSub InsertLines
 	BufInfo<BI.BLOCKSTART> = ""
@@ -2843,10 +2895,12 @@ CUR.TOP.OF.SCREEN:
 	
 Return
 
-** ================================================================================
-** Editor.Main
-** ================================================================================
-Editor.Main:
+*-------------------------------------------------------------------------
+*  READ.BUFFER INTERNAL COMMAND
+*-------------------------------------------------------------------------
+READ.BUFFER:
+
+	@USER.RETURN.CODE = -1
 
 	LastCapture = 0
 	ItemList = ""
@@ -2857,21 +2911,7 @@ Editor.Main:
 	ParentBufNo = ""
 	StatusMessage = ""
 
-	!! 強制的に端末サイズに合わせる
-	If @TTY = 'console' Then
-		A = "TERM ":@CRTWIDE:",":@CRTHIGH
-		IF @TERM.TYPE = 'msvt' THEN A:=" qmterm":@FM:"TERM msvt"
-		Execute A
-	END ELSE
-		Crt CSI:"8;":@CRTHIGH:";":@CRTWIDE:"t":
-	END
-
-*-------------------------------------------------------------------------
-*  Parse Command Line
-*-------------------------------------------------------------------------
-ParseCommandLine:
-	
-	args = Convert(' ',@FM,Trim(editerCmd)[' ',2,HUGE])
+	args = Convert(' ',@FM,Trim(cmdline)[' ',2,HUGE])
 	CFileName = Remove(args,s)
 	Begin Case
 		Case CFileName = ""
@@ -2946,15 +2986,6 @@ $ENDIF
 	End Case
 
 	If FileName = "" And ItemList = "" Then
-		!! 引数指定がない
-		If Not(lruBuffList) Then
-			!! バッファがない場合は新規で開く
-			GoSub DoNew
-		End Else
-			!! バッファがある場合は以前開いていたものを開く
-			Found = lruBuffList<1> ;** 直近を開く
-			GoSub ChangeBuf
-		End
 	End Else If FileName >< "" And ItemList = "" Then
 		!! Item名がない場合はリストから選択
 		GoSub DoOpen                    ; * presents a list
@@ -2962,9 +2993,296 @@ $ENDIF
 	End Else
 		Loop
 			Remove ItemName From ItemList Setting s
-			GoSub DoRead
+			buffCnt = DCount(lruBuffList,@FM)
+			GoSub DoRead.Without.Jump
+			If Found And buffCnt#DCount(lruBuffList,@FM) Then
+				Print "Read ":FileName:" ":ItemName:" (":FMT(Len(Rec),"R,"):" chars) > Buffer ":Found
+			End
 		While s Do
 		Repeat
+	End
+
+	!! LRUオープンリスト入替
+	A = TrimF(cmdline[" ",2,999])
+	Find A In SubstringS(LRUOpenList,2,999) Setting f Then
+		Del LRUOpenList<f>
+		Ins CurBuf:A Before LRUOpenList<1>
+	End
+
+	@USER.RETURN.CODE = 0
+	Return
+
+*-------------------------------------------------------------------------
+*  WRITE.BUFFER INTERNAL COMMAND
+*-------------------------------------------------------------------------
+WRITE.BUFFER:
+	
+	@USER.RETURN.CODE=-1
+
+	a = Trim(cmdline)[" ",2,1]
+	If Not(Num(a)) Or a > MAXWINDOWS Then
+		Print "Arg1. Must Buffer No (1-":MAXWINDOWS:")"
+		Return
+	End
+	CurBuf = a
+
+	If Not(BufInfo<BI.USED>) Then
+		Print "Buffer No ":CurBuf:" is not used."
+		Return
+	End
+
+	If ReadOnly Then
+		Print "File is marked as Read Only! - Enter ! to Force Write :":
+		GoSub GetKey
+		Print ""
+		If TrimF(C)[1,1] = "!" Else
+			@USER.RETURN.CODE=0
+			Return
+		End
+		ReadOnly = @False
+	End
+	
+	If BufInfo<BI.PBUFNO> Then
+		!! 親バッファ保存モード
+		
+		!! 親が存在するかチェック
+		pno = BufInfo<BI.PBUFNO>
+		If Not(BufInfos(pno)<BI.USED>) Then
+			Print "Parent BufferNo already closed - Cannot save"  
+			Return
+		End
+		
+	End Else
+		!! 親バッファ保存モードではない
+		
+		FileName = Trim(cmdline)[" ",3,1]
+		If FileName="" Then FileName = BufInfo<BI.FILE>
+		If FileName = "" Then
+			GoSub GetFile
+			If FileName = "" Then Return
+		End
+		
+		ItemName = Trim(cmdline)[" ",4,1]
+		If ItemName = "" Then ItemName = BufInfo<BI.ITEM>
+		If ItemName = "" Then
+			Print "Item Name From '":FileName:"' ->":
+			Input ItemName
+			Print ""
+			If ItemName = "" Then
+				@USER.RETURN.CODE=0
+				Return
+			End
+		End
+		
+		!! アカウント違いの警告
+		If BufInfo<BI.ACCOUNT> >< "" Then
+			If Not(BufInfo<BI.ACCOUNT> Matches Quote(@ACCOUNT):@VM:Quote(@PATH)) Then 
+				Print "This Item Read from Different Account! - Save in This Account (Y) :":
+				GoSub GetKey
+				Print ""
+				If TrimF(UpCase(C))[1,1] = "Y" Else
+					@USER.RETURN.CODE=0
+					Return
+				End
+			End
+		End
+	
+		!!
+		!! 保存処理
+		!!   更新ロックがかかっていたらエラー
+		!!   編集前時と比較して違っていれば他のセッションで変更があったとみなす(楽観的ロック)
+		!!
+		GoSub Common.OpenFile
+		IF FILEINFO(FL,3)=4 THEN
+			IN.OSBS = ItemName
+			GOSUB GET.OSBS
+		END ELSE
+			OUT.OSBS = ItemName
+		END
+		ReadU prevRec From FL,OUT.OSBS On Error Return Locked
+			Print "Record previously Locked by ":Status():", Do Not Saved"
+			GoSub Common.CloseFile
+			Return
+		End Then
+			Convert CHAR(10):CHAR(13) To '' In Rec ;** 改行コードが残っていたら自動除外
+		End Else
+			prevRec = ""
+		End
+		GoSub Common.CloseFile
+		
+	End
+	
+	If TgtFld Then
+		!! フィールド指定モード
+		
+		saveRec = StartRec ;** 開始時点レコードに対して上書きする
+
+		fldCnt = Dcount(TgtFld,@FM) ;** 固定フィールド数
+		
+		If BufInfo<BI.VALUEFIX> Then
+			!! サブバリュー編集モード
+			
+			!! 集める
+			tmp = ""
+			cnt = DCount(Rec,@FM)
+			For i = 1 To cnt
+				fIdx = Mod((i-1),fldCnt)+1
+				svno = Int((i-1)/fldCnt)+1
+				If Rec<i> Then
+					tmp<fIdx,1,svno> = Rec<i>
+				End
+			Next
+
+			offset = (BufInfo<BI.VALUEFIX> - 1) * fldCnt + 1
+
+			!! バッファポインタを一時的に切り替える    
+			stackCurBuf = CurBuf ;** 現在のBuffNoをスタック
+			CurBuf = BufInfo<BI.PBUFNO>
+			
+			editCmd = ""
+			For i = 1 To fldCnt
+				fno = offset + (i - 1)
+				cmd = ""
+				cmd<1> = fno
+				cmd<2> = 1
+				cmd<3> = fno
+				cmd<4> = Len(Rec<fno>) + 1
+				cmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),tmp<i>)
+				cmd<6> = ""
+				editCmd<-1> = cmd
+			Next
+	
+			GoSub StackEditCmd
+			
+			saveRec = Rec
+			
+			!! バッファポインタを元に戻す
+			CurBuf = stackCurBuf
+			
+		End Else
+			!! バリュー編集モード
+			!! 縦一列になっているのを2次元に戻す
+			For i = 1 To fldCnt
+				fno = TgtFld<i,1>
+				saveRec<fno> = ""
+			Next
+			cnt = DCount(Rec,@FM)
+			For i = 1 To cnt
+				fno = TgtFld<(Mod((i-1),fldCnt)+1),1>
+				vno = Int((i-1)/fldCnt)+1
+				If Rec<i> Then
+					saveRec<fno,vno> = Rec<i>
+				End
+			Next
+			
+			If BufInfo<BI.PBUFNO> Then
+				!! 親バッファに保存
+		
+				flist = TgtFld
+				cnt = DCount(flist,@FM)
+		
+				!! バッファポインタを一時的に切り替える    
+				stackCurBuf = CurBuf ;** 現在のBuffNoをスタック
+				CurBuf = BufInfo<BI.PBUFNO>
+				
+				editCmd = ""
+				For i = 1 To cnt
+					fno = flist<i,1>
+					cmd = ""
+					cmd<1> = fno
+					cmd<2> = 1
+					cmd<3> = fno
+					cmd<4> = Len(Rec<fno>) + 1
+					cmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),saveRec<fno>)
+					cmd<6> = ""
+					editCmd<-1> = cmd
+				Next
+		
+				GoSub StackEditCmd
+				
+				saveRec = Rec
+				
+				!! バッファポインタを元に戻す
+				CurBuf = stackCurBuf
+				
+			End Else
+				!! ファイル書き込みモード
+				
+				!! Conversion
+				For i = 1 To fldCnt
+					fno = TgtFld<i,1>
+					conv = TgtFld<i,3>
+					If conv Then saveRec<fno> = IConvS(saveRec<fno>,conv)
+				Next
+			End
+			
+		End
+		
+	End Else
+		!! 通常モード
+		saveRec = Rec ;** 保存対象レコード
+	End
+	
+	If Not(BufInfo<BI.PBUFNO>) Then
+		!! ファイルに保存
+		If prevRec >< saveRec Then
+			!! 現在のレコード内容と違いがある場合だけ更新する
+!!			If prevRec >< StartRec Then
+!!				StatusMessage = "Record previously Changed by Another, Cannot Save This Modify"
+!!				ReadOnly = True
+!!				Return
+!!			End
+			GoSub Common.OpenFile
+			IF FILEINFO(FL,3)=4 THEN
+				IN.OSBS = ItemName
+				GOSUB GET.OSBS
+			END ELSE
+				OUT.OSBS = ItemName
+			END
+			If BufInfo<BI.LOCKED> Then
+				WriteU saveRec On FL,OUT.OSBS On Error Return
+			End Else
+				Write saveRec On FL,OUT.OSBS On Error Return
+			End
+			Print "Write Buffer ":CurBuf:" > ":FileName:" ":ItemName:" (":FMT(Len(saveRec),"R,"):" chars) at ":OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS")
+			GoSub Common.CloseFile
+		End
+	End
+
+	!! Bufferの初期化処理  
+	BufInfo<BI.FILE> = FileName
+	BufInfo<BI.ITEM> = ItemName
+	BufInfo<BI.CAPTURE> = ""
+	GoSub Set.BI.ACCOUNT
+	Changed = False
+	IsNew = False
+	StartRec = saveRec
+	
+	!! 編集スタックの調整
+	If EditCmdPos > 1 Then
+		EditCmdStack = EditCmdStack[@FM,EditCmdPos,HUGE]
+		EditCmdPos = 1
+	End
+	Find "SAVED_POINT" In EditCmdStack Setting f Then Del EditCmdStack<f>
+	Ins "SAVED_POINT" Before EditCmdStack<1>
+	EditCmdPos = 1
+	
+	@USER.RETURN.CODE=0	
+	
+	Return
+
+** ================================================================================
+** Editor.Main
+** ================================================================================
+Editor.Main:
+
+	!! バッファがない場合は新規で開く
+	If Not(lruBuffList) Then
+		GoSub DoNew
+	End Else
+		!! バッファがある場合は以前開いていたものを開く
+		Found = lruBuffList<1> ;** 直近を開く
+		GoSub ChangeBuf
 	End
 
 	biInfoWide.lineNo = 5 ;** 行番号表示の桁数
@@ -3181,8 +3499,8 @@ Catalog:
 			GoSub ShowWindow
 			Return
 		End Case
+	cmdline<-1> = "PAUSE.AND.BACK.TO.EDITOR"
 	bAutoCommand = @TRUE
-	bAutoEditor = @TRUE
 	GoSub Act.Exit
 Return
 
@@ -3640,7 +3958,7 @@ $IFNDEF U2__UNIVERSE
 		IN.OSBS = FileName
 		GOSUB GET.OSBS
 		!! PATH:なら READ:自動認識 WRITE:UTF8
-		Open OUT.OSBS ENCODING "UTF8.A" To FL Else
+		Open OUT.OSBS ENCODING "UTF8.ABD" To FL Else
 			StatusMessage = "Cannot Open ":FileName
 			Return
 		End
@@ -5737,7 +6055,7 @@ PrintStatus.Impl:
 	
 	!! ステータスメッセージ
 	If StatusMessage >< "" Then
-		crtBuff := @(0, StLine.Y+1):BG.RED:FG.BASE3:StatusMessage:SGR.ALL.OFF:@(-4)
+		crtBuff := @(0, StLine.Y+1):BG.CYAN:FG.BASE3:StatusMessage:SGR.ALL.OFF:@(-4)
 		StatusMessage = ""
 	End Else
 		crtBuff := @(0, StLine.Y+1):@(-4)
@@ -5797,21 +6115,16 @@ PromptLine:
 *  SaveAs
 *-----------------------------------------------------------------------
 SaveAs: 
-	TempFileName = BufInfo<BI.FILE>
-	TempItemName = BufInfo<BI.ITEM>
-	GoSub GetFile
-	If FileName = "" Then
-		BufInfo<BI.FILE> = TempFileName
+	Redraw.StatusLine = @TRUE
+	
+	If BufInfo<BI.PBUFNO> Then
+		StatusMessage = "Save Target is determined by parent buffer"  
 		Return
 	End
-	BufInfo<BI.ITEM> = ""
-	GoSub SaveItem
-	If BufInfo<BI.FILE> = "" Then
-		BufInfo<BI.FILE> = TempFileName
-	End
-	If BufInfo<BI.ITEM> = "" Then
-		BufInfo<BI.ITEM> = TempItemName
-	End
+	
+	cmdline = "WRITE.BUFFER ":CurBuf:" ":BufInfo<BI.FILE>:" ":BufInfo<BI.ITEM>
+	GoSub Act.Exit
+	
 	Return
 *--------------------------------------------------------------------------
 * SaveItem
@@ -5834,143 +6147,43 @@ SaveItem:
 			StatusMessage = "Parent BufferNo already closed - Cannot save"  
 			Return
 		End
-		
-	End Else
-		!! 親バッファ保存モードではない
-		
-		FileName = BufInfo<BI.FILE>
-		If FileName = "" Then
-			GoSub GetFile
-			If FileName = "" Then Return
-		End
-		ItemName = BufInfo<BI.ITEM>
-		If ItemName = "" Then
-			PromptLine = "Item Name From '":FileName:"' ->" ; GoSub PromptLine
-			inputBox = ""
-			GoSub InputBox
-			ItemName = inputBox
-			If ItemName = "" then Return
-		End
-		
-		!! アカウント違いの警告
-		If BufInfo<BI.ACCOUNT> >< "" Then
-			If Not(BufInfo<BI.ACCOUNT> Matches Quote(@ACCOUNT):@VM:Quote(@PATH)) Then 
-				PromptLine = BG.RED:FG.BASE3:"This Item Read from Different Account! - Save in This Account (Y) :":@(-4) ; GoSub PromptLine 
-				GoSub GetKey
-				If TrimF(UpCase(C))[1,1] = "Y" Else Return
-			End
-		End
 	
-		!! ToDo Backup
-		
-		!!
-		!! 保存処理
-		!!   更新ロックがかかっていたらエラー
-		!!   編集前時と比較して違っていれば他のセッションで変更があったとみなす(楽観的ロック)
-		!!
-		GoSub Common.OpenFile
-		Crt @(0, PY):
-		IF FILEINFO(FL,3)=4 THEN
-			IN.OSBS = ItemName
-			GOSUB GET.OSBS
-		END ELSE
-			OUT.OSBS = ItemName
-		END
-		ReadU prevRec From FL,OUT.OSBS On Error Return Locked
-			StatusMessage = "Record previously Locked by ":Status():", Do Not Saved"
-			GoSub Common.CloseFile
-			Return
-		End Then
-			Convert CHAR(10):CHAR(13) To '' In Rec ;** 改行コードが残っていたら自動除外
-		End Else
-			prevRec = ""
-		End
-		GoSub Common.CloseFile
-		
-	End
-	
-	If TgtFld Then
-		!! フィールド指定モード
-		
-		saveRec = StartRec ;** 開始時点レコードに対して上書きする
+		If TgtFld Then
+			!! フィールド指定モード
+			
+			saveRec = StartRec ;** 開始時点レコードに対して上書きする
 
-		fldCnt = Dcount(TgtFld,@FM) ;** 固定フィールド数
-		
-		If BufInfo<BI.VALUEFIX> Then
-			!! サブバリュー編集モード
+			fldCnt = Dcount(TgtFld,@FM) ;** 固定フィールド数
 			
-			!! 集める
-			tmp = ""
-			cnt = DCount(Rec,@FM)
-			For i = 1 To cnt
-				fIdx = Mod((i-1),fldCnt)+1
-				svno = Int((i-1)/fldCnt)+1
-				If Rec<i> Then
-					tmp<fIdx,1,svno> = Rec<i>
-				End
-			Next
+			If BufInfo<BI.VALUEFIX> Then
+				!! サブバリュー編集モード
+				
+				!! 集める
+				tmp = ""
+				cnt = DCount(Rec,@FM)
+				For i = 1 To cnt
+					fIdx = Mod((i-1),fldCnt)+1
+					svno = Int((i-1)/fldCnt)+1
+					If Rec<i> Then
+						tmp<fIdx,1,svno> = Rec<i>
+					End
+				Next
 
-			offset = (BufInfo<BI.VALUEFIX> - 1) * fldCnt + 1
+				offset = (BufInfo<BI.VALUEFIX> - 1) * fldCnt + 1
 
-			!! バッファポインタを一時的に切り替える    
-			stackCurBuf = CurBuf ;** 現在のBuffNoをスタック
-			CurBuf = BufInfo<BI.PBUFNO>
-			
-			editCmd = ""
-			For i = 1 To fldCnt
-				fno = offset + (i - 1)
-				cmd = ""
-				cmd<1> = fno
-				cmd<2> = 1
-				cmd<3> = fno
-				cmd<4> = Len(Rec<fno>) + 1
-				cmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),tmp<i>)
-				cmd<6> = ""
-				editCmd<-1> = cmd
-			Next
-	
-			GoSub StackEditCmd
-			
-			saveRec = Rec
-			
-			!! バッファポインタを元に戻す
-			CurBuf = stackCurBuf
-			
-		End Else
-			!! バリュー編集モード
-			!! 縦一列になっているのを2次元に戻す
-			For i = 1 To fldCnt
-				fno = TgtFld<i,1>
-				saveRec<fno> = ""
-			Next
-			cnt = DCount(Rec,@FM)
-			For i = 1 To cnt
-				fno = TgtFld<(Mod((i-1),fldCnt)+1),1>
-				vno = Int((i-1)/fldCnt)+1
-				If Rec<i> Then
-					saveRec<fno,vno> = Rec<i>
-				End
-			Next
-			
-			If BufInfo<BI.PBUFNO> Then
-				!! 親バッファに保存
-		
-				flist = TgtFld
-				cnt = DCount(flist,@FM)
-		
 				!! バッファポインタを一時的に切り替える    
 				stackCurBuf = CurBuf ;** 現在のBuffNoをスタック
 				CurBuf = BufInfo<BI.PBUFNO>
 				
 				editCmd = ""
-				For i = 1 To cnt
-					fno = flist<i,1>
+				For i = 1 To fldCnt
+					fno = offset + (i - 1)
 					cmd = ""
 					cmd<1> = fno
 					cmd<2> = 1
 					cmd<3> = fno
 					cmd<4> = Len(Rec<fno>) + 1
-					cmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),saveRec<fno>)
+					cmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),tmp<i>)
 					cmd<6> = ""
 					editCmd<-1> = cmd
 				Next
@@ -5983,67 +6196,74 @@ SaveItem:
 				CurBuf = stackCurBuf
 				
 			End Else
-				!! ファイル書き込みモード
-				
-				!! Conversion
+				!! バリュー編集モード
+				!! 縦一列になっているのを2次元に戻す
 				For i = 1 To fldCnt
 					fno = TgtFld<i,1>
-					conv = TgtFld<i,3>
-					If conv Then saveRec<fno> = IConvS(saveRec<fno>,conv)
+					saveRec<fno> = ""
 				Next
-			End
+				cnt = DCount(Rec,@FM)
+				For i = 1 To cnt
+					fno = TgtFld<(Mod((i-1),fldCnt)+1),1>
+					vno = Int((i-1)/fldCnt)+1
+					If Rec<i> Then
+						saveRec<fno,vno> = Rec<i>
+					End
+				Next
+				
+				If BufInfo<BI.PBUFNO> Then
+					!! 親バッファに保存
 			
-		End
-		
-	End Else
-		!! 通常モード
-		saveRec = Rec ;** 保存対象レコード
-	End
-	
-	If Not(BufInfo<BI.PBUFNO>) Then
-		!! ファイルに保存
-		If prevRec >< saveRec Then
-			!! 現在のレコード内容と違いがある場合だけ更新する
-!!			If prevRec >< StartRec Then
-!!				StatusMessage = "Record previously Changed by Another, Cannot Save This Modify"
-!!				ReadOnly = True
-!!				Return
-!!			End
-			GoSub Common.OpenFile
-			IF FILEINFO(FL,3)=4 THEN
-				IN.OSBS = ItemName
-				GOSUB GET.OSBS
-			END ELSE
-				OUT.OSBS = ItemName
-			END
-			If BufInfo<BI.LOCKED> Then
-				WriteU saveRec On FL,OUT.OSBS On Error Return
-			End Else
-				Write saveRec On FL,OUT.OSBS On Error Return
+					flist = TgtFld
+					cnt = DCount(flist,@FM)
+			
+					!! バッファポインタを一時的に切り替える    
+					stackCurBuf = CurBuf ;** 現在のBuffNoをスタック
+					CurBuf = BufInfo<BI.PBUFNO>
+					
+					editCmd = ""
+					For i = 1 To cnt
+						fno = flist<i,1>
+						cmd = ""
+						cmd<1> = fno
+						cmd<2> = 1
+						cmd<3> = fno
+						cmd<4> = Len(Rec<fno>) + 1
+						cmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),saveRec<fno>)
+						cmd<6> = ""
+						editCmd<-1> = cmd
+					Next
+			
+					GoSub StackEditCmd
+					
+					saveRec = Rec
+					
+					!! バッファポインタを元に戻す
+					CurBuf = stackCurBuf
+					
+				End Else
+					!! ファイル書き込みモード
+					
+					!! Conversion
+					For i = 1 To fldCnt
+						fno = TgtFld<i,1>
+						conv = TgtFld<i,3>
+						If conv Then saveRec<fno> = IConvS(saveRec<fno>,conv)
+					Next
+				End
+				
 			End
-			GoSub Common.CloseFile
+		End
+	End Else
+		!! ファイル保存
+		If Changed Then
+			cmdline = "WRITE.BUFFER ":CurBuf:" ":BufInfo<BI.FILE>:" ":BufInfo<BI.ITEM>
+			cmdline<-1> = "BACK.TO.EDITOR"
+			bAutoCommand = @TRUE
+			GoSub Act.Exit
 		End
 	End
-
-	!! Bufferの初期化処理  
-	BufInfo<BI.FILE> = FileName
-	BufInfo<BI.ITEM> = ItemName
-	BufInfo<BI.CAPTURE> = ""
-	GoSub Set.BI.ACCOUNT
-	Changed = False
-	IsNew = False
-	StartRec = saveRec
 	
-	!! 編集スタックの調整
-	If EditCmdPos > 1 Then
-		EditCmdStack = EditCmdStack[@FM,EditCmdPos,HUGE]
-		EditCmdPos = 1
-	End
-	Find "SAVED_POINT" In EditCmdStack Setting f Then Del EditCmdStack<f>
-	Ins "SAVED_POINT" Before EditCmdStack<1>
-	EditCmdPos = 1
-	
-	GoSub PrintStatus
 	Return
 *--------------------------------------------------------------------------
 * Delete
@@ -6457,22 +6677,13 @@ ChangeBuf:
 	End
 	CurBuf = Found
 	
-	FileName = BufInfo<BI.FILE>
-	ItemName = BufInfo<BI.ITEM>
-	PathName = BufInfo<BI.PATHNAME>
-
-	If Not(IsNew) And @PATH = BufInfo<BI.ACCOUNT> Then
-
-		GoSub Act.Reload
-		
-		!! ロック処理の再実行をしておく
-		BufInfo<BI.LOCKED> = If BufInfo<BI.LOCKED> Then @FALSE Else @TRUE 
-		GoSub DoLock
-	End
-	
 	keepDP_X = X
 	keepSelection = @TRUE
 
+	!! ロック処理の再実行をしておく
+	BufInfo<BI.LOCKED> = If BufInfo<BI.LOCKED> Then @FALSE Else @TRUE 
+	GoSub DoLock
+	
 	Return
 *--------------------------------------------------------------------------
 * SubstCommand
@@ -9040,6 +9251,9 @@ Act.ShowBuffList:
 		End Case
 		choiceList<-1> = dispStr:@VM:no
 	Next
+	
+	choiceList<-1> = Trim(IfS(NotS(SubstringS(LRUOpenList,1,1)),SubstringS(LRUOpenList,2,999),""),@FM)
+	
 	choiceOrgY = 0
 	title = SBOLD:FG.BASE02:BG.BLUE:" Buffers"
 	choiceNo = If DCount(choiceList,@FM) < 2 Then 1 Else 2 ;**   !! 初期値は１つ前のものにする
@@ -9058,12 +9272,24 @@ Act.ShowBuffList:
 		Begin Case
 			Case actNo = A.CANCEL ;** 抜ける
 				actNo = 0
+				GoSub Act.Reload
 				Exit
 			Case actNo = A.NEWLINE ;** 決定
 				If choiceSelection Then
 					Found = choiceSelection<1,2>
-					GoSub StackJumpHistory
-					GoSub ChangeBuf
+					IF Found Then
+						!! バッファ切り替え
+						GoSub StackJumpHistory
+						GoSub ChangeBuf
+						GoSub ShowWindow
+						GoSub Act.Reload
+					End Else
+						!! 新規オープン
+						cmdline = "READ.BUFFER ":choiceSelection
+						cmdline<-1> = "BACK.TO.EDITOR"
+						bAutoCommand = @TRUE
+						GoSub Act.Exit
+					End
 				End
 				Exit
 			Case actNo = A.BUFFER ;** バッファ進める
@@ -9141,6 +9367,7 @@ Act.AutoIndent:
 		a = line[Index(lineUC,"FOR",1),3]
 		pattern = "...'":a:"'...1A0X' '..."
 		varName = MatchField(line,pattern,4):MatchField(line,pattern,5)
+		varName = varName["=",1,1]
 		If UpCase(varName) = "EACH" Then
 			!! EACHが来たらもう一度
 			pattern = "...'":a:"'...'":varName:"'...1A0X' '..."
@@ -9568,10 +9795,11 @@ $ENDIF
 
 Act.Reload:
 	
-	If IsNew Then Return
-	
 	FileName = BufInfo<BI.FILE>
 	ItemName = BufInfo<BI.ITEM>
+	PathName = BufInfo<BI.PATHNAME>
+	
+	If IsNew Then Return
 	
 	!! レコード格納先ファイルのオープン  
 	GoSub Common.OpenFile
@@ -9590,16 +9818,23 @@ Act.Reload:
 		!! 初めのレコードと違いがある
 		If Changed Then
 			!! 変更ありなら自分の変更を破棄するか判断させる
-			PromptLine = BG.YELLOW:FG.BASE3:"Record previously Changed by Another, Are you sure you want to destroy your modification? (Y) :"
-			GoSub PromptLine
-			GoSub GetKey
-			If UpCase(C) = "Y" Else Return
+			PromptLine = BG.RED:FG.BASE3:"Record previously changed by another, Are you sure you want to destroy your modification? (Y) :"
+		End Else
+			PromptLine = BG.CYAN:FG.BASE3:"Record previously changed by another, Do you want to reload this item? (Y) :"
 		End
-		GoSub ReadItem
-		StatusMessage = "Reloaded, Because updated by others."
+		GoSub PromptLine
+		GoSub GetKey
+		If UpCase(C) = "Y" Else Return
+		
+		cmdline = "READ.BUFFER ":If PathName<>"" And FileName[1,5]="PATH:" Then PathName Else FileName:" ":ItemName
+		cmdline<-1> = "BACK.TO.EDITOR"
+		bAutoCommand = @TRUE
+		GoSub Act.Exit
+		Changed = @False
+		GoSub Act.CloseBuff
+	End Else
+		Redraw = REDRAW.ALL
 	End
-
-	Redraw = REDRAW.ALL
 	
 	Return
 
@@ -9623,8 +9858,8 @@ $IFDEF U2__UNIVERSE
 $ELSE
 	cmdline = "BASIC ":FileName:" ":ItemName:" DEBUGGING CHANGED"
 $ENDIF
+	cmdline<-1> = "PAUSE.AND.BACK.TO.EDITOR"
 	bAutoCommand = @TRUE
-	bAutoEditor = @TRUE
 	GoSub Act.Exit
 	Return
 
@@ -9646,8 +9881,8 @@ $ENDIF
 		If DCount(Rec,@FM)=1 Then Return
 		cmdline = Rec[@FM,2,9999]
 	End
+	cmdline<-1> = "PAUSE.AND.BACK.TO.EDITOR"
 	bAutoCommand = @TRUE
-	bAutoEditor = @TRUE
 	GoSub Act.Exit
 	Return
 
@@ -9712,7 +9947,7 @@ Act.Action:
 * Act.Exit
 
 Act.Exit:
-	AllDone = True
+	AllDone = True ;** Exit Main Loop
 	Return
 
 * **************************************************************************
@@ -9721,7 +9956,7 @@ Act.Exit:
 Act.CloseBuff:
 	
 	If Changed And Not(ReadOnly) Then
-		PromptLine = "Record has changed - Enter ! to Force Close :"; GoSub PromptLine
+		PromptLine = BG.RED:FG.BASE3:"Record has changed - Enter ! to Force Close :"; GoSub PromptLine
 		GoSub GetKey
 		If C >< "!" Then Return
 	End
@@ -9750,6 +9985,11 @@ Act.CloseBuff:
 	flgs = EqS(lruBuffList,Reuse(CurBuf))
 	lruBuffList = IfS(flgs,Reuse(""),lruBuffList)
 	lruBuffList = Convert(' ',@FM,Trim(Convert(@FM,' ',lruBuffList)))
+
+	!! オープンフラグを消す
+	Find CurBuf In SubstringS(LRUOpenList,1,1) Setting f Then
+		LRUOpenList<f>[1,1] = "0"
+	End
 
 	!! 次のバッファ
 	Found = lruBuffList<1>

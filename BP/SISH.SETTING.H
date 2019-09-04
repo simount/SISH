@@ -235,7 +235,7 @@ Equ K.C_SPACE To          "@@"
 !! Solalizedのカラーテーマ設定
 THEME.COLOR.SETTINGS = ""
 IF @TTY = "console" AND @TERM.TYPE # "msvt" ELSE
-	A = IF @TERM.TYPE = "msvt" THEN ESC ELSE BEL
+	A = BEL:ESC
 	THEME.COLOR.SETTINGS := ESC:"]4;0;rgb:00/2b/36":A:" "
 	THEME.COLOR.SETTINGS := ESC:"]4;10;rgb:07/36/42":A:" "
 	THEME.COLOR.SETTINGS := ESC:"]4;11;rgb:58/6e/75":A:" "
