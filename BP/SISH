@@ -37,7 +37,7 @@ $ELSE
 	$CATALOGUE SISH GLOBAL
 
 	$MODE CASE.SENSITIVE,CONDITIONAL.STATEMENTS,UV.LOCATE
-$MODE DEBUG.EQUATES
+	$MODE DEBUG.EQUATES
 	
 	$INCLUDE SYSCOM KEYS.H
 	$INCLUDE SYSCOM TERMINFO.H
@@ -281,10 +281,6 @@ Shell.Main:
 	EQU DIRec To DIRecs(CurBuf)                        ;** 辞書情報レコード
 	EQU TgtFld To TgtFlds(CurBuf)                      ;** 編集対象フィールド
 	
-	!! シェルと共用
-	EQU cmdline To Bufs(52)
-	EQU curPos To Xs(52)
-	
 	!! Buffer Information
 	EQU BI.USED To 1
 	EQU BI.FILE To 2
@@ -453,6 +449,7 @@ $ENDIF
 
 	bAutoCommand = @FALSE
 	bAutoEditor = @FALSE
+	dispType = ""
 	
 	!! 大文字小文字変換の初期化
 	Perform "PTERM CASE ":If bInvert Then "INVERT" Else "NOINVERT"
@@ -510,12 +507,12 @@ $ENDIF
 	
 	dictName = ""
 
-	cmdlineRows = 0
-	curY = 0
-	curPos = 1
-	cmdline = ""
 	cmdStackPos = 1
 	cmdStackPage = ""
+	cmdlineRows = 0
+	
+	curPos = 1 ;** cmdline上のカーソル位置
+	cmdline = ""
 	
 	selCurStart = 0
 	selCurEnd = 0
@@ -603,36 +600,204 @@ $ENDIF
 	MOUSE = "" ;** マウスデータ
 	nowC = ""
 
+	Y = 1
+	prevY = 1
+	prevX = 1
+	Rec = ":"
+	prevRec = Rec
+	keepSelection	=@False
+	
 *
 * キータイプのループ
 *
 Shell.KeyLoop.Start:
 	Loop
 	
-		!! １行に固定する
-		Y = 1
+		If bAutoCommand Then GoTo Run.Command
 		
-		Rec = Rec<1>
-		Line = Rec
-
-AutocommanLoop.Start:
+		!! コマンドエディタからコマンドを取得する
+		GoSub GET.CMDLINE
+		
+Set.Command.Editor:
+		
+		prmptStr = "si"
+		If bInvert Then prmptStr = UpCase(prmptStr)
+		
+		!! インクリメンタルサーチ
+		If bIncSearch Then
+			prmptStr := " ":bIncSearch:"`":iSearchText:"'"
+		End
+		
+		!! コマンドスタック位置表示
+		If cmdStackPos > 1 Then
+			no = cmdStackPos-1
+			prmptStr := " ":Fmt(no,"R%":Maximum(Len(no):@FM:2))
+		End
+		prmptStr := PROMPT.STR
+		If System(11) Then prmptStr := PROMPT.STR ;** アクティブな選択リストあり
+		
+AutoWrap:
+		!! Auto Wrap と カーソル表示位置の計算
+		If BufInfo<BI.BLOCKSTART> Then
+			selStartIndex = BufInfo<BI.BLOCKSTART,2>
+			A = BufInfo<BI.BLOCKSTART,1>
+			If A>1 Then selStartIndex += SUM(LenS(Rec[@FM,1,A-1]))
+		End
+		
+		Rec = ""
+		Lines = 1
+		tmpDX = 1 ;** 表示用X位置
+		tmpIX = 1 ;** 内部用X位置
+		prev.tmpDX = 0 ;** 前行の表示用X位置
+		prev.tmpIX = 0 ;** 前行の表示用X位置
+		cl = prmptStr:cmdline
+		clLen = Len(cl)+1
+		curIndex = Min(curPos+Len(prmptStr)-1,clLen)
+		For i = 1 To clLen
+			
+			c = cl[i,1]
+			dispLen = LenDP(c)
+			If tmpDX+dispLen > @CRTWIDE+1 Then
+				* 改行
+				Rec := @FM
+				Lines += 1
+				tmpIX = 1
+				tmpDX = 1
+			End
+			
+			!! カーソル位置を再設定
+			If i = curIndex Then
+				If Y+1 = prevY AND prevX = 1 And X > prev.tmpIX Then
+					!! 行頭から上の行の末端へ移動する時の特殊処理
+					X = prev.tmpIX
+					DP_X = prev.tmpDX
+					If BufInfo<BI.BLOCKSTART> Then
+						BufInfo<BI.BLOCKEND,1> = Y
+						BufInfo<BI.BLOCKEND,2> = X
+					End
+				End Else
+					Y = Lines
+					X = tmpIX
+					DP_X = tmpDX
+				End
+				If i = clLen Then Exit ;** 最終文字
+			End
+			
+			!! 選択範囲位置の再設定
+			If BufInfo<BI.BLOCKSTART> Then
+				If i = selStartIndex Then
+					BufInfo<BI.BLOCKSTART,1> = Lines
+					BufInfo<BI.BLOCKSTART,2> = tmpIX
+				End
+			End
+			
+			prev.tmpIX = tmpIX
+			prev.tmpDX = tmpDX
+			tmpDX += dispLen
+			tmpIX += 1
+			
+			Rec := c
+			
+		Next i
+		
+		!! Auto Wrap 後のX位置調整
+		If prevY#Y And prevX = X Then
+			** X位置を表示位置から逆算する
+			Line = Rec<Y> ;** 現在Y行
+			GoSub GetX.From.keepDPX
+			X = outX
+			DP_X = 1
+			FOR I=1 TO X-1
+				c = Line[I,1]
+				DP_X += LenDP(c)
+			NEXT I
+		End
+		
+		If Y = 1 And X <= Len(prmptStr) Then
+			!! プロンプト内にカーソルを入れない処理
+			X = Len(prmptStr)+1
+			DP_X = X
+		End
+		
+		!! 選択範囲の調整
+		If keepSelection Then
+			** 選択終了位置の設定
+			If BufInfo<BI.BLOCKEND> Then
+				If BufInfo<BI.BLOCKEND,2> > Len(Rec<Y>) Then
+					BufInfo<BI.BLOCKEND,1> += 1
+					BufInfo<BI.BLOCKEND,2> = 1
+				End
+			End Else
+				BufInfo<BI.BLOCKEND> = Y:@VM:X
+			End
+			If BufInfo<BI.BLOCKSTART>=BufInfo<BI.BLOCKEND> Then
+				BufInfo<BI.BLOCKSTART> = ""
+				BufInfo<BI.BLOCKEND> = ""
+			End
+			LOGMSG BufInfo<BI.BLOCKSTART>:" : ":BufInfo<BI.BLOCKEND>
+		End Else
+			BufInfo<BI.BLOCKSTART> = ""
+			BufInfo<BI.BLOCKEND> = ""
+		End
+		
+		!! 描画処理
+		cmdDraw = "" ;** 描画構築済み
+		cmdDraw := HI.SHELL.ON
+		cmdDraw := prmptStr
+		cmdDraw := HI.SHELL.OFF
+		
+		GoSub GetSelBlock
+		
+		Rec.len = Len(Rec)
+		tmpY = 1
+		tmpX = Len(prmptStr)+1
+		For i=Len(prmptStr)+1 To Rec.len
+			c = Rec[i,1]
+			If c = @FM Then
+				cmdDraw := ESC.CRT.MOVE_NEXT_LINE
+				tmpY += 1
+				tmpX = 0
+			End Else
+				If BufInfo<BI.BLOCKSTART> Then
+					!! 選択範囲の描画
+					A = tmpY:@FM:tmpX
+					If blockStart = A Then
+						cmdDraw := HI.SELECT.ON
+					End Else If blockEnd = A Then
+						cmdDraw := SGR.ALL.OFF
+					End
+				End
+				cmdDraw := c
+			End
+			tmpX += 1
+		Next i
+		
 		!!
 		!! 表示
 		!!
+		
+		!! カーソルを先頭に持ってきてクリア
 		crtBuff = ""
+		crtBuff := SGR.ALL.OFF
+		GoSub Clear.Cmdline.Crt
+		
 		If NOT(IS.CONSOLE) Then
 			crtBuff := CHAR(27):"]2;":act.title:CHAR(7)
 		End
 		GoSub Draw.Cmdline
+		GoSub Draw.Cmdline.Cursor
 		GoSub CRT.BUFF.FLUSH
 		
-		!! 自動的にコマンドを実行するモード
-		If bAutoCommand Then GoTo Run.Command
-		If bAutoEditor Then bAutoEditor = @FALSE; GoTo Launch.Editor
+Shell.KeyLoop.Bef.GetKey:
+		
+		!! 前回位置として保存しておく
+		prevY = Y
+		prevX = X
+		keepDP_X = DP_X
+		cmdlineRows = Max(cmdlineRows,Lines)
+		
 		NokoriKouho = @FALSE
 		bFirstTab = @TRUE
-		
-Shell.KeyLoop.Bef.GetKey:
 		
 		prevC = nowC ;** 前回の入力文字を保持
 		
@@ -650,9 +815,33 @@ Shell.KeyLoop.Bef.GetKey:
 		!!
 		Begin Case
 			Case actNo = A.UP
-				GoSub ACTION.CMDSTACK.NEXT
+				If Y=1 Then
+					GoSub ACTION.CMDSTACK.NEXT
+					GoTo Set.Command.Editor
+				End Else
+					Y -= 1
+				End
+			Case actNo = A.PREVSTMT
+				If Y=1 Then
+					GoSub ACTION.CMDSTACK.NEXT
+					GoTo Set.Command.Editor
+				End Else
+					GoSub Act.PrevStmt
+				End
 			Case actNo = A.DOWN 
-				GoSub ACTION.CMDSTACK.BACK
+				If Y >= Lines Then
+					GoSub ACTION.CMDSTACK.BACK
+					GoTo Set.Command.Editor
+				End Else
+					Y += 1
+				End
+			Case actNo = A.NEXTSTMT
+				If Y >= Lines Then
+					GoSub ACTION.CMDSTACK.BACK
+					GoTo Set.Command.Editor
+				End Else
+					GoSub Act.NextStmt
+				End
 			Case actNo = A.TOP
 				cmdStackPos = 2
 				GoSub ACTION.CMDSTACK.BACK
@@ -691,6 +880,7 @@ Shell.KeyLoop.Bef.GetKey:
 					bIncSearch = "R"
 				End
 				GoSub ACTION.CMDSTACK.INC.SEARCH
+				GoTo Set.Command.Editor
 				
 			Case C = CTRL.F
 				!! コマンド履歴正順インクリメンタルサーチ
@@ -702,6 +892,7 @@ Shell.KeyLoop.Bef.GetKey:
 					bIncSearch = "F"
 				End
 				GoSub ACTION.CMDSTACK.INC.SEARCH
+				GoTo Set.Command.Editor
 				
 			Case C = CTRL.L
 				If cmdStackPos = 1 Then
@@ -713,7 +904,7 @@ Shell.KeyLoop.Bef.GetKey:
 				bAutoCommand = @TRUE
 				
 			Case actNo = A.NEWLINE
-				GoTo Run.Command
+				bAutoCommand = @TRUE
 				
 			Case actNo = A.CASEINVERT
 				GoSub Act.ToggleCaseInvert
@@ -746,7 +937,7 @@ Shell.KeyLoop.Bef.GetKey:
 				END
 Launch.Editor:
 				GoSub Editor.Main
-				If bAutoCommand Then GoTo AutocommanLoop.Start
+				prevY = Y
 			
 			Case actNo = A.CANCEL
 				If Not(bFirstCurTop) Then
@@ -790,36 +981,31 @@ Launch.Editor:
 						cmdStackPos += 1
 					End
 					GoSub ACTION.CMDSTACK.INC.SEARCH
+					GoTo Set.Command.Editor
 				End Else
-					GoSub Input.Actions
-!					If actNo = A.LEFT Or actNo = A.RIGHT Or actNo = A.PREVWORD Or actNo = A.NEXTWORD Then
-!						!! カーソル移動なら描画高速化
-!						GoSub Draw.Cmdline.Cursor
-!						GoSub CRT.BUFF.FLUSH
-!						GoTo Shell.KeyLoop.Bef.GetKey
-!					End Else If actNo = A.INSCHAR And UniSeq(C) < 127 And BufInfo<BI.BLOCKSTART> = "" Then
-					If actNo = A.INSCHAR And UniSeq(C) < 127 And BufInfo<BI.BLOCKSTART> = "" Then
-						!! 半角文字なら描画高速化
-						CRT (IF IS.CONSOLE AND @TERM.TYPE # 'msvt' THEN @(-19) ELSE CSI:"1@"):C:
-						GoTo Shell.KeyLoop.Bef.GetKey
+					If actNo = A.BACKSPACE Then 
+						GoSub Act.DelBackCh2
+					End Else
+						GoSub Input.Actions
+!						If actNo = A.LEFT Or actNo = A.RIGHT Or actNo = A.PREVWORD Or actNo = A.NEXTWORD Then
+!							!! カーソル移動なら描画高速化
+!							DP_X = X
+!							GoSub Draw.Cmdline.Cursor
+!							GoSub CRT.BUFF.FLUSH
+!							GoTo Shell.KeyLoop.Bef.GetKey
+!						End
+!						End Else If actNo = A.INSCHAR And UniSeq(C) < 127 And BufInfo<BI.BLOCKSTART> = "" Then
+!						If actNo = A.INSCHAR And UniSeq(C) < 127 And BufInfo<BI.BLOCKSTART> = "" Then
+!							!! 半角文字なら描画高速化
+!							CRT (IF IS.CONSOLE AND @TERM.TYPE # 'msvt' THEN @(-19) ELSE CSI:"1@"):C:
+!							GoTo Shell.KeyLoop.Bef.GetKey
+!						End
 					End
 				End
 			
 		End Case
 		
 		prevActNo = actNo
-		
-		** --------------------------
-		** 選択範囲調整
-		** --------------------------
-		If keepSelection Then
-			** 選択終了位置
-			If Not(BufInfo<BI.BLOCKEND>) Then BufInfo<BI.BLOCKEND> = Y:@VM:X
-		End Else
-			** 選択範囲が外れた
-			BufInfo<BI.BLOCKSTART> = ""
-			BufInfo<BI.BLOCKEND> = ""
-		End
 		
 Shell.KeyLoop.End:
 	Repeat
@@ -854,86 +1040,33 @@ AutoTermSize:
 * コマンドライン描画
 *---------------------
 Draw.Cmdline:
-	!! カーソルを先頭に持ってきてクリア
-	crtBuff := SGR.ALL.OFF
-	GoSub Clear.Cmdline.Crt
-	crtBuff := HI.SHELL.ON
+	
+	crtBuff := cmdDraw
+	
+Return
 
-	!! プロンプト部分の構築
-	prmptStr = "si"
-	If bInvert Then prmptStr = UpCase(prmptStr)
-	
-	!! インクリメンタルサーチ
-	If bIncSearch Then
-		prmptStr := " ":bIncSearch:"`":iSearchText:"'"
-	End
-	
-	!! コマンドスタック位置表示
-	If cmdStackPos > 1 Then
-		no = cmdStackPos-1
-		prmptStr := " ":Fmt(no,"R%":Maximum(Len(no):@FM:2))
-	End
-	prmptStr := PROMPT.STR
-	If System(11) Then prmptStr := PROMPT.STR ;** アクティブな選択リストあり
-	
-	!! コマンド行表示 (Auto Wrap) 
-	cl = prmptStr : cmdline<1>
-	curIndex = Len(prmptStr) + curPos - 1
-	tmpX = 0
-	tmpY = 0
-	clLen = Len(cl)
-	For i = 1 To clLen 
-		c = cl[i,1]
-		dispLen = LenDP(c)
-		nextX = tmpX + dispLen
-		If nextX > @CRTWIDE-1 Then
-			* 改行
-			tmpY += 1
-			tmpX = 0
-			crtBuff := ESC.CRT.MOVE_NEXT_LINE
-		End
-		crtBuff := c
-		tmpX += dispLen
-		
-		If i = Len(prmptStr) Then crtBuff := HI.SHELL.OFF
-		
-		!! カーソル位置
-		If i = curIndex Then curX=tmpX; curY=tmpY
-		
-		!! 選択範囲
-		If BufInfo<BI.BLOCKSTART> Then
-			blockSt = BufInfo<BI.BLOCKSTART,2>
-			If BufInfo<BI.BLOCKSTART,1> < BufInfo<BI.BLOCKEND,1> THEN
-				blockEd = clLen
-			END ELSE
-				blockEd = BufInfo<BI.BLOCKEND,2>
-			END
-			If blockSt > blockEd Then tmp = blockSt; blockSt = blockEd; blockEd = tmp
-			i2 = i - Len(prmptStr) + 1
-			If i2 = blockSt Then crtBuff := HI.SELECT.ON
-			If i2 = blockEd Then crtBuff := SGR.ALL.OFF
-		END
-		
-	Next
-	cmdlineRows = tmpY ;** 行数を格納
-	
 Draw.Cmdline.Cursor:
 	* カーソル表示
-	If bIncSearch Then
-		crtBuff := CSI:"G":CSI:5+Len(iSearchText):"C"
-	End Else
-		If IS.CONSOLE Then
-			If cmdlineRows - curY > 0 Then
-				crtBuff := @(curX,cmdlineRows - curY)
-			End Else
-				crtBuff := @(curX)
-			End
+	If IS.CONSOLE Then
+		If Lines - Y > 0 Then
+			crtBuff := @(-10,Lines - Y)
+		End
+		crtBuff := @(0)
+		If bIncSearch Then
+			crtBuff := @(5+Len(iSearchText))
 		End Else
-			crtBuff := CSI:"G":CSI:curX:"C"
-			If cmdlineRows - curY > 0 Then
-				* @(IT$CUU)が正しいエスケープシーケンスを出力しないので、VT100のシーケンス直書き
-				crtBuff := CSI:(cmdlineRows - curY):'A'
-			End
+			If DP_X > 1 Then crtBuff := @(DP_X-1)
+		End
+	End Else
+		* @(IT$CUU)が正しいエスケープシーケンスを出力しないので、VT100のシーケンス直書き
+		If Lines - Y > 0 Then
+			crtBuff := CSI:(Lines - Y):'A'
+		End
+		crtBuff := CSI:"G"
+		If bIncSearch Then
+			crtBuff := CSI:5+Len(iSearchText):"C"
+		End Else
+			If DP_X > 1 Then crtBuff := CSI:(DP_X-1):"C"
 		End
 	End
 Return
@@ -943,27 +1076,29 @@ Return
 *---------------------
 Clear.Cmdline.Crt:
 	If IS.CONSOLE Then
-		For i=1 To curY
-			crtBuff := @(-10) ;** CUU
-		Next
-		crtBuff := @(0):@(-4)
-		For i=1 To cmdlineRows
-			crtBuff := @(-33):@(-4)
-		Next
-		For i=1 To cmdlineRows
-			crtBuff := @(-10) ;** CUU
-		Next
+		crtBuff := @(0)
+		If prevY > 1 Then
+			crtBuff := @(-10,prevY-1)
+		End
+		crtBuff := @(-4)
+		If cmdlineRows > 1 Then
+			For i = 2 To cmdlineRows
+				crtBuff := @(33):@(-4)
+			Next i
+			crtBuff := @(-10,cmdlineRows-1)
+		End
 	End Else
-		For i=1 To curY
-			crtBuff := CSI:'1A'
-		Next
-		crtBuff := CSI:'G':CSI:'2K'
-		For i=1 To cmdlineRows
-			crtBuff := CSI:'1B':CSI:'2K'
-		Next
-		For i=1 To cmdlineRows
-			crtBuff := CSI:'1A'
-		Next		
+		crtBuff := CSI:'G'
+		If prevY > 1 Then
+			crtBuff := CSI:(prevY-1):'A'
+		End
+		crtBuff := CSI:'2K'
+		If cmdlineRows > 1 Then
+			For i = 2 To cmdlineRows
+				crtBuff := CSI:'1B':CSI:'2K'
+			Next i
+			crtBuff := CSI:(cmdlineRows-1):'A'
+		End
 	End
 Return
 
@@ -1007,7 +1142,7 @@ Run.Command:
 			Case k = "G"
 				GoTo ACTION.CMDSTACK.GOTO
 			Case k = "L"
-				GoTo ACTION.CMDSTACK.LIST
+				GoSub ACTION.CMDSTACK.LIST
 			Case k = "R"
 				GoTo ACTION.CMDSTACK.READ
 			Case k = "S"
@@ -1031,7 +1166,7 @@ Run.Command:
 				** 自動モードで初めからやり直し
 				cmdline = cmdlines
 				bAutoCommand = @TRUE
-				GoTo AutocommanLoop.Start
+				GoTo Shell.KeyLoop.Start
 				
 			Case k = "T"
 				bTimer = Not(bTimer)
@@ -1094,6 +1229,9 @@ Run.Command:
 		End
 	End
 	
+	GoSub Clear.Cmdline.Crt
+	Crt crtBuff:
+
 $IFNDEF U2__UNIVERSE
 	IF isComoActive THEN
 		!! COMOを実行前に復帰させる
@@ -1101,9 +1239,7 @@ $IFNDEF U2__UNIVERSE
 	END
 $ENDIF
 	
-	GoSub Clear.Cmdline.Crt
-	crtBuff := HI.SHELL.ON:PROMPT.STR:HI.SHELL.OFF:cmdline
-	Crt crtBuff:
+	crtBuff = HI.SHELL.ON:PROMPT.STR:HI.SHELL.OFF:cmdline
 	
 	** 空コマンドは無視
 	If cmdline = "" Then
@@ -1238,17 +1374,23 @@ Run.Command.Ending:
 			bAutoEditor = @TRUE
 		End Else If cmdlines # "" Then
 			cmdline = cmdlines
-			GoTo AutocommanLoop.Start ;** まだ続く
+			GoTo Run.Command ;** まだ続く
 		End
 		bAutoCommand = @FALSE
 	End
+	
+	cmdline = ""
+	cmdlineRows = 1
 	
 !! 非同期メッセージの表示
 $IFNDEF U2__UNIVERSE
 	msgs = GET.MESSAGES()
 	If msgs THEN PRINT CONVERT(@FM,CHAR(10),msgs)
 $ENDIF
-	
+
+	!! 実行完了後にエディタを開く
+	If bAutoEditor Then bAutoEditor = @FALSE; GoTo Launch.Editor
+
 	GoTo Shell.Input.Begin ;* キーループに戻る
 
 
@@ -1327,7 +1469,7 @@ $IFNDEF U2__UNIVERSE
 		choiceNo = 1
 		choiceList = lines
 		title = dispType
-		choiceOrgY = cmdlineRows + 1
+		choiceOrgY = Lines
 		filter = ""
 		GoSub InitChoiceList
 		
@@ -1482,7 +1624,7 @@ $ENDIF
 	End Else
 	
 		* Verbは決定済み
-		words = Convert(", ",@FM:@FM,cmdline);
+		words = Convert(", ",@FM:@FM,cmdline)
 		
 		** 初めの単語がLOGTOならアカウント補完
 		If UpCase(words<1>)="LOGTO" Then
@@ -1788,7 +1930,7 @@ Disp.NokoriKouho:
 		choiceNo = 0
 		choiceList = slist
 		title = dispType
-		choiceOrgY = cmdlineRows + 1
+		choiceOrgY = Lines
 		crtBuff = ""
 		GoSub InitChoiceList
 		choiceActive = @False
@@ -1826,7 +1968,7 @@ CmdHist.Candidate:
 	choiceNo = cmdStack.len - cmdStackPos
 	filter = iSearchText
 	title = "Cmd Hist"
-	choiceOrgY = cmdlineRows + 1
+	choiceOrgY = Lines
 	GoSub InitChoiceList
 	Loop
 		
@@ -1897,7 +2039,7 @@ DispCandidate.Common:
 		choiceList<-1> = FMTDP(slist<i>,col1+2:"T"):dlist<i>:@VM:slist<i>
 	Next i
 	title = dispType
-	choiceOrgY = cmdlineRows + 1
+	choiceOrgY = Lines
 	GoSub InitChoiceList
 	Loop
 		
@@ -2311,6 +2453,16 @@ $ENDIF
 	** Shellを抜ける
 	Stop
 
+*----------------------------------------
+* 現在カーソル位置のコマンドラインを取得
+*----------------------------------------
+GET.CMDLINE:
+	cmdline = Convert(@FM,"",Rec[":",2,999])
+	curPos = X
+	If Y>1 Then curPos += SUM(LenS(Rec[@FM,1,Y-1]))
+	curPos -= Len(Rec[":",1,1]) ;** プロンプト分減らす
+	Return
+
 *--------------------------------
 * コマンドスタック進む Action
 *--------------------------------
@@ -2327,10 +2479,10 @@ ACTION.CMDSTACK.NEXT:
 			End
 		End
 		cmdline = cmdStackPage<cmdStackPos>
-		curPos = Len(cmdline) + 1
+		curPos = 1
 	End
 	
-Return
+	Return
 
 *--------------------------------
 * コマンドスタック戻る Action
@@ -2343,10 +2495,10 @@ ACTION.CMDSTACK.BACK:
 		End
 		cmdStackPos -= 1
 		cmdline = cmdStackPage<cmdStackPos>
-		curPos = Len(cmdline) + 1
+		curPos = Len(cmdline)+2
 	End
 	
-Return
+	Return
 
 *--------------------------------
 * コマンドスタック一覧表示 Action
@@ -2373,13 +2525,13 @@ ACTION.CMDSTACK.LIST:
 		Read rec From VOC,id Then
 			cmdline = "CT VOC ":id
 			bAutoCommand = @TRUE
-			GoTo Run.Command
+			Return
 		End Else
 			OPEN "PVOC,":@USER TO PVOC Then
 				Read rec From PVOC,id Then
 					cmdline = "CT PVOC,":@USER:" ":id
 					bAutoCommand = @TRUE
-					GoTo Run.Command
+					Return
 				End
 			End
 		End
@@ -2432,8 +2584,8 @@ ACTION.CMDSTACK.LIST:
 	!! 現在行の調整
 	GoSub ACTION.CMDSTACK.NEXT
 	GoSub ACTION.CMDSTACK.BACK
-	
-GoTo Run.Command.Ending
+
+	Return
 
 *--------------------------------
 * コマンドスタックジャンプ Action
@@ -2441,8 +2593,6 @@ GoTo Run.Command.Ending
 ACTION.CMDSTACK.GOTO:
 	no = MatchField(UpCase(cmdline),"'.G'0N...",2)
 ACTION.CMDSTACK.GOTO.impl:
-	cmdline = ""
-	curPos = 1
 	If no <> "" And DCount(cmdStack,@FM) > no + 1 Then
 		cmdStackPos = 1
 		Loop
@@ -2450,7 +2600,9 @@ ACTION.CMDSTACK.GOTO.impl:
 			If cmdStackPos = no + 1 Then Exit
 		Repeat
 	End
-	GoTo Shell.KeyLoop.End
+	cmdline = cmdStackPage<cmdStackPos>
+	curPos = Len(cmdline)+2
+	GoTo Set.Command.Editor
 
 *--------------------------------
 * コマンドスタックインクリ検索 Action
@@ -2501,7 +2653,7 @@ ACTION.CMDSTACK.APPEND:
 
 	!! 一覧表示
 	cmdline = ".L":no:",1"
-	GoTo ACTION.CMDSTACK.LIST
+	GoSub ACTION.CMDSTACK.LIST
 
 *--------------------------------
 * コマンドスタック行のSAVE Action
@@ -2866,10 +3018,10 @@ AUTO.COMPLATE:
 Return
 
 CLEAR.FOR.PERFORM:
-	If cmdlineRows - curY > 0 Then
-		Crt @(IT$CUD, cmdlineRows - curY):
+	If cmdlineRows - Y > 0 Then
+		crtBuff := @(IT$CUD, cmdlineRows - Y)
 	End
-	Crt
+	Crt crtBuff ;** 改行
 	Crt @(IT$CLEOS):
 Return
 
@@ -2889,9 +3041,11 @@ CUR.TOP.OF.SCREEN:
 		If IS.CONSOLE Then
 			Crt @(-1):
 		End Else
-			Crt CSI:"J":ESC.CUR.TOP:@(-3):
+			Crt ESC.CUR.TOP:@(-1):
 		End
 	End
+	
+	cmdlineRows = Lines
 	
 Return
 
@@ -3293,7 +3447,8 @@ Editor.Main:
 	Replacing = False
 	ignoreCase = False
 	searchReverse = False
-
+	
+	crtBuff = ""
 	GoSub GoAltScreenBuf ;** 代替画面バッファ
 	
 	Redraw = REDRAW.ALL
@@ -3322,7 +3477,6 @@ Editor.Main:
 	
 	GoSub BackAltScreenBuf ;** 代替画面バッファから戻る
 	Crt crtBuff:
-	
 	CurBuf = CMD_BUF
 	
 	Return
@@ -3558,7 +3712,6 @@ GET.SELECTION.STRING:
 		blockStart = Raise(BufInfo<BI.BLOCKSTART>)
 		blockEnd = Raise(BufInfo<BI.BLOCKEND>)
 		If blockStart<1> > blockEnd<1> Then tmp = blockStart; blockStart = blockEnd; blockEnd = tmp
-		
 		If blockStart<1> = blockEnd<1> Then
 			** １行内での選択
 			If blockStart<2> > blockEnd<2> Then
@@ -3899,6 +4052,7 @@ DoRead.Without.Jump:
 					If info<BI.FIELDFIX> = FldInfo And info<BI.PBUFNO> = ParentBufNo And info<BI.VALUEFIX> = DiveValuePos Then
 						Found = no
 						GoSub ChangeBuf
+						GoSub Act.Reload
 						Return
 					End
 				End
@@ -3973,7 +4127,7 @@ $ENDIF
 Return
 
 Common.CloseFile:
-	Close FL
+	If Not(BufInfo<BI.LOCKED>) Then Close FL
 Return
 
 *-----------------------------------------------------------------------
@@ -4098,10 +4252,14 @@ Return
 *-----------------------------------------------------------------------
 DoLock:
 	
-	If ReadOnly Then
-		StatusMessage = "Cannot get RU Lock at Read Only mode"
+	If IsNew Then
+		StatusMessage = BG.RED:"Cannot get Lock, because not stored Item."
 		Return
 	End
+	
+DoLock.Impl:
+	
+	Redraw.StatusLine = @true
 	
 	FileName = BufInfo<BI.FILE>
 	ItemName = BufInfo<BI.ITEM>
@@ -4113,14 +4271,25 @@ DoLock:
 		** ロック中ならロックを外す
 		Release FL, ItemName
 		BufInfo<BI.LOCKED> = @FALSE
+		StatusMessage = "Unlock"
 	End Else
 		** ロック中でないなら更新ロックを取得する
 		If Changed Then GoSub CheckSave
 		If Changed Then Return
-		RecordLockU FL, ItemName Locked
-			StatusMessage = "Record previously Locked by ":Status()
-			GoSub Common.CloseFile
-			Return
+		If ReadOnly Then
+			RecordLockL FL, ItemName Locked
+				StatusMessage = "Record previously Locked by ":Status()
+				GoSub Common.CloseFile
+				Return
+			End
+			StatusMessage = "Get 'RL' Lock"
+		End Else
+			RecordLockU FL, ItemName Locked
+				StatusMessage = "Record previously Locked by ":Status()
+				GoSub Common.CloseFile
+				Return
+			End
+			StatusMessage = "Get 'RU' Lock"
 		End
 		BufInfo<BI.LOCKED> = @TRUE
 	End
@@ -4439,6 +4608,10 @@ ProcChoiceList:
 				If keepSelection Then
 					** 選択終了位置
 					If Not(BufInfo<BI.BLOCKEND>) Then BufInfo<BI.BLOCKEND> = Y:@VM:X
+					If BufInfo<BI.BLOCKSTART>=BufInfo<BI.BLOCKEND> Then
+						BufInfo<BI.BLOCKSTART> = ""
+						BufInfo<BI.BLOCKEND> = ""
+					End
 				End Else
 					** 選択範囲が外れた
 					BufInfo<BI.BLOCKSTART> = ""
@@ -4619,6 +4792,7 @@ ProcChoiceList:
 		crtBuff := @(-4)
 	End
 	If PFilter.X#"" Then crtBuff := @(-9,PFilter.X) ;** 実際のカーソル位置に戻す
+	crtBuff := SGR.ALL.OFF
 	GoSub CRT.BUFF.FLUSH
 	choiceSelNo = choiceOutList<choiceNo>
 	choiceSelection = choiceList<choiceSelNo>
@@ -4969,6 +5143,10 @@ Draw.Editor:
 		** 選択終了位置
 		If Not(BufInfo<BI.BLOCKEND>) Then BufInfo<BI.BLOCKEND> = Y:@VM:X
 		Redraw = (If Not(moveY) And Redraw = 0 Then Y Else REDRAW.ALL)
+		If BufInfo<BI.BLOCKSTART>=BufInfo<BI.BLOCKEND> Then
+			BufInfo<BI.BLOCKSTART> = ""
+			BufInfo<BI.BLOCKEND> = ""
+		End
 	End Else
 		If BufInfo<BI.BLOCKSTART> Then
 			** 選択範囲が外れた
@@ -6680,10 +6858,6 @@ ChangeBuf:
 	keepDP_X = X
 	keepSelection = @TRUE
 
-	!! ロック処理の再実行をしておく
-	BufInfo<BI.LOCKED> = If BufInfo<BI.LOCKED> Then @FALSE Else @TRUE 
-	GoSub DoLock
-	
 	Return
 *--------------------------------------------------------------------------
 * SubstCommand
@@ -6922,6 +7096,10 @@ InputBox:
 		If keepSelection Then
 			** 選択終了位置
 			If Not(BufInfo<BI.BLOCKEND>) Then BufInfo<BI.BLOCKEND> = Y:@VM:X
+			If BufInfo<BI.BLOCKSTART>=BufInfo<BI.BLOCKEND> Then
+				BufInfo<BI.BLOCKSTART> = ""
+				BufInfo<BI.BLOCKEND> = ""
+			End
 		End Else
 			** 選択範囲が外れた
 			BufInfo<BI.BLOCKSTART> = ""
@@ -7098,7 +7276,8 @@ Act.Right:
 		If prevPos <> Y:@FM:X Then Return ;** Go To Range End Then Stop
 	End
 	
-	If Rec<Y>[X,1] = "" Then
+	A = Rec<Y>
+	If A[X,1] = "" Then
 		If Y < Lines Then Y += 1 ; X = 1
 	End Else
 		X += 1
@@ -7188,10 +7367,16 @@ Act.NextWord:
 			
 		End Else
 			!! 非インデント部
-			If kakko >< "" And X < kakko<2,1> Then
-				!! 対応する括弧の後ろに移動
-				X = kakko<2,1> + 1
-				If BufInfo<BI.BLOCKSTART> Then BufInfo<BI.BLOCKEND> = Y:@VM:X
+			If kakko >< "" Then
+				If X < kakko<2,1> Then
+					!! 対応する括弧に移動
+					X = kakko<2,1>
+					If BufInfo<BI.BLOCKSTART> Then BufInfo<BI.BLOCKEND> = Y:@VM:X
+				End Else
+					!! 対応する括弧の末尾
+					X += 1
+					GoSub Move.NextWord
+				End
 			End Else
 				!! 単語移動
 				GoSub Move.NextWord
@@ -7254,7 +7439,8 @@ Act.NextStmt:
 		X = prevPos<2> ;** X位置は元に戻す
 	End
 	
-	If Count("*!",TrimF(Rec<Y>)[1,1]) Then
+	A = TrimF(Rec<Y>)[1,1]
+	If A<>"" And Count("*!",A) Then
 		!! コメント行内
 		Line = Change(Rec<Y+1>,Char(9),Space(STDTAB))
 		GoSub GetX.From.keepDPX
@@ -7317,8 +7503,8 @@ Act.PrevStmt:
 		GoSub GoToRangeStart
 		X = prevPos<2> ;** X位置は元に戻す
 	End
-	
-	If Count("*!",TrimF(Rec<Y>)[1,1]) Then
+	A = TrimF(Rec<Y>)[1,1]
+	If A<>"" And Count("*!",A) Then
 		!! コメント行内
 		Line = Rec<Y-1>
 		ch = Line[X,1]
@@ -7732,8 +7918,7 @@ Act.DelCh:
 * Act.DelBackCh
 
 Act.DelBackCh:
-	
-	If Y=1 & X=1 Else
+	If Y=1 And X=1 Else
 	
 		editCmd = ""
 		If BufInfo<BI.BLOCKSTART> Then
@@ -7748,6 +7933,39 @@ Act.DelBackCh:
 			If X = 1 Then
 				editCmd<3> = Y-1
 				editCmd<4> = Len(Rec<Y-1>)+1
+			End Else
+				editCmd<3> = Y
+				editCmd<4> = X-1
+			End
+		End
+		editCmd<5> = ""
+		editCmd<6> = ""
+		
+		GoSub StackEditCmd
+		
+	End
+	
+	Return
+
+* **************************************************************************
+* Act.DelBackCh2 Auto Wrap用
+
+Act.DelBackCh2:
+	If Y=1 And X=1 Else
+	
+		editCmd = ""
+		If BufInfo<BI.BLOCKSTART> Then
+			** 選択中
+			editCmd<1> = BufInfo<BI.BLOCKEND, 1>
+			editCmd<2> = BufInfo<BI.BLOCKEND, 2>
+			editCmd<3> = BufInfo<BI.BLOCKSTART, 1>
+			editCmd<4> = BufInfo<BI.BLOCKSTART, 2>
+		End Else
+			editCmd<1> = Y
+			editCmd<2> = X
+			If X = 1 Then
+				editCmd<3> = Y-1
+				editCmd<4> = Len(Rec<Y-1>)
 			End Else
 				editCmd<3> = Y
 				editCmd<4> = X-1
@@ -9722,6 +9940,7 @@ Act.InsCommentOut:
 			editCmd<-1> = cmd
 		END
 	Next
+	keepSelection = @TRUE
 	GoSub StackEditCmd
 	X = tmpX + (Len(Rec<Y>) - tmpLen)
 	Return
@@ -9834,6 +10053,14 @@ Act.Reload:
 		GoSub Act.CloseBuff
 	End Else
 		Redraw = REDRAW.ALL
+	End
+	
+	!! ロック処理の再実行をしておく
+	If BufInfo<BI.LOCKED> Then
+		If Not(IsNew) And Not(ReadOnly) Then
+			BufInfo<BI.LOCKED> = @FALSE
+			GoSub DoLock.Impl
+		End
 	End
 	
 	Return
