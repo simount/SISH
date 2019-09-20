@@ -124,6 +124,11 @@ Equ CSI To ESC:'['
 Equ ESC.CUR.TOP To CSI:"1;2H" ;** カーソルを画面のトップに持ってくる制御
 Equ ESC.CRT.MOVE_NEXT_LINE To CRLF
 
+!! スクロール高速描画に切り替えるスクロール行数
+!Equ SCROLL.DRAW.NUM To Int(Depth/2) ;** Winodows Consoleだとなぜかちらつく
+Equ SCROLL.DRAW.NUM To 1 ;** 1行以外は全描画した方がなぜかレスポンスが良い
+!Equ SCROLL.DRAW.NUM To 0
+
 !! OS Switch
 Equ OS.GATES To SYSTEM(91)
 
@@ -303,6 +308,7 @@ Shell.Main:
 	EQU BI.INDENTTYPE To 19
 	EQU BI.INDENTSIZE To 20
 	EQU BI.PATHNAME To 21
+	EQU BI.AUTOWRAP To 22
 	
 	EQU BufInfo To BufInfos(CurBuf)
 	EQU Changed To BufInfo<BI.CHANGED>
@@ -310,6 +316,7 @@ Shell.Main:
 	EQU ReadOnly To BufInfo<BI.READONLY>
 	EQU BookMark To BufInfo<BI.BOOKMARK>
 	EQU IndentType To BufInfo<BI.INDENTTYPE>
+	EQU AutoWrap To BufInfo<BI.AUTOWRAP>
 	EQU STDTAB To BufInfo<BI.INDENTSIZE>
 	EQU STDINDENT TO STDTAB * 1        ; * other indents
 	EQU STDFIRSTINDENT To 0
@@ -385,6 +392,7 @@ Shell.Main:
 		FileName = ""
 		ItemName = ""
 		PathName = ""
+		DP_Y = 0
 		
 		Crt SISH.VERSION
 		
@@ -466,6 +474,7 @@ $ENDIF
 	crtBuff = ""
 	moveChar = "" ;** Move To Char モード
 	filter = ""
+	choiceParse = @False
 	
 	EQU REDRAW.ALL To -1
 	Redraw = 0
@@ -475,6 +484,7 @@ $ENDIF
 	DiveValuePos = ""
 	ParentBufNo = ""
 	StatusMessage = ""
+	ignoreCase = False
 
 Shell.Input.Begin:
 
@@ -509,10 +519,10 @@ $ENDIF
 
 	cmdStackPos = 1
 	cmdStackPage = ""
-	cmdlineRows = 0
 	
 	curPos = 1 ;** cmdline上のカーソル位置
 	cmdline = ""
+	prev.dispRows = 0
 	
 	selCurStart = 0
 	selCurEnd = 0
@@ -599,11 +609,13 @@ $ENDIF
 	C = "" ;** 入力文字
 	MOUSE = "" ;** マウスデータ
 	nowC = ""
+	AutoWrap = @CRTWIDE+1 ;** コマンド編集は自動折り返しモード
 
 	Y = 1
 	prevY = 1
+	prevDP_Y = 1
 	prevX = 1
-	Rec = ":"
+	Rec = "si:"
 	prevRec = Rec
 	keepSelection	=@False
 	
@@ -613,110 +625,47 @@ $ENDIF
 Shell.KeyLoop.Start:
 	Loop
 	
-		If bAutoCommand Then GoTo Run.Command
+		If bAutoCommand Then
+			crtBuff = ""
+			GoSub Clear.Cmdline.Crt
+			Crt crtBuff:
+			GoTo Run.Command
+		End
 		
 		!! コマンドエディタからコマンドを取得する
-		GoSub GET.CMDLINE
+		GoSub GET.CMDLINES
+		
+		A = Rec<Y>
+		curPos = X - Len(A[":",1,1]) - 1 ;** プロンプト分減らす
+		cmdline = A[":",2,999]
+		
+		!! 編集対象行が変わった場合は選択が解除される
+		If Y # prevY Then
+			BufInfo<BI.BLOCKSTART> = ""
+			BufInfo<BI.BLOCKEND> = ""
+		End
 		
 Set.Command.Editor:
 		
-		prmptStr = "si"
-		If bInvert Then prmptStr = UpCase(prmptStr)
+		GoSub GET.PROMPTSTR
+		Rec<Y> = prmptStr:cmdline
 		
-		!! インクリメンタルサーチ
-		If bIncSearch Then
-			prmptStr := " ":bIncSearch:"`":iSearchText:"'"
-		End
-		
-		!! コマンドスタック位置表示
-		If cmdStackPos > 1 Then
-			no = cmdStackPos-1
-			prmptStr := " ":Fmt(no,"R%":Maximum(Len(no):@FM:2))
-		End
-		prmptStr := PROMPT.STR
-		If System(11) Then prmptStr := PROMPT.STR ;** アクティブな選択リストあり
-		
-AutoWrap:
-		!! Auto Wrap と カーソル表示位置の計算
-		If BufInfo<BI.BLOCKSTART> Then
-			selStartIndex = BufInfo<BI.BLOCKSTART,2>
-			A = BufInfo<BI.BLOCKSTART,1>
-			If A>1 Then selStartIndex += SUM(LenS(Rec[@FM,1,A-1]))
-		End
-		
-		Rec = ""
-		Lines = 1
-		tmpDX = 1 ;** 表示用X位置
-		tmpIX = 1 ;** 内部用X位置
-		prev.tmpDX = 0 ;** 前行の表示用X位置
-		prev.tmpIX = 0 ;** 前行の表示用X位置
-		cl = prmptStr:cmdline
-		clLen = Len(cl)+1
-		curIndex = Min(curPos+Len(prmptStr)-1,clLen)
-		For i = 1 To clLen
-			
-			c = cl[i,1]
-			dispLen = LenDP(c)
-			If tmpDX+dispLen > @CRTWIDE+1 Then
-				* 改行
-				Rec := @FM
-				Lines += 1
-				tmpIX = 1
-				tmpDX = 1
-			End
-			
-			!! カーソル位置を再設定
-			If i = curIndex Then
-				If Y+1 = prevY AND prevX = 1 And X > prev.tmpIX Then
-					!! 行頭から上の行の末端へ移動する時の特殊処理
-					X = prev.tmpIX
-					DP_X = prev.tmpDX
-					If BufInfo<BI.BLOCKSTART> Then
-						BufInfo<BI.BLOCKEND,1> = Y
-						BufInfo<BI.BLOCKEND,2> = X
-					End
-				End Else
-					Y = Lines
-					X = tmpIX
-					DP_X = tmpDX
-				End
-				If i = clLen Then Exit ;** 最終文字
-			End
-			
-			!! 選択範囲位置の再設定
-			If BufInfo<BI.BLOCKSTART> Then
-				If i = selStartIndex Then
-					BufInfo<BI.BLOCKSTART,1> = Lines
-					BufInfo<BI.BLOCKSTART,2> = tmpIX
-				End
-			End
-			
-			prev.tmpIX = tmpIX
-			prev.tmpDX = tmpDX
-			tmpDX += dispLen
-			tmpIX += 1
-			
-			Rec := c
-			
-		Next i
-		
-		!! Auto Wrap 後のX位置調整
-		If prevY#Y And prevX = X Then
+		** --------------------------
+		** X表示位置の計算
+		** --------------------------
+		moveY = prevY >< Y
+		Line = Rec<Y> ;** 現在Y行
+		If moveY And prevX = X Then
 			** X位置を表示位置から逆算する
-			Line = Rec<Y> ;** 現在Y行
 			GoSub GetX.From.keepDPX
 			X = outX
-			DP_X = 1
-			FOR I=1 TO X-1
-				c = Line[I,1]
-				DP_X += LenDP(c)
-			NEXT I
 		End
 		
-		If Y = 1 And X <= Len(prmptStr) Then
+		If X <= Len(prmptStr) Then
 			!! プロンプト内にカーソルを入れない処理
 			X = Len(prmptStr)+1
-			DP_X = X
+		End Else If X >= Len(Rec<Y>)+1 Then
+			X = Len(Rec<Y>)+1
 		End
 		
 		!! 選択範囲の調整
@@ -734,43 +683,30 @@ AutoWrap:
 				BufInfo<BI.BLOCKSTART> = ""
 				BufInfo<BI.BLOCKEND> = ""
 			End
-			LOGMSG BufInfo<BI.BLOCKSTART>:" : ":BufInfo<BI.BLOCKEND>
+			If BufInfo<BI.BLOCKSTART> Then
+				If BufInfo<BI.BLOCKSTART,2>=1 And BufInfo<BI.BLOCKEND,2>=1 And BufInfo<BI.BLOCKSTART,1>+1=BufInfo<BI.BLOCKEND,1> Then
+					!! 全行選択
+					BufInfo<BI.BLOCKSTART,2> = Len(prmptStr)+1
+					BufInfo<BI.BLOCKEND,1> = BufInfo<BI.BLOCKSTART,1>
+					BufInfo<BI.BLOCKEND,2> = Len(Rec<BufInfo<BI.BLOCKSTART,1>>)+1
+				End
+			End
 		End Else
 			BufInfo<BI.BLOCKSTART> = ""
 			BufInfo<BI.BLOCKEND> = ""
 		End
 		
+		If BufInfo<BI.BLOCKSTART> Then
+			GoSub GetSelBlock
+		End
+		
 		!! 描画処理
-		cmdDraw = "" ;** 描画構築済み
-		cmdDraw := HI.SHELL.ON
-		cmdDraw := prmptStr
-		cmdDraw := HI.SHELL.OFF
+		GoSub Create.CmdDraw
 		
-		GoSub GetSelBlock
-		
-		Rec.len = Len(Rec)
-		tmpY = 1
-		tmpX = Len(prmptStr)+1
-		For i=Len(prmptStr)+1 To Rec.len
-			c = Rec[i,1]
-			If c = @FM Then
-				cmdDraw := ESC.CRT.MOVE_NEXT_LINE
-				tmpY += 1
-				tmpX = 0
-			End Else
-				If BufInfo<BI.BLOCKSTART> Then
-					!! 選択範囲の描画
-					A = tmpY:@FM:tmpX
-					If blockStart = A Then
-						cmdDraw := HI.SELECT.ON
-					End Else If blockEnd = A Then
-						cmdDraw := SGR.ALL.OFF
-					End
-				End
-				cmdDraw := c
-			End
-			tmpX += 1
-		Next i
+		If prevDP_Y = DP_Y And prevX <> X Then
+			** X位置だけが動いた場合にkeepDP_Xを変える
+			keepDP_X = DP_X
+		End
 		
 		!!
 		!! 表示
@@ -793,8 +729,8 @@ Shell.KeyLoop.Bef.GetKey:
 		!! 前回位置として保存しておく
 		prevY = Y
 		prevX = X
-		keepDP_X = DP_X
-		cmdlineRows = Max(cmdlineRows,Lines)
+		prevDP_Y = DP_Y
+		prev.dispRows = dispRows
 		
 		NokoriKouho = @FALSE
 		bFirstTab = @TRUE
@@ -815,39 +751,75 @@ Shell.KeyLoop.Bef.GetKey:
 		!!
 		Begin Case
 			Case actNo = A.UP
-				If Y=1 Then
+				GoSub Act.Up
+				If Y<1 Then
+					GoSub GET.CMDLINES
 					GoSub ACTION.CMDSTACK.NEXT
-					GoTo Set.Command.Editor
-				End Else
-					Y -= 1
+					Rec = "si:":cmdline
+					GoSub InitBuf
 				End
 			Case actNo = A.PREVSTMT
 				If Y=1 Then
-					GoSub ACTION.CMDSTACK.NEXT
-					GoTo Set.Command.Editor
+					cmdStackPos += 1
+					GoSub GET.PROMPTSTR
+					Y = 1
+					X = 1
+					InsBuffer = prmptStr:cmdStack<cmdStackPos>:CHAR(10)
+					GoSub InsertLines
+					Y = 1
+					X = prevX
 				End Else
-					GoSub Act.PrevStmt
+					Y = 1
 				End
-			Case actNo = A.DOWN 
-				If Y >= Lines Then
-					GoSub ACTION.CMDSTACK.BACK
-					GoTo Set.Command.Editor
-				End Else
-					Y += 1
+			Case actNo = A.DOWN
+				GoSub Act.Down
+				If Y>Lines Then
+					If 1<cmdStackPos Then
+						GoSub GET.CMDLINES
+						GoSub ACTION.CMDSTACK.BACK
+						Rec = "si:":cmdline
+						GoSub InitBuf
+						X = 999
+					End Else
+						Y = Lines
+					End
 				End
 			Case actNo = A.NEXTSTMT
-				If Y >= Lines Then
-					GoSub ACTION.CMDSTACK.BACK
-					GoTo Set.Command.Editor
+				If Y>=Lines Then
+					GoSub GET.PROMPTSTR
+					A = cmdStackPos-Y
+					Rec<-1> = If A > 1 Then prmptStr:cmdStack<A> Else prmptStr
+					Y += 1
 				End Else
-					GoSub Act.NextStmt
+					Y = Lines
 				End
 			Case actNo = A.TOP
-				cmdStackPos = 2
-				GoSub ACTION.CMDSTACK.BACK
+				GoSub GET.CMDLINES
+				Loop
+					GoSub ACTION.CMDSTACK.NEXT
+					If cmdStackPos = DCount(cmdStack,@FM) - 1 Then Exit
+				Repeat
+				Rec = "si:":cmdline
+				GoSub InitBuf
 			Case actNo = A.BOTTOM
-				cmdStackPos = DCount(cmdStack,@FM) - 1
-				GoSub ACTION.CMDSTACK.NEXT
+				GoSub GET.CMDLINES
+				GoSub ACTION.CMDSTACK.BACK
+				cmdStackPos = 2
+				cmdline = ""
+				Y = 2
+				GoSub ACTION.CMDSTACK.BACK
+				Rec = "si:":cmdline
+				GoSub InitBuf
+				X = 999
+			Case actNo = A.COPY
+				If BufInfo<BI.BLOCKSTART>="" Then
+					GoSub GET.CMDLINES
+					selString = cmdline
+					GoSub Act.Copy.Impl
+				End Else
+					GoSub Act.Copy
+				End
+				
 		** 文字入力系  
 			Case actNo = A.TAB
 				If bIncSearch Then
@@ -860,6 +832,15 @@ Shell.KeyLoop.Bef.GetKey:
 				
 			Case actNo = A.HELP
 				GoSub COMMAND.HELP
+				
+			Case C = CTRL.S
+				GoSub GET.CMDLINES
+				GoSub DoNew
+				Rec = "PA Created at ":OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS"):" by ":@LOGNAME:"@":@ACCOUNT
+				Rec<-1> = cmdline
+				FileName = "VOC"
+				GoSub StartBuf
+				GoTo Launch.Editor
 				
 			Case C = CTRL.T
 				GoSub ACTION.INPUT.PREV.FILENAME
@@ -879,8 +860,11 @@ Shell.KeyLoop.Bef.GetKey:
 					End
 					bIncSearch = "R"
 				End
+				stackPos = cmdStackPos
+				If bIncSearch#"" Then
+					cmdStackPos += 1
+				End
 				GoSub ACTION.CMDSTACK.INC.SEARCH
-				GoTo Set.Command.Editor
 				
 			Case C = CTRL.F
 				!! コマンド履歴正順インクリメンタルサーチ
@@ -891,8 +875,11 @@ Shell.KeyLoop.Bef.GetKey:
 					End
 					bIncSearch = "F"
 				End
+				stackPos = cmdStackPos
+				If bIncSearch#"" Then
+					cmdStackPos -= 1
+				End
 				GoSub ACTION.CMDSTACK.INC.SEARCH
-				GoTo Set.Command.Editor
 				
 			Case C = CTRL.L
 				If cmdStackPos = 1 Then
@@ -904,7 +891,13 @@ Shell.KeyLoop.Bef.GetKey:
 				bAutoCommand = @TRUE
 				
 			Case actNo = A.NEWLINE
-				bAutoCommand = @TRUE
+				If cmdStackPos = 1 And X = 4 And Y > 1 Then
+					InsBuffer = CHAR(10):"si:"
+					GoSub InsertLines
+				End Else
+					GoSub GET.CMDLINES
+					bAutoCommand = @TRUE
+				End
 				
 			Case actNo = A.CASEINVERT
 				GoSub Act.ToggleCaseInvert
@@ -964,27 +957,32 @@ Launch.Editor:
 					!! インクリメンタルサーチモード
 					If actNo = A.INSCHAR Then
 						iSearchText := C
-						cmdStackPos = 1
 					End Else If actNo = A.BACKSPACE Then
 						If Len(iSearchText) > 0 Then
 							iSearchText = iSearchText[1,Len(iSearchText)-1]
-							cmdStackPos = 1
 						End
 					End Else
 						bIncSearch = "" ;** 終了
 						iSearchText = ""
 						GoTo Shell.KeyLoop.Start
 					End
-					If bIncSearch = "R" Then
-						If cmdStackPos > 2 Then cmdStackPos -= 1
-					End Else
-						cmdStackPos += 1
-					End
+					stackPos = cmdStackPos
 					GoSub ACTION.CMDSTACK.INC.SEARCH
 					GoTo Set.Command.Editor
 				End Else
-					If actNo = A.BACKSPACE Then 
-						GoSub Act.DelBackCh2
+					If actNo = A.BACKSPACE Then
+						If X <= Len(prmptStr)+1 Then
+							!! 行頭なら行の削除を行う
+							If cmdStackPos = 1 And Y>1 Then
+								BufInfo<BI.BLOCKSTART> = Y:@VM:X
+								Y -= 1
+								X = Len(Rec<Y>)+1
+								BufInfo<BI.BLOCKEND> = Y:@VM:X
+								GoSub Act.DelBackCh
+							End
+						End Else
+							GoSub Act.DelBackCh
+						End
 					End Else
 						GoSub Input.Actions
 !						If actNo = A.LEFT Or actNo = A.RIGHT Or actNo = A.PREVWORD Or actNo = A.NEXTWORD Then
@@ -1011,6 +1009,36 @@ Shell.KeyLoop.End:
 	Repeat
 	
 GoTo Shell.KeyLoop.Start; * キー入力待ちに戻る
+
+GET.PROMPTSTR:
+	prmptStr = ""
+	prmptStr := "si"
+	If bInvert Then prmptStr = UpCase(prmptStr)
+	
+	!! インクリメンタルサーチ
+	If bIncSearch Then
+		prmptStr := bIncSearch:" `" :iSearchText:"'"
+	End
+
+	!! コマンドスタック位置表示
+	no = cmdStackPos-1-Y+1
+	If no > 0 Then
+		prmptStr := Fmt(no,"R%":Maximum(Len(no):@FM:2))
+	End
+	prmptStr := PROMPT.STR
+	If System(11) Then prmptStr := PROMPT.STR ;** アクティブな選択リストあり
+	
+	Return
+
+GET.CMDLINES:
+	Lines = DCount(Rec,@FM)
+	cmdline = Rec<1>[":",2,999]
+	If cmdline[1,1]=":" Then cmdline = cmdline[2,BIG]
+	For i=2 To Lines
+		cmdline<-1> = Rec<i>[":",2,999]
+	Next i
+	
+	Return
 
 *---------------------------
 * ターミナルサイズの自動設定
@@ -1039,6 +1067,81 @@ AutoTermSize:
 *---------------------
 * コマンドライン描画
 *---------------------
+Create.CmdDraw:
+	!! 描画処理
+	cmdDraw = "" ;** 描画構築済み
+	
+	tmpDY=1
+	For Row=1 To Lines
+		If Row>1 Then cmdDraw := ESC.CRT.MOVE_NEXT_LINE
+		cmdDraw := BG.BASE2
+		Line = Rec<Row>
+		Line.len = Len(Line)
+		tmpDX = Index(Line,":")
+		If Row=1 Then
+			B = Line[1,tmpDX-1]
+			If bIncSearch Then
+				cmdDraw := FG.BASE03
+				cmdDraw := If bIncSearch="R" Then "↑" Else "↓"
+				cmdDraw := B[5,Index(B,"'")-4]
+				cmdDraw := HI.SHELL.ON
+				cmdDraw := B[1,2]
+				cmdDraw := B[Index(B,"'")+1,99]
+			End Else
+				cmdDraw := HI.SHELL.ON
+				cmdDraw := B
+			End
+			cmdDraw := ":"
+			If Line[tmpDX+2,1]=":" And System(11) Then
+				cmdDraw := ":"
+				tmpDX += 1
+			End
+		End Else
+			cmdDraw := HI.SHELL.ON:Line[1,tmpDX]
+		End
+		cmdDraw := HI.SHELL.OFF
+		tmpDX += 1
+		For i=tmpDX To Line.len+1
+			c = Line[i,1]
+			dispLen = LenDP(c)
+			If tmpDX+dispLen > AutoWrap Then
+				* 改行
+				cmdDraw := ESC.CRT.MOVE_NEXT_LINE
+				tmpDX = 1
+				tmpDY += 1
+			End
+			
+			IF Row = Y Then
+				If i = X Then
+					DP_X = tmpDX
+					DP_Y = tmpDY
+				End
+				If i = Line.len+1 And i < X Then
+					DP_X = tmpDX
+					DP_Y = tmpDY
+				End
+			End
+			
+			If BufInfo<BI.BLOCKSTART> Then
+				!! 選択範囲の描画
+				A = Row:@FM:i
+				If blockStart = A Then
+					cmdDraw := HI.SELECT.ON
+				End Else If blockEnd = A Then
+					cmdDraw := SGR.ALL.OFF
+				End
+			End
+			
+			cmdDraw := c
+			tmpDX += dispLen
+		Next i
+		tmpDY += 1
+	Next Row
+	
+	dispRows = tmpDY-1
+	
+	Return
+
 Draw.Cmdline:
 	
 	crtBuff := cmdDraw
@@ -1053,18 +1156,18 @@ Draw.Cmdline.Cursor:
 		End
 		crtBuff := @(0)
 		If bIncSearch Then
-			crtBuff := @(5+Len(iSearchText))
+			crtBuff := @(3+Len(iSearchText))
 		End Else
 			If DP_X > 1 Then crtBuff := @(DP_X-1)
 		End
 	End Else
 		* @(IT$CUU)が正しいエスケープシーケンスを出力しないので、VT100のシーケンス直書き
-		If Lines - Y > 0 Then
-			crtBuff := CSI:(Lines - Y):'A'
+		If dispRows - DP_Y > 0 Then
+			crtBuff := CSI:(dispRows - DP_Y):'A'
 		End
 		crtBuff := CSI:"G"
 		If bIncSearch Then
-			crtBuff := CSI:5+Len(iSearchText):"C"
+			crtBuff := CSI:3+Len(iSearchText):"C"
 		End Else
 			If DP_X > 1 Then crtBuff := CSI:(DP_X-1):"C"
 		End
@@ -1077,27 +1180,27 @@ Return
 Clear.Cmdline.Crt:
 	If IS.CONSOLE Then
 		crtBuff := @(0)
-		If prevY > 1 Then
-			crtBuff := @(-10,prevY-1)
+		If prevDP_Y > 1 Then
+			crtBuff := @(-10,prevDP_Y-1)
 		End
 		crtBuff := @(-4)
-		If cmdlineRows > 1 Then
-			For i = 2 To cmdlineRows
+		If 	prev.dispRows > 1 Then
+			For i = 2 To prev.dispRows
 				crtBuff := @(33):@(-4)
 			Next i
-			crtBuff := @(-10,cmdlineRows-1)
+			crtBuff := @(-10,prev.dispRows-1)
 		End
 	End Else
 		crtBuff := CSI:'G'
-		If prevY > 1 Then
-			crtBuff := CSI:(prevY-1):'A'
+		If prevDP_Y > 1 Then
+			crtBuff := CSI:(prevDP_Y-1):'A'
 		End
 		crtBuff := CSI:'2K'
-		If cmdlineRows > 1 Then
-			For i = 2 To cmdlineRows
+		If prev.dispRows > 1 Then
+			For i = 2 To prev.dispRows
 				crtBuff := CSI:'1B':CSI:'2K'
 			Next i
-			crtBuff := CSI:(cmdlineRows-1):'A'
+			crtBuff := CSI:(prev.dispRows-1):'A'
 		End
 	End
 Return
@@ -1229,9 +1332,6 @@ Run.Command:
 		End
 	End
 	
-	GoSub Clear.Cmdline.Crt
-	Crt crtBuff:
-
 $IFNDEF U2__UNIVERSE
 	IF isComoActive THEN
 		!! COMOを実行前に復帰させる
@@ -1239,7 +1339,7 @@ $IFNDEF U2__UNIVERSE
 	END
 $ENDIF
 	
-	crtBuff = HI.SHELL.ON:PROMPT.STR:HI.SHELL.OFF:cmdline
+	crtBuff = BG.BASE2:HI.SHELL.ON:PROMPT.STR:HI.SHELL.OFF:cmdline
 	
 	** 空コマンドは無視
 	If cmdline = "" Then
@@ -1380,7 +1480,6 @@ Run.Command.Ending:
 	End
 	
 	cmdline = ""
-	cmdlineRows = 1
 	
 !! 非同期メッセージの表示
 $IFNDEF U2__UNIVERSE
@@ -1955,7 +2054,17 @@ CmdHist.Candidate:
 	!! 描画
 	GoSub CUR.TOP.OF.SCREEN
 	
+	filter = iSearchText
+	bIncSearch = ""
+	iSearchText = ""
+	
+	GoSub GET.PROMPTSTR
+	Rec = prmptStr:Rec[":",2,999999]
+	
 	crtBuff = ""
+	crtBuff := SGR.ALL.OFF
+	GoSub Create.CmdDraw
+	GoSub Clear.Cmdline.Crt
 	GoSub Draw.Cmdline
 	GoSub CRT.BUFF.FLUSH
 
@@ -1965,10 +2074,9 @@ CmdHist.Candidate:
 	For i = cmdStack.len To 2 Step -1
 		choiceList<-1> = Fmt((i-1),Len(cmdStack.len):"R"):"  ":cmdStack<i>:@VM:i
 	Next i
-	choiceNo = cmdStack.len - cmdStackPos
-	filter = iSearchText
+	choiceNo = cmdStack.len - cmdStackPos + 1
 	title = "Cmd Hist"
-	choiceOrgY = Lines
+	choiceOrgY = dispRows
 	GoSub InitChoiceList
 	Loop
 		
@@ -1980,14 +2088,10 @@ CmdHist.Candidate:
 		Begin Case
 			Case actNo = A.CANCEL ;** 抜ける
 				!! 選択を非表示にして画面を残す
-				bIncSearch = "" ;** 終了
-				iSearchText = ""
 				choiceActive = @False
 				GoSub ProcChoiceList
 				Exit
 			Case actNo = A.NEWLINE ;** 決定
-				bIncSearch = "" ;** 終了
-				iSearchText = ""
 				GoSub CUR.TOP.OF.SCREEN
 				Crt @(winX,0):
 				no = choiceSelection<1,2>-1
@@ -2039,7 +2143,7 @@ DispCandidate.Common:
 		choiceList<-1> = FMTDP(slist<i>,col1+2:"T"):dlist<i>:@VM:slist<i>
 	Next i
 	title = dispType
-	choiceOrgY = Lines
+	choiceOrgY = dispRows
 	GoSub InitChoiceList
 	Loop
 		
@@ -2064,6 +2168,9 @@ DispCandidate.Common:
 					fullWord.Len = 0
 					crtBuff = ""
 					Crt @(winX,0):
+					crtBuff := SGR.ALL.OFF
+					GoSub Create.CmdDraw
+					GoSub Clear.Cmdline.Crt
 					GoSub Draw.Cmdline
 					GoSub CRT.BUFF.FLUSH
 				END ELSE
@@ -2453,16 +2560,6 @@ $ENDIF
 	** Shellを抜ける
 	Stop
 
-*----------------------------------------
-* 現在カーソル位置のコマンドラインを取得
-*----------------------------------------
-GET.CMDLINE:
-	cmdline = Convert(@FM,"",Rec[":",2,999])
-	curPos = X
-	If Y>1 Then curPos += SUM(LenS(Rec[@FM,1,Y-1]))
-	curPos -= Len(Rec[":",1,1]) ;** プロンプト分減らす
-	Return
-
 *--------------------------------
 * コマンドスタック進む Action
 *--------------------------------
@@ -2470,7 +2567,21 @@ ACTION.CMDSTACK.NEXT:
 	
 	If DCount(cmdStack,@FM) > cmdStackPos Then
 		If Trim(cmdline)[1,1] <> "." Then
-			cmdStackPage<cmdStackPos> = cmdline ;** 現在行の保存
+			cnt = DCount(cmdline,@FM)
+			If cmdStackPos = 1 Then
+				If cnt=0 Then
+					cmdStackPage<1> = ""
+				End Else
+					cmdStackPage<1> = cmdline<1>
+					For i=2 To cnt
+						cmdStackPage<1> := @VM:"si:":cmdline<i> ;** 現在行の保存
+					Next i
+				End
+			End Else
+				For i=1 To cnt
+					cmdStackPage<cmdStackPos-i+1> = cmdline<i> ;** 現在行の保存
+				Next i
+			End
 		End
 		cmdStackPos += 1
 		If DCount(cmdStackPage,@FM) < cmdStackPos Then
@@ -2479,7 +2590,6 @@ ACTION.CMDSTACK.NEXT:
 			End
 		End
 		cmdline = cmdStackPage<cmdStackPos>
-		curPos = 1
 	End
 	
 	Return
@@ -2491,11 +2601,13 @@ ACTION.CMDSTACK.BACK:
 	
 	If 1<cmdStackPos Then
 		If Trim(cmdline)[1,1] <> "." Then
-			cmdStackPage<cmdStackPos> = cmdline ;** 現在行の保存
+			cnt = DCount(cmdline,@FM)
+			For i=1 To cnt
+				cmdStackPage<cmdStackPos-i+1> = cmdline<i> ;** 現在行の保存
+			Next i
 		End
-		cmdStackPos -= 1
-		cmdline = cmdStackPage<cmdStackPos>
-		curPos = Len(cmdline)+2
+		cmdStackPos = cmdStackPos-Y+1
+		cmdline = Raise(cmdStackPage<cmdStackPos>)
 	End
 	
 	Return
@@ -2594,6 +2706,7 @@ ACTION.CMDSTACK.GOTO:
 	no = MatchField(UpCase(cmdline),"'.G'0N...",2)
 ACTION.CMDSTACK.GOTO.impl:
 	If no <> "" And DCount(cmdStack,@FM) > no + 1 Then
+		GoSub GET.CMDLINES
 		cmdStackPos = 1
 		Loop
 			GoSub ACTION.CMDSTACK.NEXT
@@ -2601,7 +2714,8 @@ ACTION.CMDSTACK.GOTO.impl:
 		Repeat
 	End
 	cmdline = cmdStackPage<cmdStackPos>
-	curPos = Len(cmdline)+2
+	Rec = "si:":cmdline
+	GoSub InitBuf
 	GoTo Set.Command.Editor
 
 *--------------------------------
@@ -2609,12 +2723,15 @@ ACTION.CMDSTACK.GOTO.impl:
 *--------------------------------
 ACTION.CMDSTACK.INC.SEARCH:
 	
+	cmdline = cmdStackPage<cmdStackPos>
+	Rec = "si:":cmdline
+	GoSub InitBuf
+	GoSub GET.CMDLINES
+	
 	If iSearchText Then
-		stackPos = cmdStackPos
 		If bIncSearch = "R" Then
 			!! 履歴遡り
 			Loop
-				GoSub ACTION.CMDSTACK.NEXT
 				If UpCase(cmdline) Matches "...":UpCase(iSearchText):"..." Then Exit
 				If DCount(cmdStack,@FM) <= cmdStackPos Then
 					!! 見つからなかった
@@ -2622,11 +2739,11 @@ ACTION.CMDSTACK.INC.SEARCH:
 					cmdline = cmdStackPage<cmdStackPos>
 					Exit
 				End
+				GoSub ACTION.CMDSTACK.NEXT
 			Repeat
 		End Else
 			!! 履歴遡り
 			Loop
-				GoSub ACTION.CMDSTACK.BACK
 				If UpCase(cmdline) Matches "...":UpCase(iSearchText):"..." Then Exit
 				If 1 >= cmdStackPos Then
 					!! 見つからなかった
@@ -2634,8 +2751,19 @@ ACTION.CMDSTACK.INC.SEARCH:
 					cmdline = cmdStackPage<cmdStackPos>
 					Exit
 				End
+				Y = 2
+				GoSub ACTION.CMDSTACK.BACK
 			Repeat
 		End
+		Rec = "si:":cmdline
+		GoSub InitBuf
+	End Else
+		GoSub GET.CMDLINES
+		cmdline = cmdline<Y>
+		cmdStackPos = cmdStackPos+Y-1
+		Rec = "si:":cmdline
+		GoSub InitBuf
+		Y = 1
 	End
 	
 	Return
@@ -3018,9 +3146,6 @@ AUTO.COMPLATE:
 Return
 
 CLEAR.FOR.PERFORM:
-	If cmdlineRows - Y > 0 Then
-		crtBuff := @(IT$CUD, cmdlineRows - Y)
-	End
 	Crt crtBuff ;** 改行
 	Crt @(IT$CLEOS):
 Return
@@ -3044,8 +3169,6 @@ CUR.TOP.OF.SCREEN:
 			Crt ESC.CUR.TOP:@(-1):
 		End
 	End
-	
-	cmdlineRows = Lines
 	
 Return
 
@@ -3186,7 +3309,13 @@ WRITE.BUFFER:
 	End
 
 	If ReadOnly Then
-		Print "File is marked as Read Only! - Enter ! to Force Write :":
+		A = "File is marked as Read Only! - Enter ! to Force Write :"
+		If AllDone Then
+			Print A:
+		End Else
+			PromptLine = BG.CYAN:FG.BASE3:A
+			GoSub PromptLine
+		End
 		GoSub GetKey
 		Print ""
 		If TrimF(C)[1,1] = "!" Else
@@ -3196,13 +3325,20 @@ WRITE.BUFFER:
 		ReadOnly = @False
 	End
 	
+WRITE.BUFFER.impl:
+	
 	If BufInfo<BI.PBUFNO> Then
 		!! 親バッファ保存モード
 		
 		!! 親が存在するかチェック
 		pno = BufInfo<BI.PBUFNO>
 		If Not(BufInfos(pno)<BI.USED>) Then
-			Print "Parent BufferNo already closed - Cannot save"  
+			A = "Parent BufferNo already closed - Cannot save"  
+			If AllDone Then
+				Print A
+			End Else
+				StatusMessage = A
+			End
 			Return
 		End
 		
@@ -3219,9 +3355,15 @@ WRITE.BUFFER:
 		ItemName = Trim(cmdline)[" ",4,1]
 		If ItemName = "" Then ItemName = BufInfo<BI.ITEM>
 		If ItemName = "" Then
-			Print "Item Name From '":FileName:"' ->":
+			A = "Item Name From '":FileName:"' ->"
+			If AllDone Then
+				Print A:
+			End Else
+				PromptLine = BG.CYAN:FG.BASE3:A
+				GoSub PromptLine
+			End
 			Input ItemName
-			Print ""
+			If AllDone Then Print ""
 			If ItemName = "" Then
 				@USER.RETURN.CODE=0
 				Return
@@ -3231,7 +3373,13 @@ WRITE.BUFFER:
 		!! アカウント違いの警告
 		If BufInfo<BI.ACCOUNT> >< "" Then
 			If Not(BufInfo<BI.ACCOUNT> Matches Quote(@ACCOUNT):@VM:Quote(@PATH)) Then 
-				Print "This Item Read from Different Account! - Save in This Account (Y) :":
+				A = "This Item Read from Different Account! - Save in This Account (Y) :"
+				If AllDone Then
+					Print A:
+				End Else
+					PromptLine = BG.CYAN:FG.BASE3:A
+					GoSub PromptLine
+				End
 				GoSub GetKey
 				Print ""
 				If TrimF(UpCase(C))[1,1] = "Y" Else
@@ -3254,7 +3402,12 @@ WRITE.BUFFER:
 			OUT.OSBS = ItemName
 		END
 		ReadU prevRec From FL,OUT.OSBS On Error Return Locked
-			Print "Record previously Locked by ":Status():", Do Not Saved"
+			A = "Record previously Locked by ":Status():", Do Not Saved"
+			If AllDone Then
+				Print A
+			End Else
+				StatusMessage = BG.RED:FG.BASE3:A
+			End
 			GoSub Common.CloseFile
 			Return
 		End Then
@@ -3398,7 +3551,9 @@ WRITE.BUFFER:
 			End Else
 				Write saveRec On FL,OUT.OSBS On Error Return
 			End
-			Print "Write Buffer ":CurBuf:" > ":FileName:" ":ItemName:" (":FMT(Len(saveRec),"R,"):" chars) at ":OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS")
+			If AllDone Then
+				Print "Write Buffer ":CurBuf:" > ":FileName:" ":ItemName:" (":FMT(Len(saveRec),"R,"):" chars) at ":OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS")
+			End
 			GoSub Common.CloseFile
 		End
 	End
@@ -3445,7 +3600,6 @@ Editor.Main:
 	DIRec = ""
 	SearchString = ""
 	Replacing = False
-	ignoreCase = False
 	searchReverse = False
 	
 	crtBuff = ""
@@ -4508,9 +4662,9 @@ InitChoiceList: ;** 選択リストボックス初期化
 	End Else
 		!! 下側モード
 		winWidth = Width - 1
-		winX = 1
+		winX = 0
 		winHeight = Depth - choiceOrgY + 1
-		crtBuff = @(0,choiceOrgY):BG.BASE2:@(-4)
+		crtBuff = @(0,choiceOrgY):BG.BASE3:@(-4)
 		For i = choiceOrgY To choiceOrgY+winHeight
 			crtBuff := @(0,i):" "
 		Next
@@ -4545,7 +4699,9 @@ $ENDIF
 	!! 選択範囲の描画
 	Line = filter
 	Row = 1
-	HI.OFF = FG.BASE03:BG.BASE2
+	X = If filter[1,1]=" " Then 2 Else Len(filter)+1
+	BufInfo<BI.BLOCKSTART> = ""
+	HI.OFF = FG.BASE03:BG.BASE3
 	GoSub ParseLine.Impl
 	PFilter = PLine
 	PFilter.X = If Len(Rec) >= X Then LenDP(Rec[X,HUGE]) Else ""
@@ -4622,7 +4778,7 @@ ProcChoiceList:
 				!! 選択範囲の描画
 				Line = filter
 				Row = 1
-				HI.OFF = FG.BASE03:BG.BASE2
+				HI.OFF = FG.BASE03:BG.BASE3
 				GoSub ParseLine.Impl
 				PFilter = PLine
 				PFilter.X = If Len(Rec) >= X Then LenDP(Rec[X,HUGE]) Else ""
@@ -4713,18 +4869,28 @@ ProcChoiceList:
 		selected = (choiceNo = winTop+i) ;** 選択行か？
 		Line = choiceList<no,1>
 		crtBuff := @(winX,i+winY)
+		crtBuff := If choiceOrgY=0 Then title[" ",1,1] Else BG.BASE3
 		If selected Then
-			If choiceActive Then crtBuff := HI.SELECT.ON
+			If choiceActive Then crtBuff := BG.BASE2
 
 			If choiceParse Then
 				XOffSet = 1
 				selection = 1:@FM:BIG
 				LineWidth = winWidth
+				Selection.Color = BG.BASE2:FG.BASE01
+				Selection.Key.Color = HI.KEY.ON
 				GoSub ParseLine2
-				Gyo = Fmt(choiceList<no,2>,"4R"):" "
-				PLine = FG.BASE1:Gyo:PLine:If choiceActive Then HI.SELECT.ON Else ""
+				Row = choiceList<no,2>
+				GoSub Get.Gyo
+				PLine = FG.BASE01:Gyo:PLine:If choiceActive Then BG.BASE2 Else ""
 				Line = Gyo:Line
-			End Else PLine = Line
+			End Else
+				If choiceActive Then
+					PLine = BG.BASE2:FG.BASE02:Line
+				End Else
+					PLine = Line
+				End
+			End
 		End Else
 			crtBuff := FG.BASE01:BG.BASE3
 			If choiceParse Then
@@ -4732,8 +4898,9 @@ ProcChoiceList:
 				selection = ""
 				LineWidth = winWidth
 				GoSub ParseLine2
-				Gyo = Fmt(choiceList<no,2>,"4R"):" "
-				PLine = FG.BASE1:Gyo:PLine
+				Row = choiceList<no,2>
+				GoSub Get.Gyo
+				PLine = FG.BASE0:Gyo:PLine
 				Line = Gyo:Line
 			End Else PLine = Line
 		End
@@ -4741,7 +4908,8 @@ ProcChoiceList:
 		If filterCnt>0 Then
 			!! フィルター文字と一致するものに色を付ける
 			If filter[1,1]=" " Then
-				crtBuff := Char(13):CSI:(winX):"C"
+				crtBuff := Char(13)
+				If choiceOrgY=0 Then crtBuff := CSI:(winX):"C"
 				fi = filter[2,9999]
 				fi.len = Len(fi)
 				li = Line
@@ -4757,7 +4925,8 @@ ProcChoiceList:
 				Repeat			
 			End Else
 				For j = 1 To filterCnt
-					crtBuff := Char(13):CSI:(winX):"C"
+					crtBuff := Char(13)
+					If choiceOrgY=0 Then crtBuff := CSI:(winX):"C"
 					li = Line
 					Loop
 						p = Index(UpCase(li),filterUpcase(j))
@@ -4781,15 +4950,15 @@ ProcChoiceList:
 	!! フィルター入力欄表示
 	
 	If choiceOrgY=0 Then
-		crtBuff := @(winX,1):FG.BASE03:BG.BASE2:PFilter:@(-4)
+		crtBuff := @(winX,1):FG.YELLOW:":":BG.BASE3:PFilter:@(-4)
 	End Else
 		crtBuff := @(winX,winY)
 		If choiceActive Then crtBuff := FG.BLUE
-		crtBuff := BG.BASE2
+		crtBuff := BG.BASE3
 		If title#"" Then crtBuff := title
 		crtBuff := " ":Fmt("(":choiceOutList.length:")",Len(choiceList.length)+2:"L")
-		crtBuff := If choiceActive Then " :":FG.BASE03:PFilter Else filter
-		crtBuff := @(-4)
+		crtBuff := If choiceActive Then " :":PFilter Else filter
+		crtBuff := HI.OFF:@(-4)
 	End
 	If PFilter.X#"" Then crtBuff := @(-9,PFilter.X) ;** 実際のカーソル位置に戻す
 	crtBuff := SGR.ALL.OFF
@@ -4798,6 +4967,14 @@ ProcChoiceList:
 	choiceSelection = choiceList<choiceSelNo>
 
 Return
+
+Get.Gyo:
+	If Row > 9999 Then
+		Gyo = (Rem(Row,10000) "R%4"):" " ;* 行番号
+	End Else
+		Gyo = (Row "4R"):" " ;* 行番号
+	End
+	Return
 
 *--------------------------------------------------------------------------
 * SelectionStart:
@@ -5043,6 +5220,7 @@ Enters:
 	moveY = 0
 	prevY = Y
 	prevX = X
+	prevTop = Top
 	IndentCh = If IndentType = "Tab" Then Char(9) Else Space(STDTAB)
 
 	keepSelection = @FALSE
@@ -5081,6 +5259,9 @@ Enters:
 	End Case
 
 Draw.Editor:
+	
+	If prevY >< Y Then moveY = True
+	
 	** --------------------------
 	** X表示位置の計算
 	** --------------------------
@@ -5121,21 +5302,54 @@ Draw.Editor:
 	** --------------------------
 	** Yスクロール位置調整
 	** --------------------------
+	If Y >= Lines Then Y = Lines
 	If prevY >< Y Then
 		tmpY = Top + SCROLLMERGINE
 		If Y < tmpY Then
 			Top -= tmpY - Y
-			Redraw = REDRAW.ALL
 		End Else
 			tmpY = Depth + Top - SCROLLMERGINE - 1
 			If Y > tmpY Then
 				Top += Y - tmpY
-				Redraw = REDRAW.ALL
 			End
 		End
 	End
 	If Top < 1 Then Top = 1
-
+	
+	If Not(IS.CONSOLE) And Redraw#REDRAW.ALL And prevTop#Top Then
+		If prevTop<Top Then
+			a = Top-prevTop
+			If a <= SCROLL.DRAW.NUM Then
+				!! 下に高速スクロール
+				crtBuff := ESC:"[1;":Depth:"r":ESC:"[":a:"S":ESC:"[1;":@CRTHIGH:"r"
+				For i=Top+Depth-a To Top+Depth-1 
+					Redraw<-1> = i
+				Next i
+				IF moveY Then
+					Find prevY In Redraw Else Redraw<-1> = prevY
+					Find Y In Redraw Else Redraw<-1> = Y
+				End
+			End Else
+				Redraw = REDRAW.ALL
+			End
+		End Else
+			a = prevTop-Top
+			If a <= SCROLL.DRAW.NUM Then
+				!! 上に高速スクロール
+				crtBuff := ESC:"[1;":Depth:"r":ESC:"[":a:"T":ESC:"[1;":@CRTHIGH:"r"
+				For i=Top To prevTop-1
+					Redraw<-1> = i
+				Next i
+				IF moveY Then
+					Find prevY In Redraw Else Redraw<-1> = prevY
+					Find Y In Redraw Else Redraw<-1> = Y
+				End
+			End Else
+				Redraw = REDRAW.ALL
+			End
+		End
+	End
+	
 	** --------------------------
 	** 選択範囲調整
 	** --------------------------
@@ -5612,6 +5826,8 @@ ParseLine.Impl:
 	End
 	
 	LineWidth = Width ;** 行幅はウィンドウサイズ
+	Selection.Color = HI.SELECT.ON
+	Selection.Key.Color = SBOLD:FG.BASE3
 
 ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れること)
 
@@ -5965,18 +6181,18 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 			!! 行全体のハイライト
 			If Mask[1,1] = SI.DIRECTIVE Then
 				HI.Light = FG.BASE3
-				HI.Key = SBOLD:FG.BASE2
+				HI.Key = SBOLD:FG.BASE3
 				PLine := HI.DIR.ON
 				Old = SI.DIRECTIVE
 			End
 		End
 		If K = selection<1> - iXOffSet + 1 And selection<1> <> selection<2> Then
 			!! 選択開始
-			HI.Default = HI.SELECT.ON
+			HI.Default = Selection.Color
+			HI.Key = Selection.Key.Color
 			HI.Light = FG.BASE00
-			HI.Key = SBOLD:FG.BASE2
 			HI.Search = HI.SEARCH.SEL
-			PLine := HI.SELECT.ON
+			PLine := HI.Default
 			Old = ""
 		End
 
@@ -6134,11 +6350,8 @@ PrintLine:
 		End
 	End Else
 		biInfoWide.lineNo = 5
-		If Row > 9999 Then
-			crtBuff := (Rem(Row,10000) "R%4"):" " ;* 行番号
-		End Else
-			crtBuff := (Row "4R"):" " ;* 行番号
-		End
+		GoSub Get.Gyo
+		crtBuff := Gyo
 		If DIRec Then
 			!! 辞書表示
 			crtBuff := FMTDP(DIRec<Row>,biInfoWide.dict:"L")
@@ -6158,7 +6371,27 @@ GetDAPos:
 	fPos = TgtFld<fIdx,1>
 	vPos = Int((inY-1)/fldCnt)+1
 	Return
-	
+
+Get.FileSentence:
+	fileSentence = ""
+	If info<BI.CHANGED> Then fileSentence := "*"
+	If info<BI.PATHNAME> >< "" And UpCase(info<BI.FILE>[1,5])="PATH:" Then
+		fileSentence := info<BI.PATHNAME>
+	End Else If info<BI.FILE> <> "" Then
+		fileSentence := info<BI.FILE>
+		fileSentence := " ":info<BI.ITEM>
+	End Else If info<BI.CAPTURE> <> "" Then
+		fileSentence := "[":info<BI.CAPTURE>:"]"
+	End Else
+		fileSentence := "(Untitled)" 
+	End
+	If info<BI.PBUFNO> Then fileSentence := " [pno=":info<BI.PBUFNO>:"]"
+	If info<BI.FIELDFIX> Then fileSentence := " {":info<BI.FIELDFIX>:"}"
+	If info<BI.VALUEFIX> Then fileSentence := ",V":info<BI.VALUEFIX>
+	If info<BI.ACCOUNT> >< @PATH and info<BI.ACCOUNT> >< @WHO Then fileSentence := " <":info<BI.ACCOUNT>:">"
+	If info<BI.NEW> Then fileSentence := "(New)"
+	Return
+
 *--------------------------------------------------------------------------
 * PrintStatus
 *--------------------------------------------------------------------------
@@ -6169,29 +6402,12 @@ PrintStatus.Impl:
 	crtBuff := HI.STATUS.ON
 	
 	If Redraw.StatusLine Then
-		fileSentence = CurBuf:" > "
-		If Changed Then fileSentence := "*"
-		If BufInfo<BI.PATHNAME> >< "" And UpCase(BufInfo<BI.FILE>[1,5])="PATH:" Then
-			fileSentence := BufInfo<BI.PATHNAME>
-		End Else If BufInfo<BI.FILE> <> "" Then
-			fileSentence := BufInfo<BI.FILE>
-			fileSentence := " ":BufInfo<BI.ITEM>
-!			If BufInfo<BI.PATHNAME> >< "" AND @PATH#BufInfo<BI.PATHNAME>[1,LEN(@PATH)] Then
-!				fileSentence := "  ":FG.BASE2:"[ ":BufInfo<BI.PATHNAME>:" ]":FG.BASE3
-!			End
-		End Else If BufInfo<BI.CAPTURE> <> "" Then
-			fileSentence := BufInfo<BI.CAPTURE>
-		End Else
-			fileSentence := "(Untitled)" 
-		End
-		If BufInfo<BI.PBUFNO> Then fileSentence := " (pno=":BufInfo<BI.PBUFNO>:")"
-		If BufInfo<BI.FIELDFIX> Then fileSentence := " {":BufInfo<BI.FIELDFIX>:"}"
-		If BufInfo<BI.VALUEFIX> Then fileSentence := ",V":BufInfo<BI.VALUEFIX>
-		If BufInfo<BI.ACCOUNT> >< @PATH and BufInfo<BI.ACCOUNT> >< @WHO Then fileSentence := " (":BufInfo<BI.ACCOUNT>:")"
-		If IsNew Then fileSentence := "(New)"
+		info = BufInfo
+		GoSub Get.FileSentence
 		
 		!! 左詰
 		crtBuff := @(0, StLine.Y)
+		crtBuff := " ":CurBuf:"< "
 		crtBuff := fileSentence:@(-4)
 		
 		!! 右詰
@@ -6233,10 +6449,10 @@ PrintStatus.Impl:
 	
 	!! ステータスメッセージ
 	If StatusMessage >< "" Then
-		crtBuff := @(0, StLine.Y+1):BG.CYAN:FG.BASE3:StatusMessage:SGR.ALL.OFF:@(-4)
+		crtBuff := @(0, StLine.Y+1):BG.CYAN:FG.BASE3:" ":StatusMessage:" ":SGR.ALL.OFF:@(-4)
 		StatusMessage = ""
 	End Else
-		crtBuff := @(0, StLine.Y+1):@(-4)
+		crtBuff := @(0, StLine.Y+1):BG.BASE2:@(-4)
 	End
 	Return
 
@@ -6286,7 +6502,7 @@ MenuLine:
 *  PromptLine
 *-----------------------------------------------------------------------
 PromptLine: 
-	Crt @(0,PY+1):BG.BASE3:PromptLine:SGR.ALL.OFF:@(-4):
+	Crt @(0,PY+1):BG.BASE3:" ":PromptLine:SGR.ALL.OFF:@(-4):
 	Redraw.StatusLine = @TRUE
 	Return
 *-----------------------------------------------------------------------
@@ -6301,6 +6517,9 @@ SaveAs:
 	End
 	
 	cmdline = "WRITE.BUFFER ":CurBuf:" ":BufInfo<BI.FILE>:" ":BufInfo<BI.ITEM>
+	CurBuf = CMD_BUF
+	Rec = "si:":cmdline
+	X = 999
 	GoSub Act.Exit
 	
 	Return
@@ -6311,135 +6530,19 @@ SaveItem:
 
 	Redraw.StatusLine = @TRUE
 	
+	If IsNew Then
+		GoSub SaveAs 
+	End
+	
 	If ReadOnly Then
 		StatusMessage = "File is marked as Read Only - Cannot save"  
 		Return
 	End
 	
-	If BufInfo<BI.PBUFNO> Then
-		!! 親バッファ保存モード
-		
-		!! 親が存在するかチェック
-		pno = BufInfo<BI.PBUFNO>
-		If Not(BufInfos(pno)<BI.USED>) Then
-			StatusMessage = "Parent BufferNo already closed - Cannot save"  
-			Return
-		End
-	
-		If TgtFld Then
-			!! フィールド指定モード
-			
-			saveRec = StartRec ;** 開始時点レコードに対して上書きする
-
-			fldCnt = Dcount(TgtFld,@FM) ;** 固定フィールド数
-			
-			If BufInfo<BI.VALUEFIX> Then
-				!! サブバリュー編集モード
-				
-				!! 集める
-				tmp = ""
-				cnt = DCount(Rec,@FM)
-				For i = 1 To cnt
-					fIdx = Mod((i-1),fldCnt)+1
-					svno = Int((i-1)/fldCnt)+1
-					If Rec<i> Then
-						tmp<fIdx,1,svno> = Rec<i>
-					End
-				Next
-
-				offset = (BufInfo<BI.VALUEFIX> - 1) * fldCnt + 1
-
-				!! バッファポインタを一時的に切り替える    
-				stackCurBuf = CurBuf ;** 現在のBuffNoをスタック
-				CurBuf = BufInfo<BI.PBUFNO>
-				
-				editCmd = ""
-				For i = 1 To fldCnt
-					fno = offset + (i - 1)
-					cmd = ""
-					cmd<1> = fno
-					cmd<2> = 1
-					cmd<3> = fno
-					cmd<4> = Len(Rec<fno>) + 1
-					cmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),tmp<i>)
-					cmd<6> = ""
-					editCmd<-1> = cmd
-				Next
-		
-				GoSub StackEditCmd
-				
-				saveRec = Rec
-				
-				!! バッファポインタを元に戻す
-				CurBuf = stackCurBuf
-				
-			End Else
-				!! バリュー編集モード
-				!! 縦一列になっているのを2次元に戻す
-				For i = 1 To fldCnt
-					fno = TgtFld<i,1>
-					saveRec<fno> = ""
-				Next
-				cnt = DCount(Rec,@FM)
-				For i = 1 To cnt
-					fno = TgtFld<(Mod((i-1),fldCnt)+1),1>
-					vno = Int((i-1)/fldCnt)+1
-					If Rec<i> Then
-						saveRec<fno,vno> = Rec<i>
-					End
-				Next
-				
-				If BufInfo<BI.PBUFNO> Then
-					!! 親バッファに保存
-			
-					flist = TgtFld
-					cnt = DCount(flist,@FM)
-			
-					!! バッファポインタを一時的に切り替える    
-					stackCurBuf = CurBuf ;** 現在のBuffNoをスタック
-					CurBuf = BufInfo<BI.PBUFNO>
-					
-					editCmd = ""
-					For i = 1 To cnt
-						fno = flist<i,1>
-						cmd = ""
-						cmd<1> = fno
-						cmd<2> = 1
-						cmd<3> = fno
-						cmd<4> = Len(Rec<fno>) + 1
-						cmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),saveRec<fno>)
-						cmd<6> = ""
-						editCmd<-1> = cmd
-					Next
-			
-					GoSub StackEditCmd
-					
-					saveRec = Rec
-					
-					!! バッファポインタを元に戻す
-					CurBuf = stackCurBuf
-					
-				End Else
-					!! ファイル書き込みモード
-					
-					!! Conversion
-					For i = 1 To fldCnt
-						fno = TgtFld<i,1>
-						conv = TgtFld<i,3>
-						If conv Then saveRec<fno> = IConvS(saveRec<fno>,conv)
-					Next
-				End
-				
-			End
-		End
-	End Else
-		!! ファイル保存
-		If Changed Then
-			cmdline = "WRITE.BUFFER ":CurBuf:" ":BufInfo<BI.FILE>:" ":BufInfo<BI.ITEM>
-			cmdline<-1> = "BACK.TO.EDITOR"
-			bAutoCommand = @TRUE
-			GoSub Act.Exit
-		End
+	!! ファイル保存
+	If Changed Then
+		cmdline = "WRITE.BUFFER ":CurBuf:" ":BufInfo<BI.FILE>:" ":BufInfo<BI.ITEM>
+		GoSub WRITE.BUFFER.impl
 	End
 	
 	Return
@@ -7015,10 +7118,8 @@ InputBox:
 	InsBuffer = inputBox
 	GoSub InsertLines
 
-	If inputBox >< "" Then
-		BufInfo<BI.BLOCKSTART> = Y:@VM:1
-		BufInfo<BI.BLOCKEND> = Y:@VM:X
-	End
+	X = If inputBox[1,1]=" " Then 2 Else Len(inputBox)+1
+	BufInfo<BI.BLOCKSTART> = ""
 	
 	crtBuff = ""
 
@@ -7074,6 +7175,7 @@ InputBox:
 				
 				If InsBuffer <> "" Then
 					GoSub InsertLines
+					BufInfo<BI.BLOCKSTART> = ""
 				End
 				
 				If CMD_BUF <> prevCurBuf Then
@@ -7119,7 +7221,7 @@ Draw.InputBox:
 	!! 選択範囲の描画
 	Line = Rec
 	Row = 1
-	GoSub ParseLine.Impl
+	GoSub ParseLine
 	
 	!! 表示
 	crtBuff = ESC:"[u" ;** カーソル位置を復元
@@ -7296,21 +7398,82 @@ Act.Up:
 		X = prevPos<2> ;** X位置は元に戻す
 	End
 	
-	If Y > 1 Then
-		Y -= 1
-		If Y < Top + SCROLLMERGINE And Top > 1 Then
-			** 高速１行上スクロール
-			Top -= 1
-			If IS.CONSOLE Then
-				crtBuff := @(0,PY):@(-3):@(0,0):@(-17)
-				Redraw.StatusLine = @TRUE
-			End Else
-				crtBuff := ESC:"[1;":Depth:"r":ESC:"[T":ESC:"[1;":@CRTHIGH:"r"
+	If AutoWrap>0 Then
+		nextDX = ""
+		nextDY = ""
+		
+		Line = Rec<Y>
+		Line.len = Len(Line)+1
+		tmpDX = 1
+		tmpDY = 1
+		For i=1 To Line.len
+			c = Line[i,1]
+			dispLen = LenDP(c)
+			If tmpDX+dispLen > AutoWrap Then
+				* 改行
+				tmpDX = 1
+				tmpDY += 1
 			End
-			Redraw<-1> = Top:@FM:prevY:@FM:Y
+			
+			If i = X Then
+				nextDX = Max(tmpDX,keepDP_X)
+				nextDY = tmpDY-1
+				Exit
+			End
+			
+			tmpDX += dispLen
+				
+		Next i
+		
+		If nextDY>=1 Then
+			tmpDX = 1
+			tmpDY = 1
+			For i=1 To Line.len
+				c = Line[i,1]
+				dispLen = LenDP(c)
+				If tmpDX+dispLen > AutoWrap Then
+					* 改行
+					tmpDX = 1
+					tmpDY += 1
+				End
+				
+				If nextDX<=tmpDX And nextDY=tmpDY Then
+					X = i
+					Return
+				End
+				
+				tmpDX += dispLen
+			Next i
 		End
-		moveY = True
+		
+		!! １つ上の行の最後の行に移動
+		Y -= 1
+		If Y > 0 Then
+			Line = Rec<Y>
+			Line.len = Len(Line)+1
+			
+			tmpDX = 1
+			For i=1 To Line.len
+				c = Line[i,1]
+				dispLen = LenDP(c)
+				If tmpDX+dispLen > AutoWrap Then
+					* 改行
+					tmpDX = 1
+				End
+				
+				If nextDX>=tmpDX Then
+					X = i
+				End
+				
+				tmpDX += dispLen
+			Next i
+		End
+		
+		Return
 	End
+	
+	Y -= 1
+	
 	Return
 
 * **************************************************************************
@@ -7325,22 +7488,48 @@ Act.Down:
 		X = prevPos<2> ;** X位置は元に戻す
 	End
 	
-	If Y < Lines Then
-		Y += 1
-		bottomY = Depth + Top
-		If Y = bottomY - SCROLLMERGINE Then
-			** 高速１行下スクロール
-			Top += 1
-			If IS.CONSOLE Then
-				crtBuff := @(0,PY):@(-3):@(0,0):@(-18)
-				Redraw.StatusLine = @TRUE
-			End Else
-				crtBuff := ESC:"[1;":Depth:"r":ESC:"[S":ESC:"[1;":@CRTHIGH:"r"
+	If AutoWrap>0 Then
+		nextDX = ""
+		nextDY = ""
+		
+		Line = Rec<Y>
+		Line.len = Len(Line)
+		tmpDX = 1
+		tmpDY = 1
+		For i=1 To Line.len
+			c = Line[i,1]
+			dispLen = LenDP(c)
+			If tmpDX+dispLen > AutoWrap Then
+				* 改行
+				tmpDX = 1
+				tmpDY += 1
 			End
-			Redraw<-1> = bottomY:@FM:prevY:@FM:Y
+
+			If i = X Then
+				nextDX = tmpDX
+				nextDY = tmpDY+1
+			End Else
+				If nextDX<=tmpDX And nextDY=tmpDY Then
+					X = i
+					Return
+				End
+			End
+			
+			tmpDX += dispLen
+				
+		Next i
+		
+		If nextDY=tmpDY Then
+			X = Line.len+1 ;** 次の行の最終にする
+		End Else
+			Y += 1
 		End
-		moveY = True
+		
+		Return
 	End
+	
+	Y += 1
+	
 	Return
 
 * **************************************************************************
@@ -7489,7 +7678,6 @@ Act.NextStmt:
 		End
 	End
 	If Y > Lines Then Y = Lines
-	moveY = True
 	Return
 
 * **************************************************************************
@@ -7550,7 +7738,6 @@ Act.PrevStmt:
 		End
 	End
 	If Y < 1 Then Y = 1
-	moveY = True
 	Return
 
 * **************************************************************************
@@ -7585,6 +7772,36 @@ Act.SelEnd:
 Act.End:
 	GoSub GoToRangeEnd
 	
+	If AutoWrap>0 Then
+		nextDY = 0
+		
+		Line = Rec<Y>
+		Line.len = Len(Line)
+		tmpDX = 1
+		tmpDY = 1
+		For i=1 To Line.len
+			c = Line[i,1]
+			dispLen = LenDP(c)
+			If tmpDX+dispLen > AutoWrap Then
+				* 改行
+				If nextDY=tmpDY Then
+					X = i-1
+					Return
+				End
+				tmpDX = 1
+				tmpDY += 1
+			End
+
+			If i=X Then
+				nextDY = tmpDY
+			End
+			
+			tmpDX += dispLen
+				
+		Next i
+		
+	End
+
 	X = Len(Rec<Y>) + 1
 	Return
 
@@ -7607,6 +7824,36 @@ Act.Home:
 		Redraw = REDRAW.ALL
 	End
 	BufInfo<BI.BLOCKEND> = ""
+	
+	If AutoWrap>0 Then
+		homeIndex = 1
+		
+		Line = Rec<Y>
+		Line.len = Len(Line)+1
+		tmpDX = 1
+		tmpDY = 1
+		For i=1 To Line.len
+			c = Line[i,1]
+			dispLen = LenDP(c)
+			If tmpDX+dispLen > AutoWrap Then
+				* 改行
+				tmpDX = 1
+				tmpDY += 1
+				homeIndex = i
+			End
+			
+			If i = X Then
+				Exit
+			End
+			
+			tmpDX += dispLen
+				
+		Next i
+		
+		X = homeIndex
+		
+		Return
+	End
 	
 	** 論理行頭を探す
 	logicalX = 1
@@ -7637,7 +7884,6 @@ Act.NextPage:
 	Y += Depth
 	If Y > Lines Then Y = Lines
 	Top = Y - dispY
-	moveY = True
 	Redraw = REDRAW.ALL
 	Return
 
@@ -7657,7 +7903,6 @@ Act.PrevPage:
 	Y -= Depth
 	If Y < 1 Then Y = 1
 	Top = Y - dispY
-	moveY = True
 	Redraw = REDRAW.ALL
 	Return
 
@@ -7673,10 +7918,9 @@ Act.NextHalf:
 		X = prevPos<2> ;** X位置は元に戻す
 	End
 	
-	cnt = Int(Depth/4)
-	For curMoveCnt = 1 To cnt
-		GoSub Act.Down
-	Next
+	Y += Int(Depth/3)
+	If Y > Lines Then Y = Lines
+	
 	Return
 
 * **************************************************************************
@@ -7691,10 +7935,9 @@ Act.PrevHalf:
 		X = prevPos<2> ;** X位置は元に戻す
 	End
 	
-	cnt = Int(Depth/4)
-	For curMoveCnt = 1 To cnt
-		GoSub Act.Up
-	Next
+	Y -= Int(Depth/3)
+	If Y < 1 Then Y = 1
+	
 	Return
 
 * **************************************************************************
@@ -7719,7 +7962,6 @@ Act.Top:
 	
 	Y = 1
 	X = 1
-	If prevY >< Y Then moveY = True
 	Return
 
 * **************************************************************************
@@ -7732,7 +7974,6 @@ Act.Bottom:
 	
 	Y = Lines
 	X = Len(Rec<Y>)+1
-	If prevY >< Y Then moveY = True
 	Return
 
 * **************************************************************************
@@ -7895,6 +8136,12 @@ Act.DelCh:
 	
 	editCmd = ""
 	
+	If CurBuf = CMD_BUF Then
+		If BufInfo<BI.BLOCKSTART>="" And Len(Rec<Y>)+1 = X Then
+			Return ;** コマンドバッファは改行を削除できない
+		End
+	End
+	
 	If BufInfo<BI.BLOCKSTART> Then
 		** 選択中
 		editCmd<1> = BufInfo<BI.BLOCKEND, 1>
@@ -7933,39 +8180,6 @@ Act.DelBackCh:
 			If X = 1 Then
 				editCmd<3> = Y-1
 				editCmd<4> = Len(Rec<Y-1>)+1
-			End Else
-				editCmd<3> = Y
-				editCmd<4> = X-1
-			End
-		End
-		editCmd<5> = ""
-		editCmd<6> = ""
-		
-		GoSub StackEditCmd
-		
-	End
-	
-	Return
-
-* **************************************************************************
-* Act.DelBackCh2 Auto Wrap用
-
-Act.DelBackCh2:
-	If Y=1 And X=1 Else
-	
-		editCmd = ""
-		If BufInfo<BI.BLOCKSTART> Then
-			** 選択中
-			editCmd<1> = BufInfo<BI.BLOCKEND, 1>
-			editCmd<2> = BufInfo<BI.BLOCKEND, 2>
-			editCmd<3> = BufInfo<BI.BLOCKSTART, 1>
-			editCmd<4> = BufInfo<BI.BLOCKSTART, 2>
-		End Else
-			editCmd<1> = Y
-			editCmd<2> = X
-			If X = 1 Then
-				editCmd<3> = Y-1
-				editCmd<4> = Len(Rec<Y-1>)
 			End Else
 				editCmd<3> = Y
 				editCmd<4> = X-1
@@ -8125,8 +8339,7 @@ Search.Core:
 			inputBox = Rec<Y>[startX, endX-startX]
 			If Convert(PUNCS:".":@fm:@vm:@svm,"",Rec<Y>[startX-1,1])="" Then inputBox = " ":inputBox
 		End
-		HI.OFF = BG.BASE2
-		PromptLine = FG.YELLOW:BG.BASE2:"Enter Search Text :" ; GoSub PromptLine
+		PromptLine = FG.YELLOW:BG.BASE3:"Enter Search Text :" ; GoSub PromptLine
 		GoSub InputBox
 		SearchString = inputBox
 		!! スペースで始まる場合は厳格モード
@@ -8260,12 +8473,12 @@ Search.Found:
 				If firstFound Then
 					firstFound = @FALSE
 					HI.OFF = BG.BASE2
-					PromptLine = FG.YELLOW:BG.BASE2:"Enter Replacement :" ; GoSub PromptLine
+					PromptLine = FG.YELLOW:BG.BASE3:"Enter Replacement :" ; GoSub PromptLine
 					inputBox = ""
 					GoSub InputBox
 					Replacement = inputBox
 					HI.OFF = BG.BASE2
-					PromptLine = FG.YELLOW:BG.BASE2:"(All or Verify) :"; GoSub PromptLine
+					PromptLine = FG.YELLOW:BG.BASE3:"(All or Verify) :"; GoSub PromptLine
 					GoSub GetKey
 					Ok = TrimF(UpCase(C[1,1]))
 					If Ok = "A" Then
@@ -8282,7 +8495,7 @@ Search.Found:
 					Ok = "Y"
 				End Else 
 					HI.OFF = BG.BASE2
-					PromptLine = FG.YELLOW:BG.BASE2:"Replace This Selection (Y/N/All) :"; GoSub PromptLine
+					PromptLine = FG.YELLOW:BG.BASE3:"Replace This Selection (Y/N/All) :"; GoSub PromptLine
 					GoSub GetKey
 					Ok = UpCase(TrimF(C)[1,1])
 				End
@@ -8416,14 +8629,18 @@ Act.ShowOutline:
 	Next
 
 	choiceOrgY = Int(Depth / 2) + 1
-	title = SBOLD:FG.BASE02:BG.YELLOW:" Outline"
 	tmpList = Fields(Convert(@VM,char(1),choiceList),char(1),2)
 	Locate Y In tmpList By "AR" Setting choiceNo Else choiceNo -= 1
 	
 	!! カーソルがちょうど検索ハイライト文字の上なら初期値に入れる
 	If SWord#"" Then
-		If blockStart And blockStart<1> = blockEnd<1> Then
-			filter = " ":SWord
+		If blockStart Then
+			If blockStart<1> = blockEnd<1> Then
+				filter = " ":SWord
+			End Else
+				filter = ""
+				BufInfo<BI.BLOCKSTART> = ""
+			End
 		End Else
 			!! 検索ハイライトの行を含める
 			Line = Rec<Y>
@@ -8439,11 +8656,13 @@ Act.ShowOutline:
 				End
 			End
 		End
+	End Else
+		BufInfo<BI.BLOCKSTART> = ""
 	End
 	
-	crtBuff = ""
 	StLine.Y = choiceOrgY-1
 	Redraw.StatusLine = @True
+	crtBuff = ""
 	GoSub PrintStatus.Impl
 	GoSub CRT.BUFF.FLUSH
 	
@@ -8453,6 +8672,7 @@ Act.ShowOutline:
 	Stack.XOffSet = XOffSet
 	
 	title = FG.YELLOW:" Outline"
+	choiceSelection = ""
 	Loop
 		
 		prevChoiceSelection = choiceSelection
@@ -8473,8 +8693,19 @@ Act.ShowOutline:
 			For I = 0 To choiceOrgY-2
 				Row = Top+I
 				Line = Rec<Row>
-				GoSub ParseLine
-				GoSub PrintLine
+				If Row = choiceSelection<1,2> Then
+					selection = 1:@FM:BIG
+					LineWidth = winWidth
+					Selection.Color = BG.BASE2:FG.BASE01
+					Selection.Key.Color = HI.KEY.ON
+					GoSub ParseLine2
+					GoSub Get.Gyo
+					crtBuff := @(0,Row - Top) ;* 行の開始
+					crtBuff := BG.BASE2:FG.BASE01:Gyo:PLine:Selection.Color:@(-4)
+				End Else
+					GoSub ParseLine
+					GoSub PrintLine
+				End
 			Next
 			crtBuff := ESC:"[u" ;** カーソル位置の復元
 			GoSub CRT.BUFF.FLUSH
@@ -8510,6 +8741,7 @@ Act.ShowOutline:
 				CurBuf = prevCurBuf
 				actNo = 0
 				XOffSet = Stack.XOffSet
+				keepDP_X = DP_X
 				Exit
 			
 			!!決定
@@ -8528,15 +8760,18 @@ Act.ShowOutline:
 						Ix = Index(Line,Word)
 						If Ix And Convert(PUNCS:".":@fm:@vm:@svm,"",Line[Ix-1,1])="" Then X = Ix
 					End
-					keepDP_X = X
+					keepDP_X = DP_X
 					XOffSet = 1
 				End
 				Exit
 		End Case
 		
 	Repeat
-
-	prevY = "" ;** Yスクロール位置強制調整
+	
+	choiceParse = @False
+	If Not(Top < Y And Y < Top + Int(Depth / 2)) Then
+		Top = Y - Int(Depth / 2)
+	End
 	Redraw = REDRAW.ALL
 	
 	Return
@@ -8725,6 +8960,7 @@ Act.ShowWordHokan:
 	
 	If InsBuffer <> "" Then
 		GoSub InsertLines
+		BufInfo<BI.BLOCKSTART> = ""
 	End
 	
 	Redraw = REDRAW.ALL
@@ -8791,9 +9027,8 @@ Core.ShowWordHokan:
 	choiceOrgY = 0
 	choiceNo = 1
 	title = SBOLD:FG.BASE02:BG.YELLOW:" Words"
-	filter = currentWord
+	filter = " ":currentWord
 	GoSub InitChoiceList
-	
 	
 	Loop
 		
@@ -8889,7 +9124,7 @@ Get.WordList:
 						If word Then
 							ch = word[1,1]
 							s = Seq(ch)
-							If 65 <= s And s <= 122 And currentWord <> word Then
+							If (36 = s) or (64 <= s And s <= 122) And currentWord <> word Then
 								!! Alphabetで始まりフィルタと完全一致しないもの
 								Locate word In wordList By "AL" Setting f Else
 									Ins word Before wordList<f>
@@ -8938,7 +9173,7 @@ Act.GoLine:
 			!! バリュー固定モード
 			If fldCnt = 1 Then
 				!! フィールド数が１つ
-				PromptLine = FG.GREEN:BG.BASE2:"SubValue No :"
+				PromptLine = FG.GREEN:BG.BASE3:"SubValue No :"
 				GoSub PromptLine
 				inputBox = ""
 				GoSub InputBox
@@ -8946,7 +9181,7 @@ Act.GoLine:
 				vno = Ok<1>
 			End Else
 				!! フィールド数が複数
-				PromptLine = FG.GREEN:BG.BASE2:"Value No (fno,svno) :"
+				PromptLine = FG.GREEN:BG.BASE3:"Value No (fno,svno) :"
 				inputBox = ""
 				GoSub InputBox
 				Ok = TrimS(Convert(",",@FM,inputBox))
@@ -8959,7 +9194,7 @@ Act.GoLine:
 			If fldCnt = 1 Then
 				!! フィールド数が１つ
 				fno = TgtFld<1,1>
-				PromptLine = FG.GREEN:BG.BASE2:"Value No (vno[,svno]) :"
+				PromptLine = FG.GREEN:BG.BASE3:"Value No (vno[,svno]) :"
 				GoSub PromptLine
 				inputBox = ""
 				GoSub InputBox
@@ -8968,7 +9203,7 @@ Act.GoLine:
 				vno = Ok<1>
 				svno = Ok<2>
 			End Else
-				PromptLine = FG.GREEN:BG.BASE2:"Value No (fno,vno[,svno]) :"
+				PromptLine = FG.GREEN:BG.BASE3:"Value No (fno,vno[,svno]) :"
 				inputBox = ""
 				GoSub InputBox
 				Ok = TrimS(Convert(",",@FM,inputBox))
@@ -8999,7 +9234,7 @@ Act.GoLine:
 		End
 		
 	End Else
-		PromptLine = FG.GREEN:BG.BASE2:"Line No (fno[,vno[,svno]]) :"
+		PromptLine = FG.GREEN:BG.BASE3:"Line No (fno[,vno[,svno]]) :"
 		GoSub PromptLine
 		inputBox = ""
 		GoSub InputBox
@@ -9313,6 +9548,7 @@ Act.Copy:
 	keepSelection = @TRUE
 	StatusMessage = "copied"
 	
+Act.Copy.Impl:
 	clipboard = selString ;** ローカルクリップボードに格納
 		
 	!! リモート端末に送信する
@@ -9378,6 +9614,11 @@ Act.Paste:
 			startPos = Lower(blockStart)
 		End
 	End
+	If CurBuf = CMD_BUF Then
+		If Index(InsBuffer,@FM) Then
+			InsBuffer = Change(InsBuffer,@FM,If cmdStackPos<=1 Then @FM:"si:" Else " ")
+		End
+	End
 	GoSub InsertLines
 	If X = 1 Then
 		!! カーソル位置が先頭の時は選択範囲を残す
@@ -9399,6 +9640,7 @@ Act.Undo:
 		EditCmdPos += 1 ;** １つ前に戻る
 		Changed = If EditCmdStack<EditCmdPos> = "SAVED_POINT" Then False Else True
 		Redraw = REDRAW.ALL
+		prevY = ""
 	End
 	
 	Redraw.StatusLine = @TRUE
@@ -9424,6 +9666,7 @@ Act.Redo:
 			Changed = True
 		End
 		Redraw = REDRAW.ALL
+		prevY = ""
 	End
 	
 	Redraw.StatusLine = @TRUE
@@ -9443,39 +9686,28 @@ Act.ShowBuffList:
 	For I = 1 To listCnt
 		no = lruBuffList<I>
 		info = BufInfos(no)
-		If info<BI.USED> Else Continue
-		dispStr = Fmt(no,"2R"):" > "
-		Begin Case
-			Case 1
-				If info<BI.CHANGED> Then dispStr := "*"
-				If info<BI.NEW> Then dispStr := "(New)"
-				If info<BI.PATHNAME> >< "" And UpCase(info<BI.FILE>[1,5])="PATH:" Then
-					dispStr := info<BI.PATHNAME>
-				End Else If info<BI.FILE> <> "" Then
-					dispStr := info<BI.FILE>
-					dispStr := " ":info<BI.ITEM>
-					If info<BI.PATHNAME> >< "" Then fileSentence := " [ ":info<BI.PATHNAME>:" ]"
-				End Else If info<BI.CAPTURE> >< "" Then
-					dispStr := "[":info<BI.CAPTURE>:"]"
-				End Else If Bufs(no)<1>#"" Then
-					dispStr := "[":Bufs(no)<1>:"]"
-				End Else
-					dispStr := "(Untitled)" 
-				End
-				If info<BI.FIELDFIX> Then dispStr:= " {":info<BI.FIELDFIX>:"}"
-				If info<BI.VALUEFIX> Then dispStr:= ",V":info<BI.VALUEFIX>
-				If info<BI.FILE> >< "" And @PATH >< info<BI.ACCOUNT> And @WHO >< info<BI.ACCOUNT> Then dispStr:= " (":info<BI.ACCOUNT>:")"
-				If info<BI.LOCKED> Then dispStr:= " <Locked>"
-		End Case
+		GoSub Get.FileSentence
+		dispStr = Fmt(no,"2R"):"< "
+		dispStr := fileSentence
+		A = Bufs(no)<1>
+		If A#"" Then dispStr := "  | ":A
 		choiceList<-1> = dispStr:@VM:no
 	Next
 	
 	choiceList<-1> = Trim(IfS(NotS(SubstringS(LRUOpenList,1,1)),SubstringS(LRUOpenList,2,999),""),@FM)
 	
-	choiceOrgY = 0
-	title = SBOLD:FG.BASE02:BG.BLUE:" Buffers"
+	choiceOrgY = Int(Depth / 2) + 1
+	title = FG.BLUE:" Buffers"
+!	choiceOrgY = 0
+!	title = SBOLD:FG.BASE02:BG.BLUE:" Buffers"
 	choiceNo = If DCount(choiceList,@FM) < 2 Then 1 Else 2 ;**   !! 初期値は１つ前のものにする
 	
+	StLine.Y = choiceOrgY-1
+	Redraw.StatusLine = @True
+	crtBuff = ""
+	GoSub PrintStatus.Impl
+	GoSub CRT.BUFF.FLUSH
+
 	!! 選択リストボックス初期化
 	filter = ""
 	GoSub InitChoiceList
@@ -10035,14 +10267,23 @@ Act.Reload:
 	
 	If TempRec >< StartRec Then
 		!! 初めのレコードと違いがある
-		If Changed Then
-			!! 変更ありなら自分の変更を破棄するか判断させる
-			PromptLine = BG.RED:FG.BASE3:"Record previously changed by another, Are you sure you want to destroy your modification? (Y) :"
+		!! 変更ありなら自分の変更を破棄するか判断させる
+		If AllDone Then
+			If Changed Then
+				Print "Record previously changed by another, Are you sure you want to destroy your modification? (Y) :":
+			End Else
+				Print "Record previously changed by another, Do you want to reload this item? (Y) :":
+			End
+			Input C
 		End Else
-			PromptLine = BG.CYAN:FG.BASE3:"Record previously changed by another, Do you want to reload this item? (Y) :"
+			If Changed Then
+				PromptLine = BG.RED:FG.BASE3:"Record previously changed by another, Are you sure you want to destroy your modification? (Y) :"
+			End Else
+				PromptLine = BG.CYAN:FG.BASE3:"Record previously changed by another, Do you want to reload this item? (Y) :"
+			End
+			GoSub PromptLine
+			GoSub GetKey
 		End
-		GoSub PromptLine
-		GoSub GetKey
 		If UpCase(C) = "Y" Else Return
 		
 		cmdline = "READ.BUFFER ":If PathName<>"" And FileName[1,5]="PATH:" Then PathName Else FileName:" ":ItemName
@@ -10126,7 +10367,6 @@ Act.Mouse:
 		If MOUSE<1>="2" Then
 			keepSelection = @TRUE
 		End
-		moveY = @True
 		Redraw = REDRAW.ALL
 	End
 	Return
@@ -10137,13 +10377,13 @@ Act.Mouse:
 Act.ScrollUp:
 	If Top>1 Then
 		Top -= 1
-		If IS.CONSOLE Then
-			crtBuff := @(0,PY):@(-3):@(0,0):@(-17)
-			Redraw.StatusLine = @TRUE
-		End Else
-			crtBuff := ESC:"[1;":Depth:"r":ESC:"[T":ESC:"[1;":@CRTHIGH:"r"
-		End
-		Redraw<-1> = Top
+!		If IS.CONSOLE Then
+!			crtBuff := @(0,PY):@(-3):@(0,0):@(-17)
+!			Redraw.StatusLine = @TRUE
+!		End Else
+!			crtBuff := ESC:"[1;":Depth:"r":ESC:"[T":ESC:"[1;":@CRTHIGH:"r"
+!		End
+!		Redraw<-1> = Top
 	End
 	Return
 
@@ -10153,13 +10393,13 @@ Act.ScrollUp:
 Act.ScrollDown:
 	If Top < Lines - Depth + SCROLLMERGINE + 1 Then
 		Top += 1
-		If IS.CONSOLE Then
-			crtBuff := @(0,PY):@(-3):@(0,0):@(-18)
-			Redraw.StatusLine = @TRUE
-		End Else
-			crtBuff := ESC:"[1;":Depth:"r":ESC:"[S":ESC:"[1;":@CRTHIGH:"r"
-		End
-		Redraw<-1> = Depth + Top - 1
+!		If IS.CONSOLE Then
+!			crtBuff := @(0,PY):@(-3):@(0,0):@(-18)
+!			Redraw.StatusLine = @TRUE
+!		End Else
+!			crtBuff := ESC:"[1;":Depth:"r":ESC:"[S":ESC:"[1;":@CRTHIGH:"r"
+!		End
+!		Redraw<-1> = Depth + Top - 1
 	End
 	Return
 

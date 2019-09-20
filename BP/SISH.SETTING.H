@@ -57,12 +57,12 @@ Equ K.END To              "@[[F @[OF"
 Equ K.C_END To            "@[[1;5F"
 Equ K.S_END To            "@[[1;2F"
 Equ K.C_S_END To          "@[[1;6F"
-Equ K.PGDOWN To           "@[[6;5~"
-Equ K.C_PGDOWN To         "@[[6~"
+Equ K.PGDOWN To           "@[[6~"
+Equ K.C_PGDOWN To         "@[[6;5~"
 Equ K.S_PGDOWN To         "@[[6;2~"
 Equ K.C_S_PGDOWN To       "@[[6;6~"
-Equ K.PGUP To             "@[[5;5~"
-Equ K.C_PGUP   To         "@[[5~"
+Equ K.PGUP To             "@[[5~"
+Equ K.C_PGUP To           "@[[5;5~"
 Equ K.S_PGUP To           "@[[5;2~"
 Equ K.C_S_PGUP To         "@[[5;6~"
 
@@ -143,10 +143,10 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.DOWN>             = K.DOWN:" ":char(206):" ":KEY.MOVE.CURSOR.DOWN
 	keySeq<A.HOME>             = K.HOME:" ":char(209):" ":KEY.MOVE.CURSOR.TO.HOME
 	keySeq<A.END>              = K.END:" ":char(210):" ":KEY.MOVE.CURSOR.TO.LAST.LINE
-	keySeq<A.NEXTPAGE>         = K.PGDOWN:" ":char(208)
-	keySeq<A.PREVPAGE>         = K.PGUP:" ":char(207)
-	keySeq<A.NEXTHALF>         = K.C_PGDOWN:" ":char(215)
-	keySeq<A.PREVHALF>         = K.C_PGUP:" ":char(214)
+	keySeq<A.NEXTPAGE>         = K.C_PGDOWN:" ":char(215)
+	keySeq<A.PREVPAGE>         = K.C_PGUP:" ":char(214)
+	keySeq<A.NEXTHALF>         = K.PGDOWN:" ":char(208)
+	keySeq<A.PREVHALF>         = K.PGUP:" ":char(207)
 	keySeq<A.NEXTWORD>         = K.C_RIGHT:" ":char(152)
 	keySeq<A.PREVWORD>         = K.C_LEFT:" ":char(153)
 	keySeq<A.NEXTSTMT>         = K.C_DOWN:" ":char(154)
@@ -165,10 +165,10 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.SEL_PREVWORD>     = K.C_S_LEFT:" ":char(163)
 	keySeq<A.SEL_NEXTSTMT>     = K.C_S_DOWN:" ":char(164)
 	keySeq<A.SEL_PREVSTMT>     = K.C_S_UP:" ":char(165)
-	keySeq<A.SEL_NEXTPAGE>     = K.S_PGDOWN:" ":char(151)
-	keySeq<A.SEL_PREVPAGE>     = K.S_PGUP:" ":char(167)
-	keySeq<A.SEL_NEXTHALF>     = K.C_S_PGDOWN:" ":char(168)
-	keySeq<A.SEL_PREVHALF>     = K.C_S_PGUP:" ":char(169)
+	keySeq<A.SEL_NEXTPAGE>     = K.C_S_PGDOWN:" ":char(168)
+	keySeq<A.SEL_PREVPAGE>     = K.C_S_PGUP:" ":char(169)
+	keySeq<A.SEL_NEXTHALF>     = K.S_PGDOWN:" ":char(151)
+	keySeq<A.SEL_PREVHALF>     = K.S_PGUP:" ":char(167)
 	keySeq<A.SEL_NEXTCHAR>     = K.C_S_GREATER:" ":K.RB
 	keySeq<A.SEL_PREVCHAR>     = K.C_S_LESS
 	keySeq<A.SEL_TOP>          = K.C_S_HOME:" ":char(170)
@@ -395,7 +395,7 @@ EQU HI.SMK.OFF TO SGR.ALL.OFF
 EQU HI.STATUS.ON TO BG.BASE0:FG.BASE3
 EQU HI.STATUS.OFF TO SGR.ALL.OFF
 EQU HI.SHELL.ON TO FG.GREEN
-EQU HI.SHELL.OFF TO FG.DEFAULT
+EQU HI.SHELL.OFF TO FG.DEFAULT:BG.DEFAULT
 EQU HI.KAKKO.ON TO SBOLD:BG.BASE2:FG.BASE03
 EQU HI.KAKKO.OFF TO SGR.ALL.OFF
 
