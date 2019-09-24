@@ -8,7 +8,7 @@ Unix like Shell for OpenQM and UniVerse
 Unix系のShellに近い操作でコマンドライン入力が出来るようになります。 +
 また、データ(Item)やBASICソースを効率よく編集するスクリーンエディタも備えています。
 
-image:resources/Shell.png[Overview]
+image:resources/Shell.gif[Overview]
 
 == 特徴 ==
 
@@ -589,7 +589,7 @@ Linuxでは以下のターミナル制御コードと重複しているのでそ
 http://d.hatena.ne.jp/amachang/20111226/1324874731
 
 以下は適応した場合の画面キャプチャー  +
-image:resources/Consolas.png[]
+image:resources/Consolas.gif[]
 
 導入方法は少しややこしいですが、MSゴシックより見やすくなるのでとても捗ります。
 

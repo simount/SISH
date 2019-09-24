@@ -1912,7 +1912,6 @@ $ENDIF
 		
 Complate.Common:
 		GoSub AUTO.COMPLATE
-		logmsg "bComprate=":bComprate:" , ":commonWord
 		If bComprate And commonWord[1]#" " Then
 			If candidateMode#"" Then
 				prevC = ""
