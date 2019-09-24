@@ -632,11 +632,8 @@ Shell.KeyLoop.Start:
 			GoTo Run.Command
 		End
 		
-		!! コマンドエディタからコマンドを取得する
-		GoSub GET.CMDLINES
-		
+		Lines = DCount(Rec,@FM)
 		A = Rec<Y>
-		curPos = X - Len(A[":",1,1]) - 1 ;** プロンプト分減らす
 		cmdline = A[":",2,999]
 		
 		!! 編集対象行が変わった場合は選択が解除される
@@ -1561,6 +1558,9 @@ $IFNDEF U2__UNIVERSE
 		GoSub CUR.TOP.OF.SCREEN
 		
 		crtBuff = ""
+		crtBuff := SGR.ALL.OFF
+		GoSub Create.CmdDraw
+		GoSub Clear.Cmdline.Crt
 		GoSub Draw.Cmdline
 		GoSub CRT.BUFF.FLUSH
 		
@@ -1604,6 +1604,10 @@ Return
 * TAB補完 Action
 *---------------------
 TAB.HOKAN:
+	
+	A = Rec<Y>
+	cmdline = A[":",2,999]
+	curPos = X - Len(A[":",1,1]) - 1 ;** プロンプト分減らす
 	
 	GoSub Setting.WordInfo
 	
@@ -1908,6 +1912,7 @@ $ENDIF
 		
 Complate.Common:
 		GoSub AUTO.COMPLATE
+		logmsg "bComprate=":bComprate:" , ":commonWord
 		If bComprate And commonWord[1]#" " Then
 			If candidateMode#"" Then
 				prevC = ""
@@ -2131,6 +2136,9 @@ DispCandidate.Common:
 	GoSub CUR.TOP.OF.SCREEN
 	
 	crtBuff = ""
+	crtBuff := SGR.ALL.OFF
+	GoSub Create.CmdDraw
+	GoSub Clear.Cmdline.Crt
 	GoSub Draw.Cmdline
 	GoSub CRT.BUFF.FLUSH
 
@@ -2184,19 +2192,38 @@ DispCandidate.Common:
 					Exit
 				END
 			Case actNo = A.TAB ;** モード切替
-				If candidateMode = "FLATREC" Then
-					candidateMode = "FIELD"
-				End Else If candidateMode = "FIELD" Then
-					candidateMode = "RECID"
-				End Else If candidateMode = "RECID" Then
-					candidateMode = "FILE"
-				End Else If candidateMode = "FILE" Then
-					candidateMode = "VOC"
-				End Else If candidateMode = "VOC" Then
-					candidateMode = "FLATREC"
+				If dispType # "OS Path" Then
+					If candidateMode = "FLATREC" Then
+						candidateMode = "FIELD"
+					End Else If candidateMode = "FIELD" Then
+						candidateMode = "RECID"
+					End Else If candidateMode = "RECID" Then
+						candidateMode = "FILE"
+					End Else If candidateMode = "FILE" Then
+						candidateMode = "VOC"
+					End Else If candidateMode = "VOC" Then
+						candidateMode = "FLATREC"
+					End
+					Crt @(winX,0):
+					GoTo TAB.HOKAN
 				End
-				Crt @(winX,0):
-				GoTo TAB.HOKAN
+			Case actNo = A.SHIFT_TAB
+				If dispType # "OS Path" Then
+					If candidateMode = "FIELD" Then
+						candidateMode = "FLATREC"
+					End Else If candidateMode = "RECID" Then
+						candidateMode = "FIELD"
+					End Else If candidateMode = "FILE" Then
+						candidateMode = "RECID"
+					End Else If candidateMode = "VOC" Then
+						candidateMode = "FILE"
+					End Else If candidateMode = "FLATREC" Then
+						candidateMode = "VOC"
+					End
+					Crt @(winX,0):
+					GoTo TAB.HOKAN
+				End
+
 		End Case
 		
 	Repeat
@@ -4727,11 +4754,11 @@ ProcChoiceList:
 			!! リストの操作
 			Case actNo = A.UP
 				choiceNo -= 1
-			Case choiceOrgY=0 And actNo = A.SHIFT_TAB
+			Case actNo = A.SHIFT_TAB
 				choiceNo -= 1
 			Case actNo = A.DOWN
 				choiceNo += 1
-			Case choiceOrgY=0 And actNo = A.TAB
+			Case actNo = A.TAB
 				choiceNo += 1
 			Case actNo = A.PREVSTMT
 				choiceNo -= 4
@@ -4957,7 +4984,8 @@ ProcChoiceList:
 		crtBuff := BG.BASE3
 		If title#"" Then crtBuff := title
 		crtBuff := " ":Fmt("(":choiceOutList.length:")",Len(choiceList.length)+2:"L")
-		crtBuff := If choiceActive Then " :":PFilter Else filter
+		crtBuff := " :"
+		crtBuff := If choiceActive Then PFilter Else filter
 		crtBuff := HI.OFF:@(-4)
 	End
 	If PFilter.X#"" Then crtBuff := @(-9,PFilter.X) ;** 実際のカーソル位置に戻す
@@ -6471,18 +6499,18 @@ PrintCursor:
 *  MenuLine
 *-----------------------------------------------------------------------
 MenuLine:
-	crtBuff = HI.STATUS.ON
+	crtBuff = BG.BASE0:FG.MAGENTA
 	f = @TRUE
 	For i=1 To HUGE
 		ch = MenuLine[i,1]
 		If ch = '' Then Exit
 		If f Then
 			If ch = 'E' And MenuLine[i,3] = "ESC" Then
-				crtBuff := SBOLD:FG.RED:"ESC":EBOLD:HI.STATUS.ON
+				crtBuff := FG.BASE3:"ESC":FG.MAGENTA
 				f = @FALSE
 				i += 2
 			End Else If ((ch >= 'A' And ch <= 'Z') or ch = '!') Then
-				crtBuff := SBOLD:FG.RED:ch:EBOLD:HI.STATUS.ON
+				crtBuff := FG.BASE3:ch:FG.MAGENTA
 				f = @FALSE
 			End Else 
 				crtBuff := ch
