@@ -101,7 +101,8 @@ Equ K.C_GREATER To        "@[[1;5l"
 Equ K.C_S_GREATER To      "@[[1;6l"
 Equ K.C_LESS To           "@[[1;5n"
 Equ K.C_S_LESS To         "@[[1;6n"
-Equ K.ENTER To            "@J @M"
+Equ K.ENTER To            "@M"
+Equ K.C_ENTER To          "@J @^"
 Equ K.TAB To              "@I"
 Equ K.SHIFT_TAB To        "@[[Z"
 Equ K.BACKSPACE To        "@H"
@@ -175,7 +176,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.SEL_BOTTOM>       = K.C_S_END:" ":char(171)
 	keySeq<A.SCROLL_MID>       = K.C_B
 !! Editor Input
-	keySeq<A.NEWLINE>          = K.ENTER
+	keySeq<A.NEWLINE>          = K.ENTER:" ":K.C_ENTER
 	keySeq<A.TAB>              = K.TAB
 	keySeq<A.SHIFT_TAB>        = K.SHIFT_TAB:" ":Char(213):" ":K.C_F11
 	keySeq<A.INSVMC>           = K.C_9
@@ -359,9 +360,15 @@ EQU BG.DEFAULT TO BG.BASE3
 !! UnderLine
 EQU SUL   TO CSI:"4m"
 EQU EUL   TO CSI:"24m"
+
 !! BOLD
-SBOLD = CSI:"1m"
-EBOLD = CSI:"22m"
+If @TRUE Then
+	SBOLD = ""
+	EBOLD = ""
+End Else
+	SBOLD = CSI:"1m"
+	EBOLD = CSI:"22m"
+End
 
 !! Highlights Mapping
 EQU SGR.ALL.OFF TO EBOLD:FG.DEFAULT:BG.DEFAULT
@@ -398,4 +405,7 @@ EQU HI.SHELL.ON TO FG.GREEN
 EQU HI.SHELL.OFF TO FG.DEFAULT:BG.DEFAULT
 EQU HI.KAKKO.ON TO SBOLD:BG.BASE2:FG.BASE03
 EQU HI.KAKKO.OFF TO SGR.ALL.OFF
+
+Equ NEWLINE.DISP TO "↲ "
+Equ TAB.DISP TO "¦"
 

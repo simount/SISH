@@ -241,7 +241,7 @@ Shell.Main:
 	EQU CMD_BUF To BUFFS
 
 	* セッショングローバル
-	COMMON /SISH.SHELL/ ShInfo(30)
+	COMMON /SISH.SHELL/ ShInfo(30),has.Run.Command.Delegator,Run.Command.Delegator
 	COMMON /SISH.EDITOR/ initEnvEDS,lruBuffList,jumpHistory,jumpHistoryPos,currentJumpData,CurBuf,BufInfos(BUFFS),Bufs(BUFFS),Ys(BUFFS),Xs(BUFFS),DP_Xs(BUFFS),Tops(BUFFS),XOffSets(BUFFS),RecLines(BUFFS),EditCmdStacks(BUFFS),EditCmdPoss(BUFFS),StartRecs(BUFFS),ys(BUFFS),TgtFlds(BUFFS),DIRecs(BUFFS)
 
 	Equ cmdStack To ShInfo(1) ;** コマンドスタック
@@ -354,12 +354,15 @@ Shell.Main:
 	EQU PARSE.PDUMP To "PDUMP"
 
 	MY_COMMAND = Trim(@COMMAND[' ',1,1]) ;** 自コマンド名(SISH)
-	KAKKO.CHAR.LIST = \()[]<>{}''""\:"\\" ;** 対応する括弧定義
+	EQU KAKKO.CHAR.LIST1 To (\([<{'"\:"\") ;** 対応する開き括弧定義
+	EQU KAKKO.CHAR.LIST2 To (\)]>}'"\:"\") ;** 対応する閉じ括弧定義
 
 	EQU PY Lit "@CRTHIGH - 2"
 	EQU LISTDEPTH Lit "Depth - 2"
 
 	If initEnvEDS Else
+		!! 初回起動時にのみ処理するもの
+		
 		initEnvEDS = @TRUE
 		lruBuffList = "" ; !! バッファの直近順List
 		jumpHistory = "" ; !! ジャンプ履歴
@@ -407,14 +410,20 @@ $IFNDEF U2__UNIVERSE
 		End
 $ENDIF
 		theme = @FALSE
-
+		
+		!! Check for run.command.delegator
+		Run.Command.Delegator = "SISH.RUN.COMMAND.DELEGATOR"
+$IFDEF U2__UNIVERSE
+		EXECUTE "SISH.RUN.COMMAND.DELEGATOR" CAPTURING OUT
+		has.Run.Command.Delegator = @SYSTEM.RETURN.CODE#-1
+$ELSE
+		EXECUTE "SISH.RUN.COMMAND.DELEGATOR" CAPTURING OUT
+		has.Run.Command.Delegator = @SYSTEM.RETURN.CODE#-1
+$ENDIF
 	End
-
-	GoSub InitTerminal ;* 初回起動時に１回だけ初期化するもの
-
-	!! Brackets Paste Mode on
-	Crt CSI:"?2004h":
-
+	
+	GoSub InitTerminal
+	
 !! 外部設定の読み込み
 $INCLUDE SISH.SETTING.H
 
@@ -427,6 +436,9 @@ $INCLUDE SISH.SETTING.H
 	GoSub SetupDefKeyBindings
 	GoSub SetupTokens
 	
+	!! Query for support Brackets Paste Mode
+	Crt CSI:"?2004$p":
+
 	prevPath = "" ;** 前回のアカウントパスは一度クリアする
 	prevAccount = "" ;** 前回のアカウント
 	
@@ -469,7 +481,6 @@ $ENDIF
 	Close fpD.VOC
 
 	!! 共通のテンポラリ変数
-	kakko = ""
 	inputBox = ""         ;** １行入力用バッファ
 	crtBuff = ""
 	moveChar = "" ;** Move To Char モード
@@ -571,8 +582,10 @@ $ENDIF
 					Write stack[@FM,stack.cnt-10000,10000] To fpStack,logFile On Error Print "Cannot Write Stack Log -> ":STACK.FILE:"/":logFile
 				End
 				Loop
-					cmdline = stack<stack.cnt,1>[21,999999]
-					retCode = stack<stack.cnt,2>
+					line = stack<stack.cnt>
+					cnt = DCount(line,@VM)
+					cmdline = Field(line,@VM,1,cnt-1)[21,999999]
+					retCode = Field(line,@VM,cnt)
 $IFDEF U2__UNIVERSE
 					cond = (cmdline And cmdline[1,1] <> ' ')
 $ELSE
@@ -681,10 +694,10 @@ Set.Command.Editor:
 				BufInfo<BI.BLOCKEND> = ""
 			End
 			If BufInfo<BI.BLOCKSTART> Then
-				If BufInfo<BI.BLOCKSTART,2>=1 And BufInfo<BI.BLOCKEND,2>=1 And BufInfo<BI.BLOCKSTART,1>+1=BufInfo<BI.BLOCKEND,1> Then
+				If BufInfo<BI.BLOCKEND,1>#Y Then
 					!! 全行選択
-					BufInfo<BI.BLOCKSTART,2> = Len(prmptStr)+1
-					BufInfo<BI.BLOCKEND,1> = BufInfo<BI.BLOCKSTART,1>
+					If BufInfo<BI.BLOCKSTART,2>=1 Then BufInfo<BI.BLOCKSTART,2> = Len(prmptStr)+1
+					BufInfo<BI.BLOCKEND,1> = Y
 					BufInfo<BI.BLOCKEND,2> = Len(Rec<BufInfo<BI.BLOCKSTART,1>>)+1
 				End
 			End
@@ -750,13 +763,16 @@ Shell.KeyLoop.Bef.GetKey:
 			Case actNo = A.UP
 				GoSub Act.Up
 				If Y<1 Then
+					!! 上の履歴に切り替える
 					GoSub GET.CMDLINES
 					GoSub ACTION.CMDSTACK.NEXT
 					Rec = "si:":cmdline
 					GoSub InitBuf
 				End
 			Case actNo = A.PREVSTMT
-				If Y=1 Then
+				GoSub Act.Up
+				If Y<1 Then
+					!! 枠を増やす
 					cmdStackPos += 1
 					GoSub GET.PROMPTSTR
 					Y = 1
@@ -766,11 +782,37 @@ Shell.KeyLoop.Bef.GetKey:
 					Y = 1
 					X = prevX
 				End Else
+					If prevY=Y Then
+						Loop
+						While tmpDY>1
+							GoSub Act.Up
+						Repeat
+					End
+				End
+			Case actNo = A.SEL_PREVSTMT
+				GoSub Act.SelUp
+				If Y<1 Then
+					!! 枠を増やす
+					cmdStackPos += 1
+					GoSub GET.PROMPTSTR
 					Y = 1
+					X = 1
+					InsBuffer = prmptStr:cmdStack<cmdStackPos>:CHAR(10)
+					GoSub InsertLines
+					Y = 1
+					X = prevX
+				End Else
+					If prevY=Y Then
+						Loop
+						While tmpDY>1
+							GoSub Act.SelUp
+						Repeat
+					End
 				End
 			Case actNo = A.DOWN
 				GoSub Act.Down
 				If Y>Lines Then
+					!! 下の履歴に切り替える
 					If 1<cmdStackPos Then
 						GoSub GET.CMDLINES
 						GoSub ACTION.CMDSTACK.BACK
@@ -781,14 +823,47 @@ Shell.KeyLoop.Bef.GetKey:
 						Y = Lines
 					End
 				End
-			Case actNo = A.NEXTSTMT
-				If Y>=Lines Then
-					GoSub GET.PROMPTSTR
-					A = cmdStackPos-Y
-					Rec<-1> = If A > 1 Then prmptStr:cmdStack<A> Else prmptStr
-					Y += 1
+			Case actNo = A.NEXTSTMT Or actNo = A.SEL_NEXTSTMT
+				If actNo = A.NEXTSTMT Then
+					GoSub Act.Down
 				End Else
-					Y = Lines
+					GoSub Act.SelDown
+				End
+				If Y>Lines Then
+					!! 下の枠を増やす
+					GoSub GET.PROMPTSTR
+					A = cmdStackPos-Lines
+					Rec<-1> = If A > 1 Then prmptStr:cmdStack<A> Else prmptStr
+				End Else
+					If prevY=Y Then
+						nextDX = ""
+						
+						Line = Rec<Y>
+						Line.len = Len(Line)
+						tmpDX = 1
+						For i=1 To Line.len
+							c = Line[i,1]
+							dispLen = LenDP(c)
+							
+							If i = X Then
+								!! 現在位置
+								nextDX = Max(tmpDX,keepDP_X)
+							End Else
+								If nextDX>=tmpDX Then
+									X = i
+								End
+							End
+							
+							If c = @VM Or tmpDX+dispLen > AutoWrap Then
+								* 改行
+								tmpDX = 1
+								If c = @VM Then dispLen = 0
+							End
+							
+							tmpDX += dispLen
+							
+						Next i
+					End
 				End
 			Case actNo = A.TOP
 				GoSub GET.CMDLINES
@@ -856,10 +931,12 @@ Shell.KeyLoop.Bef.GetKey:
 						iSearchText = selString
 					End
 					bIncSearch = "R"
-				End
-				stackPos = cmdStackPos
-				If bIncSearch#"" Then
-					cmdStackPos += 1
+					stackPos = cmdStackPos
+				End Else
+					stackPos = cmdStackPos
+					If bIncSearch#"" Then
+						cmdStackPos += 1
+					End
 				End
 				GoSub ACTION.CMDSTACK.INC.SEARCH
 				
@@ -871,10 +948,12 @@ Shell.KeyLoop.Bef.GetKey:
 						iSearchText = selString
 					End
 					bIncSearch = "F"
-				End
-				stackPos = cmdStackPos
-				If bIncSearch#"" Then
-					cmdStackPos -= 1
+					stackPos = cmdStackPos
+				End Else
+					stackPos = cmdStackPos
+					If bIncSearch#"" Then
+						cmdStackPos -= 1
+					End
 				End
 				GoSub ACTION.CMDSTACK.INC.SEARCH
 				
@@ -888,13 +967,15 @@ Shell.KeyLoop.Bef.GetKey:
 				bAutoCommand = @TRUE
 				
 			Case actNo = A.NEWLINE
-				If cmdStackPos = 1 And X = 4 And Y > 1 Then
-					InsBuffer = CHAR(10):"si:"
+				If C # CTRL.M Then ;** Ctrl+Enterでコマンド内改行
+					InsBuffer = @VM
 					GoSub InsertLines
 				End Else
 					GoSub GET.CMDLINES
 					bAutoCommand = @TRUE
 				End
+				
+			Case C = "@J"
 				
 			Case actNo = A.CASEINVERT
 				GoSub Act.ToggleCaseInvert
@@ -967,7 +1048,7 @@ Launch.Editor:
 					GoSub ACTION.CMDSTACK.INC.SEARCH
 					GoTo Set.Command.Editor
 				End Else
-					If actNo = A.BACKSPACE Then
+					If actNo = A.BACKSPACE Or actNo = A.DELETE_BACKWORD Then
 						If X <= Len(prmptStr)+1 Then
 							!! 行頭なら行の削除を行う
 							If cmdStackPos = 1 And Y>1 Then
@@ -978,7 +1059,11 @@ Launch.Editor:
 								GoSub Act.DelBackCh
 							End
 						End Else
-							GoSub Act.DelBackCh
+							If actNo = A.DELETE_BACKWORD Then
+								GoSub Act.DelBackWord
+							End Else
+								GoSub Act.DelBackCh
+							End
 						End
 					End Else
 						GoSub Input.Actions
@@ -1068,6 +1153,36 @@ Create.CmdDraw:
 	!! 描画処理
 	cmdDraw = "" ;** 描画構築済み
 	
+	!! 対応する括弧情報を取得
+	kakko1 = "" ;** 開き括弧情報(必ず1回は初期化される)
+	OldLine = Rec<Y>
+	stCh = OldLine[X,1] ;** 現在カーソル文字の再取得
+	If stCh >< "" Then
+		ki = Index(KAKKO.CHAR.LIST1,stCh,1) 
+		If ki Then
+			Mask = ""
+			iX = X
+			moveDir = 1
+			enCh = KAKKO.CHAR.LIST2[ki,1]
+			GoSub Get.kakko
+			kakko1 = kakko
+		End
+	End
+	kakko2 = "" ;** 開き括弧情報(必ず1回は初期化される)
+	stCh = OldLine[X-1,1] ;** 現在カーソル文字の再取得
+	If stCh >< "" Then
+	!! 開き括弧調査
+		ki = Index(KAKKO.CHAR.LIST2,stCh,1) 
+		If ki Then
+			Mask = ""
+			iX = X-1
+			moveDir = -1
+			enCh = KAKKO.CHAR.LIST1[ki,1]
+			GoSub Get.kakko
+			kakko2 = kakko
+		End
+	End
+	
 	tmpDY=1
 	For Row=1 To Lines
 		If Row>1 Then cmdDraw := ESC.CRT.MOVE_NEXT_LINE
@@ -1096,24 +1211,21 @@ Create.CmdDraw:
 		End Else
 			cmdDraw := HI.SHELL.ON:Line[1,tmpDX]
 		End
+		
 		cmdDraw := HI.SHELL.OFF
 		tmpDX += 1
 		For i=tmpDX To Line.len+1
 			c = Line[i,1]
 			dispLen = LenDP(c)
 			If tmpDX+dispLen > AutoWrap Then
-				* 改行
+				!! 自動折り返し
 				cmdDraw := ESC.CRT.MOVE_NEXT_LINE
 				tmpDX = 1
 				tmpDY += 1
 			End
 			
 			IF Row = Y Then
-				If i = X Then
-					DP_X = tmpDX
-					DP_Y = tmpDY
-				End
-				If i = Line.len+1 And i < X Then
+				If i = X Or (i = Line.len+1 And i < X) Then
 					DP_X = tmpDX
 					DP_Y = tmpDY
 				End
@@ -1127,16 +1239,53 @@ Create.CmdDraw:
 				End Else If blockEnd = A Then
 					cmdDraw := SGR.ALL.OFF
 				End
+			End Else
+				If kakko1 Then
+					!! 対応する括弧を強調
+					If c#"\" And Row = Y And (i=kakko1<1> Or i=kakko1<2>) Then
+						cmdDraw := HI.KAKKO.ON
+					End
+				End
+				If kakko2 Then
+					!! 対応する括弧を強調
+					If c#"\" And Row = Y And (i=kakko2<1> Or i=kakko2<2>) Then
+						cmdDraw := HI.KAKKO.ON
+					End
+				End
 			End
 			
-			cmdDraw := c
-			tmpDX += dispLen
+			If c = @VM Then
+				!! 改行
+				cmdDraw := NEWLINE.DISP:ESC.CRT.MOVE_NEXT_LINE
+				tmpDX = 1
+				tmpDY += 1
+			End Else
+				cmdDraw := c
+				tmpDX += dispLen
+			End
+			
+			If Not(BufInfo<BI.BLOCKSTART>) Then
+				If kakko1 Then
+					!! 対応する括弧を強調
+					If c#"\" And Row = Y And (i=kakko1<1> Or i=kakko1<2>) Then
+						cmdDraw := HI.KAKKO.OFF
+					End
+				End
+				If kakko2 Then
+					!! 対応する括弧を強調
+					If c#"\" And Row = Y And (i=kakko2<1> Or i=kakko2<2>) Then
+						cmdDraw := HI.KAKKO.OFF
+					End
+				End
+			End
+			
 		Next i
 		tmpDY += 1
 	Next Row
 	
 	dispRows = tmpDY-1
 	
+!	logmsg Y:",":X:" # ":DP_Y:",":DP_X:"(":keepDP_X:") <--- ":prevY:",":prevX:" # ":prevDP_Y
 	Return
 
 Draw.Cmdline:
@@ -1212,12 +1361,12 @@ Run.Command:
 		** 補完候補表示していたらアプリケーションモードから戻す
 		GoSub BackAltScreenBuf
 	End
-
+	
 	cmdlines = "" ;** 複数コマンド
 	If Count(cmdline,@FM)>0 Then
 		!! 複数コマンドなら先だしで１つ選ぶ
-		cmdlines = cmdline
-		cmdline = cmdline<1>
+		cmdlines = Change(cmdline,"_":@FM,@VM) ;* アンダースコアで終わる場合はコマンドを結合
+		cmdline = cmdlines<1>
 		Del cmdlines<1>
 	End
 
@@ -1336,7 +1485,7 @@ $IFNDEF U2__UNIVERSE
 	END
 $ENDIF
 	
-	crtBuff = BG.BASE2:HI.SHELL.ON:PROMPT.STR:HI.SHELL.OFF:cmdline
+	crtBuff = BG.BASE2:HI.SHELL.ON:PROMPT.STR:HI.SHELL.OFF:Change(cmdline,@VM,CRLF)
 	
 	** 空コマンドは無視
 	If cmdline = "" Then
@@ -1393,10 +1542,16 @@ $ENDIF
 	!!
 	!! ##### 実行 ######
 	!!
+	
+	If has.Run.Command.Delegator Then
+		cl = "SISH.RUN.COMMAND.DELEGATOR ":cmdline
+	End Else
+		cl = Convert(@VM," ",cmdline)
+	End
 $IFDEF U2__UNIVERSE
-	Perform cmdline
+	Perform cl
 $ELSE
-	Execute cmdline TRAPPING ABORTS
+	Execute cl TRAPPING ABORTS
 	If @ABORT.CODE Then
 		IF @EXCEPTION = "SYS.PROGRAM.RESIZE_ERROR" THEN
 			!! unnamed common missmatch error
@@ -1445,8 +1600,12 @@ $ELSE
 $ENDIF
 		retCode = (If @USER.RETURN.CODE = 999999999 Then @SYSTEM.RETURN.CODE Else @USER.RETURN.CODE)
 		Seek fpStack, 0, 2 Else Abort "Seek Stack Log Error"
-		line = OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS"):" ":cmdline:@VM:retCode
-		WriteSeq line To fpStack On Error Print "Cannot Write Stack Log -> ":STACK.FILE:"/":logFile Else ;
+		dt = OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS")
+		cnt = DCount(cmdline,@FM)
+		For i=1 To cnt
+			line = dt:" ":cmdline<i>:@VM:retCode
+			WriteSeq line To fpStack On Error Print "Cannot Write Stack Log -> ":STACK.FILE:"/":logFile Else ;
+		Next i
 		CloseSeq fpStack
 	End
 	
@@ -1608,6 +1767,7 @@ TAB.HOKAN:
 	A = Rec<Y>
 	cmdline = A[":",2,999]
 	curPos = X - Len(A[":",1,1]) - 1 ;** プロンプト分減らす
+	cmdline = Convert(@VM," ",cmdline)
 	
 	GoSub Setting.WordInfo
 	
@@ -2075,8 +2235,9 @@ CmdHist.Candidate:
 	!! 候補リスト表示処理
 	choiceList = ""
 	cmdStack.len = DCount(cmdStack,@FM)
+	no.fmt = Len(cmdStack.len):"R"
 	For i = cmdStack.len To 2 Step -1
-		choiceList<-1> = Fmt((i-1),Len(cmdStack.len):"R"):"  ":cmdStack<i>:@VM:i
+		choiceList<-1> = Fmt((i-1),no.fmt):"  ":Convert(@VM," ",cmdStack<i>):@VM:i
 	Next i
 	choiceNo = cmdStack.len - cmdStackPos + 1
 	title = "Cmd Hist"
@@ -2169,7 +2330,7 @@ DispCandidate.Common:
 			Case actNo = A.NEWLINE ;** 決定
 				slist = choiceSelection<1,2>
 				GoSub AUTO.COMPLATE
-				IF C = CTRL.J THEN ;** Ctrl+Enterで連続選択
+				If C # CTRL.M Then ;** Ctrl+Enterで連続選択
 					C = ""
 					fullWord.st = X
 					fullWord.Len = 0
@@ -2257,7 +2418,8 @@ Setting.WordInfo:
 	fullWord = words<nowWordPos>
 	fullWord.st = X - Len(nowWord)
 	fullWord.Len = Len(fullWord)
-	fullWord = nowWord
+!	logmsg "curPos:":curPos:",nowWord:":dquote(nowWord):",fullWord:":dquote(fullWord):",fullWord.st:":fullWord.st:",fullWord.Len:":fullWord.Len
+
 	If actNo = A.INSCHAR And C = Char(32) Then
 		nowWord := " "
 	End
@@ -2633,7 +2795,8 @@ ACTION.CMDSTACK.BACK:
 			Next i
 		End
 		cmdStackPos = cmdStackPos-Y+1
-		cmdline = Raise(cmdStackPage<cmdStackPos>)
+		cmdline = cmdStackPage<cmdStackPos>
+		cmdline = Change(cmdline,@VM:"si:",@FM:"si:") ;** 複数コマンド
 	End
 	
 	Return
@@ -3127,13 +3290,13 @@ AUTO.COMPLATE:
 	End
 
 	If nowWord = commonWord Then Return
-
-
+	
 	!! 単語置換
 	BufInfo<BI.BLOCKSTART, 1> = Y
 	BufInfo<BI.BLOCKSTART, 2> = fullWord.st
 	BufInfo<BI.BLOCKEND, 1> = Y
 	BufInfo<BI.BLOCKEND, 2> = fullWord.st + fullWord.Len
+	
 	If fullWord[1,1]='"' Then
 		!! ""で囲む
 		a = Convert('"','',fullWord)
@@ -3158,7 +3321,7 @@ AUTO.COMPLATE:
 			End
 		End
 		!! スペースが２つ続くのを防ぐ
-		IF InsBuffer[1]=" " AND cmdline[X,1]=" " THEN InsBuffer = InsBuffer[1,LEN(InsBuffer)-1]
+		IF InsBuffer[1]=" " AND Rec<Y>[X,1]=" " THEN InsBuffer = InsBuffer[1,LEN(InsBuffer)-1]
 	End
 	GoSub InsertLines
 	BufInfo<BI.BLOCKSTART> = ""
@@ -3666,11 +3829,11 @@ GoAltScreenBuf:
 		crtBuff := @(-1)
 	End Else
 		crtBuff := ESC:"[?1049h"
-		crtBuff := ESC:"[?1h"
-		crtBuff := ESC:"[?6h"
-		crtBuff := ESC:"[?69h"
-		crtBuff := ESC:"="
-		crtBuff := ESC:"[1;":@CRTHIGH:"r"
+!		crtBuff := ESC:"[?1h"
+!		crtBuff := ESC:"[?6h"
+!		crtBuff := ESC:"[?69h"
+!		crtBuff := ESC:"="
+!		crtBuff := ESC:"[1;":@CRTHIGH:"r"
 	End
 	Return
 
@@ -3679,11 +3842,11 @@ BackAltScreenBuf:
 		Crt CSI:"2"
 		crtBuff := @(-1)
 	End Else
-		crtBuff = ESC:"[?1l"
-		crtBuff := ESC:"[?1l"
-		crtBuff := ESC:">"
-		crtBuff := ESC:"[?12l"
-		crtBuff := ESC:"[?25h"
+!		crtBuff = ESC:"[?1l"
+!		crtBuff := ESC:"[?1l"
+!		crtBuff := ESC:">"
+!		crtBuff := ESC:"[?12l"
+!		crtBuff := ESC:"[?25h"
 		crtBuff := ESC:"[?1049l"
 	End
 	Return
@@ -3883,6 +4046,9 @@ Return
 	
 *--------------------------------------------------------------------------
 * Get Selection String
+* OUT: selString  - 選択範囲の文字列
+*      blockStart - 選択範囲の開始位置
+*      blockEnd   - 選択範囲の終了位置
 *--------------------------------------------------------------------------
 GET.SELECTION.STRING:
 
@@ -4014,12 +4180,20 @@ DoEditCmd:
 			End
 		
 			** 最終カーソル位置を反映する
-			Y = stY
+			If curFlg Then
+				prevCurFlg = Y:",":X
+				If Index(curFlg,",") Then
+					Y = curFlg[",",1,1]
+					X = curFlg[",",2,1]
+				End Else
+					Y = stY
+				End
+			End Else
+				Y = stY
+			End
 			If Not(curFlg & stX = endX) Then
 				!! 開始X位置と終了X位置が同じ場合はXを移動させない
 				X = stX
-			End Else
-				moveY = @TRUE
 			End
 			
 			selected = prevStrings <> ""
@@ -4032,7 +4206,7 @@ DoEditCmd:
 		cmd = ""
 		cmd<1> = stY
 		cmd<2> = stX
-			
+		
 		If strings >< "" Then
 			**
 			** 文字列挿入
@@ -4084,6 +4258,7 @@ DoEditCmd:
 			keepSelection = @TRUE
 		End
 		
+		logmsg Y:",":X
 	While sep Repeat
 	
 Return
@@ -4697,14 +4872,6 @@ InitChoiceList: ;** 選択リストボックス初期化
 		Crt crtBuff:
 	End
 	
-	For i = 1 To choiceList.length
-$IFDEF U2__UNIVERSE
-		choiceList<i,1> = choiceList<i,1>[1,Len(FoldDP(Convert(" ","-",choiceList<i,1>),winWidth,"UTF8")<1>)]
-$ELSE
-		choiceList<i,1> = choiceList<i,1>[1,Len(FoldDW(Convert(" ","-",choiceList<i,1>),winWidth)<1>)]
-$ENDIF
-	Next
-	
 	filterPrev = char(0)
 	choiceSelNo = choiceNo
 	choiceOutList.length = choiceList.length
@@ -4894,11 +5061,16 @@ ProcChoiceList:
 		no = choiceOutList<winTop+i,1>
 		selected = (choiceNo = winTop+i) ;** 選択行か？
 		Line = choiceList<no,1>
+$IFDEF U2__UNIVERSE
+		Line = Line[1,Len(FoldDP(Convert(" ","-",Line),winWidth,"UTF8")<1>)]
+$ELSE
+		Line = Line[1,Len(FoldDW(Convert(" ","-",Line),winWidth)<1>)]
+$ENDIF
 		crtBuff := @(winX,i+winY)
 		crtBuff := If choiceOrgY=0 Then title[" ",1,1] Else BG.BASE3
 		If selected Then
 			If choiceActive Then crtBuff := BG.BASE2
-
+		
 			If choiceParse Then
 				XOffSet = 1
 				selection = 1:@FM:BIG
@@ -5145,6 +5317,19 @@ AfterKeyWait:
 						** DECSLPP -> CSI Ps1 ; Ps2 ; Ps3 t
 						Return
 					End
+				End Else If ch = "?" Then
+					!! [DA] 端末属性
+					Loop
+						GoSub GetCh.Timeout
+						C := ch
+					While ch <> ""
+					Repeat
+					If CSI:"?2004;2$y" Then
+						!! Brackets Paste Mode on
+						Crt CSI:"?2004h":
+						!! mintty系だと見越してついでに太字にも対応しているものとする
+						
+					End
 				End
 
 			End Else If ch = "]" Then
@@ -5172,6 +5357,13 @@ $ENDIF
 						Return
 					End
 				End
+			End Else If ch = "P" Then
+				!! DCS
+				Loop
+					GoSub GetCh.Timeout
+					C := ch
+				While ch <> ""
+				Repeat
 			End
 		End
 		
@@ -5251,32 +5443,6 @@ Enters:
 	IndentCh = If IndentType = "Tab" Then Char(9) Else Space(STDTAB)
 
 	keepSelection = @FALSE
-	
-	!! モード別処理
-!!	If BufInfo<BI.PARSETYPE> = PARSE.BASIC Then
-!! 		!! Basicモード
-!! 		
-!! 		If actNo = A.INSCHAR Then
-!! 			i = Index(KAKKO.CHAR.LIST,C,1)
-!! 			If i > 0 Then
-!! 				!! 開く括弧のみ閉じる括弧を自動挿入する
-!! 				!! TODO 文字リテラル内はしない
-!! 				If Rem(i,2) Then
-!! 					InsBuffer = KAKKO.CHAR.LIST[i,2]
-!! 					If C = '<' Then
-!! 						inX = X-1
-!! 						inY = Y
-!! 						GoSub GetWord.in
-!! 						If Not(Word) Then InsBuffer = ""
-!! 					End
-!! 					If InsBuffer Then
-!! 						GoSub InsertLines
-!! 						actNo = 0 ;** 処理済み
-!! 					End
-!! 				End
-!! 			End
-!! 		End
-!! 	End
 	
 	!! アクションを実行
 	GoSub Switch.Actions
@@ -5855,6 +6021,7 @@ ParseLine.Impl:
 	LineWidth = Width ;** 行幅はウィンドウサイズ
 	Selection.Color = HI.SELECT.ON
 	Selection.Key.Color = SBOLD:FG.BASE3
+	Selection.Tab.Color = FG.BASE01
 
 ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れること)
 
@@ -6113,48 +6280,31 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 	
 	** カーソル行の場合に処理
 	If Row = Y Then
-		kakko = ""
 		** 対応する括弧の表示
-		If ParseType = PARSE.BASIC Then
-			stCh = OldLine[X,1] ;** 現在カーソル文字の再取得
-			If stCh >< "" Then
-				ki = Index(KAKKO.CHAR.LIST,stCh,1) 
-				If ki Then
-					
-					If ki >= 9 Then
-						!! 文字リテラル
-						moveDir = If Rem(Count(OldLine[1,X],stCh),2) Then 1 Else -1
-						enCh = stCh
-						sign = SI.KAKKO
-					End Else
-						!! 対応する括弧
-						moveDir = If Rem(ki,2) = 1 Then 1 Else -1
-						enCh = KAKKO.CHAR.LIST[ki+moveDir,1]
-						sign = SI.KAKKO
-					End
-					
-					!! 終了位置を探す
-					nestCnt = 0
-					enPos = X
-					exitPos = If moveDir = 1 Then Len(OldLine) Else 1
-					For enPos = X + moveDir To exitPos Step moveDir
-						ch = OldLine[enPos,1]
-						If ki < 9 And Mask[enPos,1] = SI.STRING Then Continue ;** 文字リテラル中はスキップ
-						If ch = enCh Then
-							If nestCnt > 0 Then
-								nestCnt -= 1 ;** ネストを減らす
-							End Else
-								Mask[X,1] = sign
-								Mask[enPos,1] = sign
-								kakko<1,1> = X
-								kakko<2,1> = enPos
-								Exit
-							End
-						End Else If ch = stCh Then
-							nestCnt += 1 ;** ネストを増やす
-						End
-					Next
-				End
+		kakko1 = "" ;** 開き括弧情報(必ず1回は初期化される)
+		kakko2 = "" ;** 閉じ括弧情報(必ず1回は初期化される)
+		stCh = OldLine[X,1] ;** 現在カーソル文字の再取得
+		!! 開き括弧調査
+		If stCh >< "" Then
+			ki = Index(KAKKO.CHAR.LIST1,stCh,1) 
+			If ki Then
+				iX = X
+				moveDir = 1
+				enCh = KAKKO.CHAR.LIST2[ki,1]
+				GoSub Get.kakko
+				kakko1 = kakko
+			End
+		End
+		stCh = OldLine[X-1,1] ;** 現在カーソル文字の再取得
+		If stCh >< "" Then
+		!! 開き括弧調査
+			ki = Index(KAKKO.CHAR.LIST2,stCh,1) 
+			If ki Then
+				iX = X-1
+				moveDir = -1
+				enCh = KAKKO.CHAR.LIST1[ki,1]
+				GoSub Get.kakko
+				kakko2 = kakko
 			End
 		End
 	End
@@ -6200,18 +6350,19 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 		If K = 1 Or K = selection<2> - iXOffSet + 1 Then
 			!! 選択終了
 			HI.Default = HI.OFF
-			HI.Light = FG.BASE1
-			HI.Key = HI.KEY.ON
 			HI.Search = HI.SEARCH.ON
 			PLine := BG.DEFAULT
-			Old = ""
 			!! 行全体のハイライト
 			If Mask[1,1] = SI.DIRECTIVE Then
 				HI.Light = FG.BASE3
 				HI.Key = SBOLD:FG.BASE3
 				PLine := HI.DIR.ON
-				Old = SI.DIRECTIVE
+			End Else
+				HI.Light = FG.BASE1
+				HI.Key = HI.KEY.ON
 			End
+			Old = ""
+			in.selection = @False
 		End
 		If K = selection<1> - iXOffSet + 1 And selection<1> <> selection<2> Then
 			!! 選択開始
@@ -6221,27 +6372,30 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 			HI.Search = HI.SEARCH.SEL
 			PLine := HI.Default
 			Old = ""
+			in.selection = @True
 		End
 
 		cc = Line[K,1]
+		ch = Mask[K,1]
 		If cc = Char(9) Then
 			!! 文字の描画(タブの場合は表示形式に置換)
-			If Not(K>1 And Old=Char(9)) Then PLine := If Old#SI.DIRECTIVE Then FG.BASE2 Else ""
+			If ch=SI.DIRECTIVE Then
+				PLine := FG.BASE3
+			End Else
+				If (K=1 Or Old#Char(9)) Then
+					PLine := If in.selection Then Selection.Tab.Color Else FG.BASE2
+				End
+			End
 			A = STDTAB-1-REM(IX,STDTAB)
-			PLine := "»":Space(A)
+			PLine := TAB.DISP:Space(A)
 			IX += 1+A
-			If Old#SI.DIRECTIVE Then Old = Char(9)
+			Old = Char(9)
 		End Else If cc = Char(10) Then
 			!! 改行の表示
-			If selection<2> = BIG Then
-				PLine := HI.Light
-			End Else
-				PLine := HI.OFF:FG.BASE2
-			End
-			PLine := "↲"
+			PLine := If in.selection Then HI.Light Else HI.OFF:FG.BASE2
+			PLine := NEWLINE.DISP
 		End Else
 			!! Maskによる色付け
-			ch = Mask[K,1]
 			If ch <> Old Then
 				Begin Case
 					Case Old = SI.KAKKO
@@ -6267,7 +6421,7 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 				End Case
 				PLine := HI.Default
 				Begin Case
-					Case ch = SI.KAKKO
+					Case ch = SI.KAKKO And HI.Default = HI.OFF
 						PLine := HI.KAKKO.ON
 					Case ch = SI.LABEL
 						PLine := HI.LABEL.ON
@@ -6291,6 +6445,8 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 						PLine := HI.VMK.ON
 					Case ch = SI.SMK
 						PLine := HI.SMK.ON
+					Case ch = SI.DIRECTIVE
+						PLine := HI.DIR.ON
 				End case
 				Old = Mask[K,1]
 			End
@@ -6300,6 +6456,41 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 	Next
 	PLine := HI.OFF
 Return
+
+* Get.kakko
+*   IN:  kakko,OldLine,iX,Mask,stCh,enCh,ki
+*   OUT: kakko
+Get.kakko:
+	
+	kakko = ""
+	If ki >= 5 Then
+		!! 文字リテラルは方向が個数で決まる
+		moveDir = If Rem(Count(OldLine[1,iX],stCh),2) Then 1 Else -1
+	End
+	sign = SI.KAKKO
+	
+	!! 終了置を探す
+	nestCnt = 0
+	enPos = iX
+	exitPos = If moveDir = 1 Then Len(OldLine) Else 1
+	For enPos = iX + moveDir To exitPos Step moveDir
+		ch = OldLine[enPos,1]
+		If Mask[enPos,1] = SI.STRING And ch="\" Then Continue ;** 文字リテラル中のバックスラッシュは強調しない
+		If ch = enCh Then
+			If nestCnt > 0 Then
+				nestCnt -= 1 ;** ネストを減らす
+			End Else
+				Mask[iX,1] = sign
+				Mask[enPos,1] = sign
+				kakko<1,1> = iX
+				kakko<2,1> = enPos
+				Exit
+			End
+		End Else If ch = stCh Then
+			nestCnt += 1 ;** ネストを増やす
+		End
+	Next
+	Return
 
 *--------------------------------------------------------------------------
 * GetSelBlock:選択領域取得
@@ -6498,18 +6689,18 @@ PrintCursor:
 *  MenuLine
 *-----------------------------------------------------------------------
 MenuLine:
-	crtBuff = BG.BASE0:FG.MAGENTA
+	crtBuff = BG.BASE0:FG.BASE2
 	f = @TRUE
 	For i=1 To HUGE
 		ch = MenuLine[i,1]
 		If ch = '' Then Exit
 		If f Then
 			If ch = 'E' And MenuLine[i,3] = "ESC" Then
-				crtBuff := FG.BASE3:"ESC":FG.MAGENTA
+				crtBuff := BG.BASE00:FG.BASE3:"ESC":BG.BASE0:FG.BASE2
 				f = @FALSE
 				i += 2
 			End Else If ((ch >= 'A' And ch <= 'Z') or ch = '!') Then
-				crtBuff := FG.BASE3:ch:FG.MAGENTA
+				crtBuff := BG.BASE00:FG.BASE3:ch:BG.BASE0:FG.BASE2
 				f = @FALSE
 			End Else 
 				crtBuff := ch
@@ -7151,7 +7342,7 @@ InputBox:
 	crtBuff = ""
 
 	!! カーソル位置を保存
-	Crt ESC:"[s":
+	Crt ESC:"7":
 	
 	Loop
 		
@@ -7251,7 +7442,7 @@ Draw.InputBox:
 	GoSub ParseLine
 	
 	!! 表示
-	crtBuff = ESC:"[u" ;** カーソル位置を復元
+	crtBuff = ESC:"8" ;** カーソル位置を復元
 	crtBuff := SGR.ALL.OFF:PLine:@(-4) ;** 文字列の描画
 	If Len(Rec) >= X Then crtBuff := @(-9,LenDP(Rec[X,HUGE])) ;** 実際のカーソル位置に戻す
 	 
@@ -7436,16 +7627,18 @@ Act.Up:
 		For i=1 To Line.len
 			c = Line[i,1]
 			dispLen = LenDP(c)
-			If tmpDX+dispLen > AutoWrap Then
-				* 改行
-				tmpDX = 1
-				tmpDY += 1
-			End
 			
 			If i = X Then
 				nextDX = Max(tmpDX,keepDP_X)
 				nextDY = tmpDY-1
 				Exit
+			End
+			
+			If c = @VM Or tmpDX+dispLen > AutoWrap Then
+				* 改行
+				tmpDX = 1
+				tmpDY += 1
+				If c = @VM Then dispLen = 0
 			End
 			
 			tmpDX += dispLen
@@ -7458,15 +7651,21 @@ Act.Up:
 			For i=1 To Line.len
 				c = Line[i,1]
 				dispLen = LenDP(c)
-				If tmpDX+dispLen > AutoWrap Then
-					* 改行
-					tmpDX = 1
-					tmpDY += 1
-				End
 				
 				If nextDX<=tmpDX And nextDY=tmpDY Then
 					X = i
 					Return
+				End
+				
+				If c = @VM Or tmpDX+dispLen > AutoWrap Then
+					* 改行
+					tmpDX = 1
+					tmpDY += 1
+					If nextDY<tmpDY Then
+						X = i
+						Return
+					End
+					If c = @VM Then dispLen = 0
 				End
 				
 				tmpDX += dispLen
@@ -7483,13 +7682,15 @@ Act.Up:
 			For i=1 To Line.len
 				c = Line[i,1]
 				dispLen = LenDP(c)
-				If tmpDX+dispLen > AutoWrap Then
-					* 改行
-					tmpDX = 1
-				End
 				
 				If nextDX>=tmpDX Then
 					X = i
+				End
+				
+				If c = @VM Or tmpDX+dispLen > AutoWrap Then
+					* 改行
+					tmpDX = 1
+					If c = @VM Then dispLen = 0
 				End
 				
 				tmpDX += dispLen
@@ -7517,7 +7718,7 @@ Act.Down:
 	
 	If AutoWrap>0 Then
 		nextDX = ""
-		nextDY = ""
+		nextDY = BIG
 		
 		Line = Rec<Y>
 		Line.len = Len(Line)
@@ -7526,14 +7727,10 @@ Act.Down:
 		For i=1 To Line.len
 			c = Line[i,1]
 			dispLen = LenDP(c)
-			If tmpDX+dispLen > AutoWrap Then
-				* 改行
-				tmpDX = 1
-				tmpDY += 1
-			End
-
+			
 			If i = X Then
-				nextDX = tmpDX
+				!! 現在位置
+				nextDX = Max(tmpDX,keepDP_X)
 				nextDY = tmpDY+1
 			End Else
 				If nextDX<=tmpDX And nextDY=tmpDY Then
@@ -7542,8 +7739,19 @@ Act.Down:
 				End
 			End
 			
+			If c = @VM Or tmpDX+dispLen > AutoWrap Then
+				* 改行
+				tmpDX = 1
+				tmpDY += 1
+				If nextDY<tmpDY Then
+					X = i
+					Return
+				End
+				If c = @VM Then dispLen = 0
+			End
+			
 			tmpDX += dispLen
-				
+			
 		Next i
 		
 		If nextDY=tmpDY Then
@@ -7565,6 +7773,13 @@ Act.Down:
 Act.SelNextWord:
 	GoSub SelectionStart
 Act.NextWord:
+	If Not(keepSelection) And BufInfo<BI.BLOCKSTART> Then
+		If BufInfo<BI.BLOCKSTART,1>#BufInfo<BI.BLOCKEND,1> Then
+			GoSub Act.IncreaseIndent
+			Return
+		End
+	End
+	
 	If BufInfo<BI.BLOCKEND> Then
 		prevPos = Y:@FM:X
 		GoSub GoToRangeEnd
@@ -7583,23 +7798,16 @@ Act.NextWord:
 			
 		End Else
 			!! 非インデント部
-			If kakko >< "" Then
-				If X < kakko<2,1> Then
-					!! 対応する括弧に移動
-					X = kakko<2,1>
-					If BufInfo<BI.BLOCKSTART> Then BufInfo<BI.BLOCKEND> = Y:@VM:X
-				End Else
-					!! 対応する括弧の末尾
-					X += 1
-					GoSub Move.NextWord
-				End
+			If kakko1 >< "" Then
+				!! 対応する括弧に移動
+				X = kakko1<2,1>+1
+				If BufInfo<BI.BLOCKSTART> Then BufInfo<BI.BLOCKEND> = Y:@VM:X
 			End Else
 				!! 単語移動
 				GoSub Move.NextWord
 			End
 		End
 	End
-			
 	Return
 
 * **************************************************************************
@@ -7608,6 +7816,13 @@ Act.NextWord:
 Act.SelPrevWord:
 	GoSub SelectionStart
 Act.PrevWord:
+	If Not(keepSelection) And BufInfo<BI.BLOCKSTART> Then
+		If BufInfo<BI.BLOCKSTART,1>#BufInfo<BI.BLOCKEND,1> Then
+			GoSub Act.DecreaseIndent
+			Return
+		End
+	End
+	
 	If BufInfo<BI.BLOCKEND> Then
 		prevPos = Y:@FM:X
 		GoSub GoToRangeStart
@@ -7628,9 +7843,9 @@ Act.PrevWord:
 		End Else
 			!! 非インデント部
 			
-			If kakko >< "" And X > kakko<2,1> Then
+			If kakko2 >< "" Then
 				!! 対応する括弧に移動
-				X = kakko<2,1>
+				X = kakko2<2,1>
 				If BufInfo<BI.BLOCKSTART> Then
 					BufInfo<BI.BLOCKEND> = Y:@VM:X
 				End
@@ -7649,6 +7864,11 @@ Act.PrevWord:
 Act.SelNextStmt:
 	GoSub SelectionStart
 Act.NextStmt:
+	If Not(keepSelection) And BufInfo<BI.BLOCKSTART> Then
+		GoSub Act.SwapDown
+		Return
+	End
+	
 	If BufInfo<BI.BLOCKEND> Then
 		prevPos = Y:@FM:X
 		GoSub GoToRangeEnd
@@ -7671,7 +7891,7 @@ Act.NextStmt:
 			Y = iY
 		End Else
 			!! 文の切れ目まで進む（インデントの出現かコメント行の出現で止める）
-			For iY = Y+1 To Lines
+			For iY = Y+1 To Lines+1
 				Line = Change(Rec<iY>,Char(9),Space(STDTAB))
 				If Not(Count("*!",TrimF(Line)[1,1])) Then Exit
 				GoSub GetX.From.keepDPX
@@ -7695,7 +7915,7 @@ Act.NextStmt:
 			Y = iY
 		End Else
 			!! 文の切れ目まで進む（インデントの出現かコメント行の出現で止める）
-			For iY = Y+1 To Lines
+			For iY = Y+1 To Lines+1
 				Line = Change(Rec<iY>,Char(9),Space(STDTAB))
 				If Count("*!",TrimF(Line)[1,1]) Then Exit
 				GoSub GetX.From.keepDPX
@@ -7708,11 +7928,114 @@ Act.NextStmt:
 	Return
 
 * **************************************************************************
+* SwapUp
+
+Act.SwapUp:
+	
+	If Not(BufInfo<BI.BLOCKSTART>) Then
+		blockStart = Y:@VM:1
+		blockEnd = Y:@VM:1
+	End Else
+		GoSub GetSelBlock
+	End
+	
+	blockStart<2> = 1
+	If blockEnd<2> > 1 Then
+		blockEnd<1> += 1
+		blockEnd<2> = 1
+	End
+	InsBuffer = Rec[@FM,blockStart<1>,blockEnd<1>-blockStart<1>]
+	deltaY = Y-blockStart<1>
+	
+	!! 切り取って
+	ecmd = ""
+	ecmd<1> = blockStart<1>
+	ecmd<2> = blockStart<2>
+	ecmd<3> = blockEnd<1>
+	ecmd<4> = blockEnd<2>
+	ecmd<5> = ""
+	ecmd<6> = "1"
+	editCmd = ecmd
+	
+	!! 張り付け
+	ecmd = ""
+	ecmd<1> = blockStart<1>-1
+	ecmd<2> = 1
+	ecmd<3> = ""
+	ecmd<4> = ""
+	ecmd<5> = Convert(@FM,Char(10),InsBuffer):Char(10)
+	ecmd<6> = Y:",":X:":1"
+	editCmd<-1> = ecmd
+	
+	GoSub StackEditCmd
+	
+	!! Y位置調整
+	Y = blockStart<1>-1+deltaY
+	
+	keepSelection = True
+	
+	Return
+
+* **************************************************************************
+* SwapDown
+
+Act.SwapDown:
+	
+	If Not(BufInfo<BI.BLOCKSTART>) Then
+		blockStart = Y:@VM:1
+		blockEnd = Y:@VM:1
+	End Else
+		GoSub GetSelBlock
+	End
+	
+	blockStart<2> = 1
+	If blockEnd<2> > 1 Then
+		blockEnd<1> += 1
+		blockEnd<2> = 1
+	End
+	InsBuffer = Rec[@FM,blockStart<1>,blockEnd<1>-blockStart<1>]
+	deltaY = Y-blockStart<1>
+	
+	!! 切り取って
+	ecmd = ""
+	ecmd<1> = blockStart<1>
+	ecmd<2> = blockStart<2>
+	ecmd<3> = blockEnd<1>
+	ecmd<4> = blockEnd<2>
+	ecmd<5> = ""
+	ecmd<6> = "1"
+	editCmd = ecmd
+	
+	!! 張り付け
+	ecmd = ""
+	ecmd<1> = blockStart<1>+1
+	ecmd<2> = 1
+	ecmd<3> = ""
+	ecmd<4> = ""
+	ecmd<5> = Convert(@FM,Char(10),InsBuffer):Char(10)
+	ecmd<6> = "1:1"
+	editCmd<-1> = ecmd
+	
+	GoSub StackEditCmd
+	
+	!! Y位置調整
+	Y = blockStart<1>+1+deltaY
+	
+	keepSelection = True
+	
+	Return
+
+* **************************************************************************
 * Act.PrevStmt
 
 Act.SelPrevStmt:
 	GoSub SelectionStart
 Act.PrevStmt:
+	If Not(keepSelection) And BufInfo<BI.BLOCKSTART> Then
+		GoSub Act.SwapUp
+		Return
+	End
+	
 	If BufInfo<BI.BLOCKEND> Then
 		prevPos = Y:@FM:X
 		GoSub GoToRangeStart
@@ -7732,7 +8055,7 @@ Act.PrevStmt:
 			Y = iY
 		End Else
 			!! 文の切れ目まで戻る（インデントの出現で止める）
-			For iY = Y-1 To 1 Step -1
+			For iY = Y-1 To 0 Step -1
 				Line = Rec<iY>
 				ch = Line[X,1] 
 				If Not(Count("*!",TrimF(Line)[1,1])) Then Exit
@@ -7755,7 +8078,7 @@ Act.PrevStmt:
 			Y = iY
 		End Else
 			!! 文の切れ目まで戻る（インデントの出現で止める）
-			For iY = Y-1 To 1 Step -1
+			For iY = Y-1 To 0 Step -1
 				Line = Change(Rec<iY>,Char(9),Space(STDTAB))
 				If Count("*!",TrimF(Line)[1,1]) Then Exit
 				GoSub GetX.From.keepDPX
@@ -8312,6 +8635,81 @@ Act.InsertChar:
 		moveChar = "" ;** モード解除
 	End
 	
+	ki = Index(KAKKO.CHAR.LIST1,C,1)
+	If ki Then
+		!! 入力文字が開き括弧である
+		If BufInfo<BI.BLOCKSTART> Then
+			!! 選択範囲があればその前後に括弧を入れる
+			GoSub GET.SELECTION.STRING
+			!! 開く括弧
+			InsBuffer = KAKKO.CHAR.LIST1[ki,1]:selString:KAKKO.CHAR.LIST2[ki,1]
+			Y = blockStart<1>
+			X = blockStart<2>
+			editCmd = ""
+			editCmd<1> = blockEnd<1>
+			editCmd<2> = blockEnd<2>
+			editCmd<3> = blockStart<1>
+			editCmd<4> = blockStart<2>
+			editCmd<5> = InsBuffer
+			editCmd<6> = "1"
+			GoSub StackEditCmd
+			Return
+		End Else
+			ch = Rec<Y>[X,1]
+			If ch = C Then
+				!! 同じ文字を入力した
+				X += 1
+				Return
+			End
+			If ch=" " Or ch="" Then
+				!! 開く括弧のみ閉じる括弧を自動挿入する
+				InsBuffer = C
+				GoSub InsertLines
+				InsBuffer = KAKKO.CHAR.LIST2[ki,1]
+				If C="\" And Rec<Y>[X-2,1]#" " Then
+					InsBuffer = "" ;** \囲みの場合は前段にスペースが必要
+				End
+				If C = '<' Then
+					!! 前の単語とくっついている場合はダイナミックアレイとみなす
+					inX = X-1
+					inY = Y
+					GoSub GetWord.in
+					If Not(Word) Then InsBuffer = ""
+				End
+				If InsBuffer Then
+					editCmd = ""
+					editCmd<1> = Y
+					editCmd<2> = X
+					editCmd<3> = ""
+					editCmd<4> = ""
+					editCmd<5> = InsBuffer
+					editCmd<6> = "1"
+					GoSub StackEditCmd
+				End
+				Return
+			End
+		End
+	End Else
+		ki = Index(KAKKO.CHAR.LIST2,C,1)
+		If ki Then
+			!! 入力文字が閉じ括弧である
+			If BufInfo<BI.BLOCKSTART> Then
+				!! 選択範囲があればその前後に括弧を入れる
+				GoSub GET.SELECTION.STRING
+				InsBuffer = KAKKO.CHAR.LIST1[ki,1]:selString:KAKKO.CHAR.LIST2[ki,1]
+				GoSub InsertLines
+				Return
+			End Else
+				ch = Rec<Y>[X,1]
+				If ch = C Then
+					!! 同じ文字を入力した
+					X += 1
+					Return
+				End
+			End
+		End
+	End
+
 	!! 文字挿入
 	InsBuffer = C
 	GoSub InsertLines
@@ -8716,7 +9114,7 @@ Act.ShowOutline:
 		
 		!! ソース画面再描画
 		If Redraw Then
-			crtBuff = ESC:"[s" ;** カーソル位置の保存
+			crtBuff = ESC:"7" ;** カーソル位置の保存
 			For I = 0 To choiceOrgY-2
 				Row = Top+I
 				Line = Rec<Row>
@@ -8725,6 +9123,7 @@ Act.ShowOutline:
 					LineWidth = winWidth
 					Selection.Color = BG.BASE2:FG.BASE01
 					Selection.Key.Color = HI.KEY.ON
+					Selection.Tab.Color = FG.BASE3
 					GoSub ParseLine2
 					GoSub Get.Gyo
 					crtBuff := @(0,Row - Top) ;* 行の開始
@@ -8734,7 +9133,7 @@ Act.ShowOutline:
 					GoSub PrintLine
 				End
 			Next
-			crtBuff := ESC:"[u" ;** カーソル位置の復元
+			crtBuff := ESC:"8" ;** カーソル位置の復元
 			GoSub CRT.BUFF.FLUSH
 		End
 		
@@ -9642,11 +10041,68 @@ Act.Paste:
 		End
 	End
 	If CurBuf = CMD_BUF Then
-		If Index(InsBuffer,@FM) Then
-			InsBuffer = Change(InsBuffer,@FM,If cmdStackPos<=1 Then @FM:"si:" Else " ")
+		tmp = Convert(CHAR(13):CHAR(10),@FM,InsBuffer)
+		!! コマンド画面用特殊処理
+		If Index(tmp,@FM) Then
+			!! 複数行
+			InsBuffer = ""
+			cnt = DCount(tmp,@FM)
+			For i=1 To cnt
+				isCmd = @False
+				cl = tmp<i>
+				b = cl[" ",1,1]
+				If b#"" Then
+					Read rec From VOC,b Then
+						c = UpCase(rec<1>)
+						If c[1,1]="R" Then
+							rec = TRANS(rec<2>,rec<3>,1,"X")
+							c = UpCase(rec)
+						End
+						If c[1,1]="V" Or c[1]="S" Or c[1,2]="PA" Then
+							isCmd = @True
+						End
+					End
+				End
+				If isCmd Then
+					!! コマンド
+					If i=1 And X <= Len(prmptStr)+1 Then
+						!! 先頭が行頭の場合にのみそのまま入れる
+						InsBuffer := cl
+					End Else
+						!! それ以外は必ず改行
+						InsBuffer := @FM:"si:":cl
+					End
+				End Else
+					!! コマンド内改行
+					InsBuffer<DCount(InsBuffer,@FM),-1> = cl
+				End
+			Next i
 		End
 	End
-	GoSub InsertLines
+	
+	InsBuffer = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),InsBuffer)
+	editCmd = ""
+	If BufInfo<BI.BLOCKSTART> Then
+		** 選択中
+		editCmd<1> = BufInfo<BI.BLOCKEND, 1>
+		editCmd<2> = BufInfo<BI.BLOCKEND, 2>
+		editCmd<3> = BufInfo<BI.BLOCKSTART, 1>
+		editCmd<4> = BufInfo<BI.BLOCKSTART, 2>
+	End Else
+		editCmd<1> = Y
+		editCmd<2> = X
+		If bOverlay Then
+			editCmd<3> = Y
+			editCmd<4> = X + (If X < Len(Rec<Y>) Then 1 Else 0)
+		End Else
+			editCmd<3> = ""
+			editCmd<4> = ""
+		End
+	End
+	editCmd<5> = InsBuffer
+	editCmd<6> = If Index(InsBuffer,Char(10)) Then "0:1" Else ""
+	GoSub StackEditCmd
+	
 	If X = 1 Then
 		!! カーソル位置が先頭の時は選択範囲を残す
 		BufInfo<BI.BLOCKSTART> = startPos
@@ -9710,16 +10166,24 @@ Act.ShowBuffList:
 	!!
 	listCnt = DCount(lruBuffList,@FM)
 	choiceList = ""
+	dispMaxLen = 0
 	For I = 1 To listCnt
 		no = lruBuffList<I>
 		info = BufInfos(no)
 		GoSub Get.FileSentence
 		dispStr = Fmt(no,"2R"):"< "
 		dispStr := fileSentence
-		A = Bufs(no)<1>
-		If A#"" Then dispStr := "  | ":A
+		dispMaxLen = Max(dispMaxLen,Len(dispStr))
 		choiceList<-1> = dispStr:@VM:no
 	Next
+	dispMaxLen = Max(dispMaxLen+4,Int(@CRTWIDE/2))
+	For I = 1 To listCnt
+		no = choiceList<I,2>
+		A = Bufs(no)<1>
+		If A#"" Then
+			choiceList<I,1> = FMTDP(choiceList<I,1>,dispMaxLen:"L"):"| ":A
+		End
+	Next I
 	
 	choiceList<-1> = Trim(IfS(NotS(SubstringS(LRUOpenList,1,1)),SubstringS(LRUOpenList,2,999),""),@FM)
 	
@@ -9967,38 +10431,39 @@ Act.IncreaseIndent:
 		startIndentCnt = indentCnt
 	End
 	
+	blockStart<2> = 1
+	If blockEnd<2> > 1 Then
+		blockEnd<1> += 1
+		blockEnd<2> = 1
+	End
+	
+	InsBuffer = ""
+	
 	cnt = blockEnd<1>
 	If blockEnd<2> = 1 Then cnt -= 1
 	For iY = blockStart<1> To cnt
 		If startIndentCnt # 0 Then
-			!! 開始インデントが0ではないのらインデントが0の物は残す
+			!! 開始インデントが0ではないのならインデントが0の物は残す
 			line = Rec<iY>
 			GoSub GetIndentCnt
-			If indentCnt = 0 Then Continue
+			If indentCnt = 0 Then
+				InsBuffer<-1> = line
+				Continue
+			End
 		End
-		cmd = ""
-		cmd<1> = iY
-		cmd<2> = 1
-		cmd<3> = ""
-		cmd<4> = ""
-		cmd<5> = IndentCh
-		cmd<6> = "0"
-		editCmd<-1> = cmd
+		InsBuffer<-1> = IndentCh:Rec<iY>
 	Next iY
 	
-	tmpX = X ; tmpY = Y
+	editCmd = ""
+	editCmd<1> = blockStart<1>
+	editCmd<2> = blockStart<2>
+	editCmd<3> = blockEnd<1>
+	editCmd<4> = blockEnd<2>
+	editCmd<5> = Convert(@FM,Char(10),InsBuffer):Char(10)
+	editCmd<6> = Y:",":(X+1):":1"
+	
 	GoSub StackEditCmd
-	X = tmpX ; Y = tmpY
 	
-	BufInfo<BI.BLOCKSTART> = Lower(blockStart)
-	BufInfo<BI.BLOCKEND> = Lower(blockEnd)
-	
-	BufInfo<BI.BLOCKSTART, 2> = 1
-	If X > 1 Then
-		BufInfo<BI.BLOCKEND, 2> = Len(Rec<BufInfo<BI.BLOCKEND,1>>)
-		X = 1
-		Y += 1
-	End
 	keepSelection = True
 	
 	Return
@@ -10011,44 +10476,39 @@ Act.DecreaseIndent:
 	editCmd = ""
 	
 	If Not(BufInfo<BI.BLOCKSTART>) Then
-		blockStart = Y:@VM:1
-		blockEnd = Y:@VM:1
-	End Else
-		GoSub GET.SELECTION.STRING
+		BufInfo<BI.BLOCKSTART> = Y:@VM:X
+		BufInfo<BI.BLOCKEND> = Y:@VM:X+1
 	End
+	GoSub GetSelBlock
 
+	blockStart<2> = 1
+	If blockEnd<2> > 1 Then
+		blockEnd<1> += 1
+		blockEnd<2> = 1
+	End
+	
+	InsBuffer = ""
+	
 	cnt = blockEnd<1>
 	If blockEnd<2> = 1 Then cnt -= 1
-	cmd = ""
-	cmd<5> = ""
-	cmd<6> = "0"
 	For iY = blockStart<1> To cnt
-		iX = 1
-		cmd<1> = iY
-		cmd<2> = iX
-		cmd<3> = iY
-		cmd<4> = iX
-		If Rec<iY>[iX,1] = Char(9) Then
-			cmd<4> += 1
-			editCmd<-1> = cmd
+		If Rec<iY>[1,1]=Char(9) Then
+			InsBuffer<-1> = Rec<iY>[2,99999]
+		End Else
+			InsBuffer<-1> = Rec<iY>
 		End
-		If Rec<iY>[iX,STDINDENT] = Space(STDINDENT) Then
-			cmd<4> += STDINDENT
-			editCmd<-1> = cmd
-		End
-	Next
+	Next iY
 
-	tmpX = X ; tmpY = Y
+	editCmd = ""
+	editCmd<1> = blockStart<1>
+	editCmd<2> = blockStart<2>
+	editCmd<3> = blockEnd<1>
+	editCmd<4> = blockEnd<2>
+	editCmd<5> = Convert(@FM,Char(10),InsBuffer):Char(10)
+	editCmd<6> = Y:",":(X-1):":1"
+	
 	GoSub StackEditCmd
-	X = tmpX ; Y = tmpY
-		
-	!! 選択あり
-	BufInfo<BI.BLOCKSTART,2> = 1
-	If X <> 1 Then
-		X = 1
-		Y += 1
-	End
-	BufInfo<BI.BLOCKEND> = Y:@VM:X
+
 	keepSelection = True
 	Return	
 
@@ -10056,11 +10516,6 @@ Act.DecreaseIndent:
 * Act.ShiftTab
 
 Act.ShiftTab:
-	
-	If Not(BufInfo<BI.BLOCKSTART>) Then
-		GoSub Act.Tab
-		Return
-	End
 	
 	GoSub Act.DecreaseIndent
 	
@@ -10624,7 +11079,7 @@ Move.NextWord:
 				X += 1
 				ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 			Until ch = ""
-			Until Count("._$%@ =:;<>()[]{}/*+-,'\":'"',ch)
+			Until Count("._$%@ #=:;<>()[]{}/*+-,'\":'"',ch)
 			Until ch = UpCase(ch) And prev.ch # UpCase(prev.ch)
 				prev.ch = ch
 			Repeat
@@ -10634,7 +11089,7 @@ Move.NextWord:
 			X += 1
 			ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 		Until ch = ""
-		Until Count(" =:;<>()[]{}/*+-,'\":'"',ch)
+		Until Count(" #=:;<>()[]{}/*+-,'\":'"',ch)
 		Repeat
 	End Else
 		ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
@@ -10644,11 +11099,11 @@ Move.NextWord:
 	If Line[X,1] = "" Then Return
 	X += 1
 	If Line[X,1] = "" Then Return
-	prevKwd = Count("=:;<>()[]{}/*+-,'\":'"',ch)
+	prevKwd = Count("#=:;<>()[]{}/*+-,'\":'"',ch)
 	Loop
 		ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 		If ch = "" Then X-=1; Exit
-		kwd = Count("=:;<>()[]{}/*+-,", ch)
+		kwd = Count("#=:;<>()[]{}/*+-,", ch)
 		If prevKwd And kwd Else
 			If ch <> " " Then Exit
 		End
@@ -10691,7 +11146,7 @@ Move.PrevWord:
 		Until X = 0
 			ch = Convert(Char(9):@FM:@VM:@SVM,Space(4),Line[X,1])
 		Until ch = ""
-		Until Count("._$%@ =:;<>()[]{}/*+-,'\":'"',ch)
+		Until Count("._$%@ #=:;<>()[]{}/*+-,'\":'"',ch)
 			If ch = UpCase(ch) And prev.ch # UpCase(prev.ch) Then
 				X -= 1
 				Exit
