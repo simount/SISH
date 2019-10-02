@@ -693,8 +693,6 @@ Set.Command.Editor:
 			BufInfo<BI.BLOCKEND> = ""
 		End
 		
-		logmsg BufInfo<BI.BLOCKSTART>:" # ":BufInfo<BI.BLOCKEND>:" & ":Lines
-
 		!! 描画処理
 		GoSub Create.CmdDraw
 		
@@ -2544,7 +2542,7 @@ Setting.WordInfo:
 	Repeat
 	
 	nowWordPos = DCount(words,@FM)
-	fullWord = words<nowWordPos>
+	fullWord = IF nowWord="" Then "" Else words<nowWordPos>
 	fullWord.st = X - Len(nowWord)
 	fullWord.Len = Len(fullWord)
 !	logmsg "curPos:":curPos:",nowWord:":dquote(nowWord):",fullWord:":dquote(fullWord):",fullWord.st:":fullWord.st:",fullWord.Len:":fullWord.Len
@@ -3421,10 +3419,10 @@ AUTO.COMPLATE:
 	If nowWord = commonWord Then Return
 	
 	!! 単語置換
-	BufInfo<BI.BLOCKSTART, 1> = Y
-	BufInfo<BI.BLOCKSTART, 2> = fullWord.st
-	BufInfo<BI.BLOCKEND, 1> = Y
-	BufInfo<BI.BLOCKEND, 2> = fullWord.st + fullWord.Len
+	BufInfo<BI.BLOCKSTART,1> = Y
+	BufInfo<BI.BLOCKSTART,2> = fullWord.st
+	BufInfo<BI.BLOCKEND,1> = Y
+	BufInfo<BI.BLOCKEND,2> = fullWord.st + fullWord.Len
 	
 	If fullWord[1,1]='"' Then
 		!! ""で囲む
@@ -3452,7 +3450,12 @@ AUTO.COMPLATE:
 		!! スペースが２つ続くのを防ぐ
 		IF InsBuffer[1]=" " AND Rec<Y>[X,1]=" " THEN InsBuffer = InsBuffer[1,LEN(InsBuffer)-1]
 	End
-	GoSub InsertLines
+	If InsBuffer=Rec<Y>[fullWord.st,Len(InsBuffer)] Then
+		!! ベースとまったく同じ場合はカーソル移動のみ
+		X = fullWord.st+Len(InsBuffer)
+	End Else
+		GoSub InsertLines
+	End
 	BufInfo<BI.BLOCKSTART> = ""
 	BufInfo<BI.BLOCKEND> = ""
 
