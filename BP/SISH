@@ -566,12 +566,12 @@ $ENDIF
 		act.title = "QM [":@TTY:"] ":account['/',DCount(account,'/'),1]:" @ ":logname:" (":System(18):")"
 		
 		** コマンドスタック保存ファイルから復元を試みる
+		logFile = @LOGNAME:"$":MY_COMMAND
 $IFDEF U2__UNIVERSE
 		OpenPath STACK.FILE To fpStack Then
 $ELSE
 		OpenPath STACK.FILE ENCODING "UTF8" To fpStack Then
 $ENDIF
-			logFile = @LOGNAME:"$":MY_COMMAND
 			LRUOpenList = ""
 			cmdStack = "<NEWLINE>"
 			cmdStack.cnt = 0
@@ -613,6 +613,12 @@ $ENDIF
 		Close fpStack
 	End
 
+	stackPath = STACK.FILE:"/":logFile
+	OpenSeq stackPath To fpStack Then
+		stackPath = FileInfo(fpStack,2) ;** フルパスを取得
+		closeSeq fpStack
+	End
+	
 	cmdline = ""
 	CurBuf = CMD_BUF
 
@@ -692,6 +698,7 @@ Set.Command.Editor:
 			BufInfo<BI.BLOCKSTART> = ""
 			BufInfo<BI.BLOCKEND> = ""
 		End
+!logmsg BufInfo<BI.BLOCKSTART>:" # ":BufInfo<BI.BLOCKEND>
 		
 		!! 描画処理
 		GoSub Create.CmdDraw
@@ -777,7 +784,16 @@ Shell.KeyLoop.Bef.GetKey:
 						Next ii
 					End
 				End Else
-					If actNo = A.PREVSTMT Then GoSub Act.Up Else GoSub Act.SelUp
+					If actNo = A.PREVSTMT Then
+						If BufInfo<BI.BLOCKSTART> Then
+							!! 現状行内の入れ替えは非対応
+							!GoSub Act.SwapUp
+							GoTo Shell.KeyLoop.Start
+						End
+						GoSub Act.Up
+					End Else
+						GoSub Act.SelUp
+					End
 					If prevY=Y Then
 						!! 行内移動
 						Loop
@@ -845,7 +861,16 @@ Shell.KeyLoop.Bef.GetKey:
 						Next ii
 					End
 				End Else
-					If actNo = A.NEXTSTMT Then GoSub Act.Down Else GoSub Act.SelDown
+					If actNo = A.NEXTSTMT Then
+						GoSub Act.Down
+						If BufInfo<BI.BLOCKSTART> Then
+							!! 現状行内の入れ替えは非対応
+							!GoSub Act.SwapDown
+							GoTo Shell.KeyLoop.Start
+						End
+					End Else
+						GoSub Act.SelDown
+					End
 					If prevY=Y Then
 						nextDX = ""
 						
@@ -1309,6 +1334,7 @@ Create.CmdDraw:
 		End
 	End
 	
+	in.selection = @False
 	tmpDY=1
 	For Row=1 To Lines
 		If Row>1 Then cmdDraw := ESC.CRT.MOVE_NEXT_LINE
@@ -1361,8 +1387,10 @@ Create.CmdDraw:
 				A = Row:@FM:i
 				If blockStart = A Then
 					cmdDraw := HI.SELECT.ON
+					in.selection = @True 
 				End Else If blockEnd = A Then
 					cmdDraw := SGR.ALL.OFF
+					in.selection = @False
 				End
 			End Else
 				If kakko1 Then
@@ -1381,7 +1409,11 @@ Create.CmdDraw:
 			
 			If c = @VM Then
 				!! 改行
-				cmdDraw := NEWLINE.DISP:ESC.CRT.MOVE_NEXT_LINE
+				If in.selection Then
+					cmdDraw := NEWLINE.DISP:ESC.CRT.MOVE_NEXT_LINE
+				End Else
+					cmdDraw := FG.BASE1:NEWLINE.DISP:FG.DEFAULT:ESC.CRT.MOVE_NEXT_LINE
+				End
 				tmpDX = 1
 				tmpDY += 1
 			End Else
@@ -1451,17 +1483,18 @@ Return
 * コマンドラインクリア
 *---------------------
 Clear.Cmdline.Crt:
+	a = Max(prev.dispRows,dispRows)
 	If IS.CONSOLE Then
 		crtBuff := @(0)
 		If prevDP_Y > 1 Then
 			crtBuff := @(-10,prevDP_Y-1)
 		End
 		crtBuff := @(-4)
-		If 	prev.dispRows > 1 Then
-			For i = 2 To prev.dispRows
+		If a > 1 Then
+			For i = 2 To a
 				crtBuff := @(33):@(-4)
 			Next i
-			crtBuff := @(-10,prev.dispRows-1)
+			crtBuff := @(-10,a-1)
 		End
 	End Else
 		crtBuff := CSI:'G'
@@ -1469,11 +1502,11 @@ Clear.Cmdline.Crt:
 			crtBuff := CSI:(prevDP_Y-1):'A'
 		End
 		crtBuff := CSI:'2K'
-		If prev.dispRows > 1 Then
-			For i = 2 To prev.dispRows
+		If a > 1 Then
+			For i = 2 To a
 				crtBuff := CSI:'1B':CSI:'2K'
 			Next i
-			crtBuff := CSI:(prev.dispRows-1):'A'
+			crtBuff := CSI:(a-1):'A'
 		End
 	End
 Return
@@ -1719,7 +1752,6 @@ $ENDIF
 After.Perform.Cmd:
 
 	** コマンドスタックのファイル保存
-	stackPath = STACK.FILE:"/":@LOGNAME:"$":MY_COMMAND
 $IFDEF U2__UNIVERSE
 	OpenSeq stackPath To fpStack Then
 $ELSE
@@ -1731,7 +1763,7 @@ $ENDIF
 		cnt = DCount(cmdline,@FM)
 		For i=1 To cnt
 			line = dt:" ":cmdline<i>:@VM:retCode
-			WriteSeq line To fpStack On Error Print "Cannot Write Stack Log -> ":STACK.FILE:"/":logFile Else ;
+			WriteSeq line To fpStack On Error Print "Cannot Write Stack Log -> ":stackPath Else ;
 		Next i
 		CloseSeq fpStack
 	End
@@ -1872,6 +1904,8 @@ $IFNDEF U2__UNIVERSE
 					GoSub ProcChoiceList
 					Exit
 				Case actNo = A.NEWLINE ;** 決定
+					!! 選択行を中心にしてフィルターを外す
+					actNo = A.DELETELINE
 				Case actNo = A.TAB ;** モード切替
 					candidateMode = "FLATREC"
 					Crt @(winX,0):
@@ -4995,6 +5029,7 @@ InitChoiceList: ;** 選択リストボックス初期化
 		!! 下側モード
 		winWidth = Width - 1
 		winX = 0
+		winTop = 0
 		winHeight = Depth - choiceOrgY + 1
 		crtBuff = @(0,choiceOrgY):BG.BASE3:@(-4)
 		For i = choiceOrgY To choiceOrgY+winHeight
@@ -5073,7 +5108,9 @@ ProcChoiceList:
 				choiceNo = 1
 			Case actNo = A.END
 				choiceNo = choiceOutList.length
-				
+			Case actNo = A.NEWLINE
+				!! 何もしない
+
 			!! 共通アクション
 			Case 1
 				prevCurBuf = CurBuf
@@ -5151,10 +5188,12 @@ ProcChoiceList:
 		End
 		choiceOutList.length = DCount(choiceOutList,@FM)
 		filterPrev = filter
+		tmpY = choiceNo - winTop
 		Locate choiceSelNo In choiceOutList By "AR" Setting choiceNo Else
 			choiceNo = choiceNo - 1
 		End
-		winTop = 0
+		winTop = choiceNo - tmpY
+		If winTop < 0 Then winTop = 0
 	End
 
 	!! 選択範囲チェック
@@ -5927,6 +5966,7 @@ GetWord.in:
 	ch = Line[inX,1]
 	
 	!! タイプチェック
+	type = 0
 	GoSub Is.Variable.Char ;** 英数字と変数に使える記号
 	If flg Then type = 1 Else
 		GoSub Is.Unicode.Char ;** UniCode単語
@@ -8103,7 +8143,7 @@ Act.SwapUp:
 	ecmd<6> = "1"
 	editCmd = ecmd
 	
-	!! 張り付け
+	!! 貼り付け
 	ecmd = ""
 	ecmd<1> = blockStart<1>-1
 	ecmd<2> = 1
@@ -8279,14 +8319,15 @@ Act.End:
 		For i=1 To Line.len
 			c = Line[i,1]
 			dispLen = LenDP(c)
-			If tmpDX+dispLen > AutoWrap Then
+			If c = @VM Or tmpDX+dispLen > AutoWrap Then
 				* 改行
 				If nextDY=tmpDY Then
-					X = i-1
+					X = If c = @VM Then i Else i-1
 					Return
 				End
 				tmpDX = 1
 				tmpDY += 1
+				If c = @VM Then dispLen = 0
 			End
 
 			If i=X Then
@@ -8332,15 +8373,22 @@ Act.Home:
 		For i=1 To Line.len
 			c = Line[i,1]
 			dispLen = LenDP(c)
-			If tmpDX+dispLen > AutoWrap Then
+			
+			If i = X Then
+				Exit
+			End
+			
+			If c = @VM Or tmpDX+dispLen > AutoWrap Then
 				* 改行
 				tmpDX = 1
 				tmpDY += 1
 				homeIndex = i
-			End
-			
-			If i = X Then
-				Exit
+				If c = @VM Then
+					dispLen = 0
+					homeIndex = i+1
+				End Else
+					homeIndex = i
+				End
 			End
 			
 			tmpDX += dispLen
@@ -8701,8 +8749,13 @@ Act.DelLine:
 	editCmd = ""
 	editCmd<1> = Y
 	editCmd<2> = 1
-	editCmd<3> = Y+1
-	editCmd<4> = 1
+	IF Y+1 > Lines Then
+		editCmd<3> = Y
+		editCmd<4> = Len(Rec<Y>)+1
+	End Else
+		editCmd<3> = Y+1
+		editCmd<4> = 1
+	End
 	editCmd<5> = ""
 	editCmd<6> = ""
 	
