@@ -621,7 +621,7 @@ $ENDIF
 	
 	cmdline = ""
 	CurBuf = CMD_BUF
-
+	BufInfo<BI.INDENTSIZE> = DEFAULT.INDENT
 	GoSub InitBuf
 
 	crtBuff = ""
@@ -673,7 +673,12 @@ Set.Command.Editor:
 		
 		If X <= Len(prmptStr) Then
 			!! プロンプト内にカーソルを入れない処理
-			X = Len(prmptStr)+1
+			If prevY+1=Y Then
+				Y -= 1
+				X = Len(Rec<Y>)+1
+			End Else
+				X = Len(prmptStr)+1
+			End
 		End Else If X >= Len(Rec<Y>)+1 Then
 			X = Len(Rec<Y>)+1
 		End
@@ -681,13 +686,7 @@ Set.Command.Editor:
 		!! 選択範囲の調整
 		If keepSelection Then
 			** 選択終了位置の設定
-			If BufInfo<BI.BLOCKEND> Then
-				A = Rec<BufInfo<BI.BLOCKEND,1>>
-				If A#"" And BufInfo<BI.BLOCKEND,2> > Len(A) Then
-					BufInfo<BI.BLOCKEND,1> += 1
-					BufInfo<BI.BLOCKEND,2> = 1
-				End
-			End Else
+			If Not(BufInfo<BI.BLOCKEND>) Then
 				BufInfo<BI.BLOCKEND> = Y:@VM:X
 			End
 			If BufInfo<BI.BLOCKSTART>=BufInfo<BI.BLOCKEND> Then
@@ -698,7 +697,7 @@ Set.Command.Editor:
 			BufInfo<BI.BLOCKSTART> = ""
 			BufInfo<BI.BLOCKEND> = ""
 		End
-!logmsg BufInfo<BI.BLOCKSTART>:" # ":BufInfo<BI.BLOCKEND>
+! logmsg BufInfo<BI.BLOCKSTART>:" # ":BufInfo<BI.BLOCKEND>
 		
 		!! 描画処理
 		GoSub Create.CmdDraw
@@ -779,7 +778,7 @@ Shell.KeyLoop.Bef.GetKey:
 					End Else
 						!! コマンド行を上に5つ広げる
 						For ii=1 To 5
-							Y = -1
+							If Y = 1 Then Y = -1 Else Y-=1
 							GoSub CmdRow.Inc.Up
 						Next ii
 					End
@@ -787,7 +786,9 @@ Shell.KeyLoop.Bef.GetKey:
 					If actNo = A.PREVSTMT Then
 						If BufInfo<BI.BLOCKSTART> Then
 							!! 現状行内の入れ替えは非対応
-							!GoSub Act.SwapUp
+							BufInfo<BI.BLOCKSTART> = Y:@VM:1
+							BufInfo<BI.BLOCKEND> = (Y+1):@VM:1
+							GoSub Act.SwapUp
 							GoTo Shell.KeyLoop.Start
 						End
 						GoSub Act.Up
@@ -818,6 +819,16 @@ Shell.KeyLoop.Bef.GetKey:
 									GoSub CmdRow.Inc.Up
 								Next ii
 							End
+						End Else
+							For ii=1 To 4
+								If actNo = A.PREVSTMT Then
+									GoSub Act.Up
+								End Else
+									Y -= 1
+									GoSub CmdRow.Inc.Up
+								End
+								If Y<=1 Then Exit
+							Next ii
 						End
 					End
 				End
@@ -856,18 +867,20 @@ Shell.KeyLoop.Bef.GetKey:
 						!! コマンド行を下に5つ広げる
 						For ii=1 To 5
 							Lines = DCount(Rec,@FM)
-							Y = Lines+1
+							If Y>Lines Then Y = Lines+1 Else Y += 1
 							GoSub CmdRow.Inc.Down
 						Next ii
 					End
 				End Else
 					If actNo = A.NEXTSTMT Then
-						GoSub Act.Down
 						If BufInfo<BI.BLOCKSTART> Then
 							!! 現状行内の入れ替えは非対応
-							!GoSub Act.SwapDown
+							BufInfo<BI.BLOCKSTART> = Y:@VM:1
+							BufInfo<BI.BLOCKEND> = (Y+1):@VM:1
+							GoSub Act.SwapDown
 							GoTo Shell.KeyLoop.Start
 						End
+						GoSub Act.Down
 					End Else
 						GoSub Act.SelDown
 					End
@@ -918,6 +931,15 @@ Shell.KeyLoop.Bef.GetKey:
 								Next ii
 							End
 						End Else
+							For ii=1 To 4
+								If actNo = A.NEXTSTMT Then
+									GoSub Act.Down
+								End Else
+									Y += 1
+									GoSub CmdRow.Inc.Down
+								End
+								If Y>=Lines Then Exit
+							Next ii
 						End
 					End
 				End
@@ -952,21 +974,18 @@ Shell.KeyLoop.Bef.GetKey:
 				End
 			Case actNo = A.SEL_ALL
 				keepSelection = @True
-				If BufInfo<BI.BLOCKSTART,2>=1 Or BufInfo<BI.BLOCKEND,2>=1 Then
+				A = Y:@VM:Len(prmptStr)+1
+				B = Y:@VM:Len(Rec<Y>)+1
+				If BufInfo<BI.BLOCKSTART>=A  And BufInfo<BI.BLOCKEND>=B  Then
 					!! 全行選択
-					GoSub Act.SelAll
+					BufInfo<BI.BLOCKSTART,1> = 1
+					BufInfo<BI.BLOCKSTART,2> = 1
+					BufInfo<BI.BLOCKEND,1> = Lines+1
+					BufInfo<BI.BLOCKEND,2> = 1
 				End Else
-					blockStart = Y:@VM:Len(prmptStr)+1
-					blockEnd = Y:@VM:Len(Rec<Y>)+1
-					If BufInfo<BI.BLOCKSTART>=blockStart And BufInfo<BI.BLOCKEND>=BufInfo<BI.BLOCKSTART,1>+1:@VM:1 Then
-						!! 1行選択
-						BufInfo<BI.BLOCKSTART> = Y:@VM:1
-						BufInfo<BI.BLOCKEND> = Y:@VM:Len(Rec<Y>)
-					End Else
-						!! 行内全選択
-						BufInfo<BI.BLOCKSTART> = blockStart
-						BufInfo<BI.BLOCKEND> = blockEnd
-					End
+					!! 1行内全選択
+					BufInfo<BI.BLOCKSTART> = A
+					BufInfo<BI.BLOCKEND> = B
 				End
 				
 		** 文字入力系  
@@ -1215,6 +1234,7 @@ GET.CMDLINES:
 * コマンド行を上に１つ広げる
 * ---------------------------
 CmdRow.Inc.Up:
+	keepSelection = @True
 	If Y<1 Then
 		!! 枠を増やす
 		cmdStackPos += 1
@@ -1246,6 +1266,7 @@ CmdRow.Inc.Up:
 * コマンド行を下に１つ広げる
 * ---------------------------
 CmdRow.Inc.Down:
+	keepSelection = @True
 	If Y>Lines Then
 		!! 下の枠を増やす
 		GoSub GET.PROMPTSTR
@@ -1417,8 +1438,14 @@ Create.CmdDraw:
 				tmpDX = 1
 				tmpDY += 1
 			End Else
-				cmdDraw := c
-				tmpDX += dispLen
+				If c=Char(9) Then
+					A = STDTAB-1-REM((If tmpDX=1 Then 2 Else tmpDX-1),STDTAB)
+					cmdDraw := " ":Space(A)
+					tmpDX += 1+A
+				End Else
+					cmdDraw := c
+					tmpDX += dispLen
+				End
 			End
 			
 			If Not(BufInfo<BI.BLOCKSTART>) Then
@@ -1483,7 +1510,11 @@ Return
 * コマンドラインクリア
 *---------------------
 Clear.Cmdline.Crt:
-	a = Max(prev.dispRows,dispRows)
+	If bFirstCurTop Then
+		a = prev.dispRows
+	End Else
+		a = Max(prev.dispRows,dispRows)
+	End
 	If IS.CONSOLE Then
 		crtBuff := @(0)
 		If prevDP_Y > 1 Then
@@ -1515,7 +1546,9 @@ Return
 * コマンド実行
 *---------------------
 Run.Command:
-
+	
+	bAutoCommand = @FALSE
+	
 	crtBuff = ""
 	If Not(bFirstCurTop) Then
 		** 補完候補表示していたらアプリケーションモードから戻す
@@ -1523,120 +1556,145 @@ Run.Command:
 	End
 	
 	cmdlines = "" ;** 複数コマンド
-	If Count(cmdline,@FM)>0 Then
-		!! 複数コマンドなら先だしで１つ選ぶ
-		cmdlines = Change(cmdline,"_":@FM,@VM) ;* アンダースコアで終わる場合はコマンドを結合
-		cmdline = cmdlines<1>
-		Del cmdlines<1>
-	End
-
-	verb = UPCASE(Trim(cmdline)[' ',1,1])
-	If verb="Q" or verb="QUIT" Then
-		!! 終了
-		GoTo QUIT.SHELL
-	End Else If verb = "TERM" Then
-		IF @TERM.TYPE = 'msvt' AND cmdline MATCHES "...1N0N..." THEN
-			Execute cmdline : " qmterm":@FM:"TERM msvt"
-		END
-	End Else If verb[1,1] = "." Then
-		!! シェル内部コマンド
-		k = verb[2,1]
-		Begin Case
-			Case k = "A"
-				GoTo ACTION.CMDSTACK.APPEND
-			Case k = "C"
-				GoTo ACTION.CMDSTACK.CHANGE
-			Case k = "D"
-				GoTo ACTION.CMDSTACK.DELETE
-			Case k = "G"
-				GoTo ACTION.CMDSTACK.GOTO
-			Case k = "L"
-				GoSub ACTION.CMDSTACK.LIST
-			Case k = "R"
-				GoTo ACTION.CMDSTACK.READ
-			Case k = "S"
-				GoTo ACTION.CMDSTACK.SAVE
-			Case k = "X"
-				** コマンド実行
-				cmd = Convert(' ','-',Trim(cmdline[3,9999]))
-				n = cmd['-',1,1]
-				m = cmd['-',2,1]
-				
-				If n = "" And m = "" Then n = 1
-				If m = "" Then m = n ;** 1行にする
-				If Num(n) And Num(m) Then
-					min_no = Minimum(n:@FM:m)
-					max_no = Maximum(n:@FM:m)
-					For i = max_no To min_no Step -1
-						cmdlines<-1> = If cmdStackPage<i+1> <> "" Then cmdStackPage<i+1> Else cmdStack<i+1>
-					Next i
-				End
-				
-				** 自動モードで初めからやり直し
-				cmdline = cmdlines
-				bAutoCommand = @TRUE
-				GoTo Shell.KeyLoop.Start
-				
-			Case k = "T"
-				bTimer = Not(bTimer)
-				Print ""
-				If bTimer Then Print "時間計測ON" Else Print "時間計測OFF"
-				GoTo Run.Command.Ending
-			Case k = "E"
-				If UpCase(Trim(cmdline)) = ".E" Then
-					cmdline = ""
-					GoTo Launch.Editor ;** 単純にエディタに切り替える
-				End
-				!! Verbをエディタに置換
-				If UpCase(Trim(cmdline)[1,3]) = ".EP" Then
-					!! Private VOC
-					OPEN "PVOC,":@USER TO PVOC Then
+	If Count(cmdline,@FM)=0 Then
+		!! 単発コマンド
+		verb = UPCASE(Trim(cmdline)[' ',1,1])
+		If verb="Q" or verb="QUIT" Then
+			!! 終了
+			GoTo QUIT.SHELL
+		End Else If verb[1,1] = "." Then
+			!! シェル内部コマンド
+			k = verb[2,1]
+			Begin Case
+				Case k = "A"
+					GoTo ACTION.CMDSTACK.APPEND
+				Case k = "C"
+					GoTo ACTION.CMDSTACK.CHANGE
+				Case k = "D"
+					GoTo ACTION.CMDSTACK.DELETE
+				Case k = "G"
+					GoTo ACTION.CMDSTACK.GOTO
+				Case k = "L"
+					GoTo ACTION.CMDSTACK.LIST
+				Case k = "R"
+					GoTo ACTION.CMDSTACK.READ
+				Case k = "S"
+					GoTo ACTION.CMDSTACK.SAVE
+				Case k = "X"
+					** コマンド実行
+					cmd = Convert(' ','-',Trim(cmdline[3,9999]))
+					n = cmd['-',1,1]
+					m = cmd['-',2,1]
+					
+					If n = "" And m = "" Then n = 1
+					If m = "" Then m = n ;** 1行にする
+					If Num(n) And Num(m) Then
+						min_no = Minimum(n:@FM:m)
+						max_no = Maximum(n:@FM:m)
+						For i = max_no To min_no Step -1
+							cmdlines<-1> = If cmdStackPage<i+1> <> "" Then cmdStackPage<i+1> Else cmdStack<i+1>
+						Next i
+					End
+					
+				Case k = "T"
+					bTimer = Not(bTimer)
+					Print ""
+					If bTimer Then Print "時間計測ON" Else Print "時間計測OFF"
+					GoTo Run.Command.Ending
+				Case k = "E"
+					If UpCase(Trim(cmdline)) = ".E" Then
+						cmdline = ""
+						GoTo Launch.Editor ;** 単純にエディタに切り替える
+					End
+					!! Verbをエディタに置換
+					If UpCase(Trim(cmdline)[1,3]) = ".EP" Then
+						!! Private VOC
+						OPEN "PVOC,":@USER TO PVOC Then
+							a = Trim(cmdline)[' ',2,9999]
+							cmdline = "READ.BUFFER PVOC,":@USER:" ":a
+							bAutoEditor = @TRUE
+						End
+					End Else
 						a = Trim(cmdline)[' ',2,9999]
-						cmdline = "READ.BUFFER PVOC,":@USER:" ":a
+						Read rec From VOC,a Then
+							cmdline = "READ.BUFFER VOC ":a
+							bAutoEditor = @TRUE
+						End
+					End
+					If cmdline Matches "READ.BUFFER..." Else 
+						cmdline = "READ.BUFFER":cmdline[3,9999]
 						bAutoEditor = @TRUE
 					End
-				End Else
-					a = Trim(cmdline)[' ',2,9999]
-					Read rec From VOC,a Then
-						cmdline = "READ.BUFFER VOC ":a
-						bAutoEditor = @TRUE
-					End
+					X += 9
+				Case k = "O" ;** COMO出力
+					IF SYSTEM(1033) THEN
+						cmdline = "COMO OFF"
+					END ELSE
+						cmdline = "COMO ON LOG_":OConv(Date(),'DYMD["",""]'):"_":OConv(Time(),"MTS''")
+					END
+				Case k = "K"
+					!! KeySeq表示モード
+					GoSub Keys
+					cmdline = ""
+			End Case
+		End
+		
+		!! LOGTO単体の場合はLOGTO履歴選択モードにする
+		If Trim(cmdline)="LOGTO" Then
+			If logtoStack Then
+				a = logtoStack[@FM,1,10]
+				wide1 = Maximum(LenS(VSLice(a,1)))+2
+				Print ""
+				For i = 1 To DCount(a,@FM)
+					If a<i> = "" Then Exit
+					Print i:" ":FMT(a<i,1>,wide1:"L"):" ":a<i,2>
+				Next i
+				Print "Choice":
+				Input i,1
+				If i # "" And Num(i) Then
+					cmdline = "LOGTO ":DQUOTE(a<i,2>)
 				End
-				If cmdline Matches "READ.BUFFER..." Else 
-					cmdline = "READ.BUFFER":cmdline[3,9999]
-					bAutoEditor = @TRUE
-				End
-				X += 9
-			Case k = "O" ;** COMO出力
-				IF SYSTEM(1033) THEN
-					cmdline = "COMO OFF"
-				END ELSE
-					cmdline = "COMO ON LOG_":OConv(Date(),'DYMD["",""]'):"_":OConv(Time(),"MTS''")
-				END
-			Case k = "K"
-				!! KeySeq表示モード
-				GoSub Keys
-				cmdline = ""
-		End Case
-	End
-	
-	!! LOGTO単体の場合はLOGTO履歴選択モードにする
-	If Trim(cmdline)="LOGTO" Then
-		If logtoStack Then
-			a = logtoStack[@FM,1,10]
-			wide1 = Maximum(LenS(VSLice(a,1)))+2
-			Print ""
-			For i = 1 To DCount(a,@FM)
-				If a<i> = "" Then Exit
-				Print i:" ":FMT(a<i,1>,wide1:"L"):" ":a<i,2>
-			Next i
-			Print "Choice":
-			Input i,1
-			If i # "" And Num(i) Then
-				cmdline = "LOGTO ":DQUOTE(a<i,2>)
 			End
 		End
+		
+	End Else
+		!! 複数コマンド
+		cmdlines = cmdline
 	End
+	
+	If cmdlines Then
+		!! 複数コマンド内に制御文があればパラグラフとしてまとめて実行に変更する
+		flg = @False
+		cmd.cnt = DCount(cmdlines,@FM)
+		For cmd.i=1 To cmd.cnt
+			cmdline = cmdlines<cmd.i>
+			!! 先頭が空文字でなければコマンドスタックの更新
+			If cmdline[1,1] <> ' ' Then
+				GoSub CmdStack.Push
+			End
+			a = UpCase(TrimF(cmdline)[" ",1,1])
+			Find a In Convert(",",@FM,"LOOP,REPEAT,GO,$ECHO") Then
+				flg = @True ;** 制御文
+				Continue
+			End
+			If a[1]=":" Then
+				flg = @True ;** ラベル
+				Continue
+			End
+		Next cmd.i
+		If flg Then
+			!! パラグラフに変換
+			cmdline = cmdlines
+			cmdlines = ""
+		End
+	End Else
+		!! 先頭が空文字でなければコマンドスタックの更新
+		If cmdline[1,1] <> ' ' Then
+			GoSub CmdStack.Push
+		End
+	End
+	
+	bFirstCurTop = @TRUE
 	
 $IFNDEF U2__UNIVERSE
 	IF isComoActive THEN
@@ -1645,7 +1703,55 @@ $IFNDEF U2__UNIVERSE
 	END
 $ENDIF
 	
-	crtBuff = BG.BASE2:HI.SHELL.ON:PROMPT.STR:HI.SHELL.OFF:Change(cmdline,@VM,CRLF)
+	** VOCファイル一度閉じる
+	Close VOC
+
+	If cmdlines Then
+		cmd.cnt = DCount(cmdlines,@FM)
+		For cmd.i=1 To cmd.cnt
+			cmdline = cmdlines<cmd.i>
+			GoSub Run.Command.One
+		Next
+	End Else
+		GoSub Run.Command.One
+	End
+	
+	** VOCファイルを開く
+	Open 'VOC' To VOC Else Abort
+	
+	** 直前のファイル名を格納(2つ目の単語をファイル名とみなす単純実装)
+	tmp = Trim(cmdline)[' ',2,1]
+	If tmp >< "" Then
+		Read rec From VOC,tmp[',',1,1] Then
+			type = rec[1,1]
+			If type = "F" OR type = "Q" Then prevFileName = tmp
+		End
+	End
+	
+Run.Command.Ending:
+	cmdline = ""
+	
+!! 非同期メッセージの表示
+$IFNDEF U2__UNIVERSE
+	msgs = GET.MESSAGES()
+	If msgs THEN PRINT CONVERT(@FM,CHAR(10),msgs)
+$ENDIF
+
+	!! 実行完了後にエディタを開く
+	If bAutoEditor Then bAutoEditor = @FALSE; GoTo Launch.Editor
+
+	GoTo Shell.Input.Begin ;* キーループに戻る
+
+
+*---------------------
+* コマンドを1行実行する
+*---------------------
+Run.Command.One:
+
+	** コマンド行を出力(ECHO)
+	If Index(cmdline,@FM)=0 Then
+		crtBuff = BG.BASE2:HI.SHELL.ON:PROMPT.STR:HI.SHELL.OFF:Change(cmdline,@VM,CRLF)
+	End
 	
 	** 空コマンドは無視
 	If cmdline = "" Then
@@ -1653,24 +1759,23 @@ $ENDIF
 		GoTo Run.Command.Ending
 	End
 
-	!! 先頭が空文字とピリオドでなければコマンドスタックの更新
-	If cmdline[1,1] <> ' ' Then
-		GoSub CmdStack.Push
-	End
-
-	bFirstCurTop = @TRUE
-
 	GoSub CLEAR.FOR.PERFORM
 
 	verb = TRIMF(cmdline[" ",1,1])
 	If verb = "READ.BUFFER" Then
 		!! ファイルをバッファにリードする
 		GoSub READ.BUFFER
-		GoTo After.Perform.Cmd
+		GoSub Write.Stack.log
+		Return
 	End Else If verb = "WRITE.BUFFER" Then
 		!! バッファの内容をファイルにライトする
 		GoSub WRITE.BUFFER
-		GoTo After.Perform.Cmd		
+		GoSub Write.Stack.log
+		Return
+	End Else If verb = "TERM" Then
+		IF @TERM.TYPE = 'msvt' AND cmdline MATCHES "...1N0N..." THEN
+			Execute cmdline : " qmterm":@FM:"TERM msvt"
+		END
 	End
 
 	!! 普通のコマンド起動
@@ -1689,10 +1794,7 @@ $ENDIF
 	prevCrt = @CRTHIGH:@CRTWIDE
 
 	@USER.RETURN.CODE = 999999999
-
-	** VOCファイル一度閉じる
-	Close VOC
-
+	
 	If bTimer Then
 		!! 時間計測開始
 		startTime = Time()
@@ -1704,7 +1806,7 @@ $ENDIF
 	!!
 	
 	If has.Run.Command.Delegator Then
-		cl = "SISH.RUN.COMMAND.DELEGATOR ":cmdline
+		cl = "SISH.RUN.COMMAND.DELEGATOR ":Convert(@FM,@IM,cmdline)
 	End Else
 		cl = Convert(@VM," ",cmdline)
 	End
@@ -1717,7 +1819,7 @@ $ELSE
 			!! unnamed common missmatch error
 			!! unnamed common をクリアするため自身を再起動して再実行
 			Print ""
-			Print FG.RED:"'Unnamed Common' has already been cleared, please re-execute the same command.":FG.BASE03
+			Print FG.RED:"'Unnamed Common' has already been cleared, please re-run the same command.":FG.BASE03
 			Print ""
 		END
 	End
@@ -1735,22 +1837,11 @@ $ENDIF
 		Crt CSI:"8;":@CRTHIGH:";":@CRTWIDE:"t":
 	End
 	
-	** VOCファイルを開く
-	Open 'VOC' To VOC Else Abort
+	GoSub Write.Stack.log
 
-	!! PA なら プロンプトをクリアする
-	ReadV type From VOC,verb,1 Then
-		If type[1,2] = "PA" Then
-$IFDEF U2__UNIVERSE
-			Perform "CLEARPROMPTS"
-$ELSE
-			Execute "CLEARPROMPTS" STACKLIST
-$ENDIF
-		End
-	End
-	
-After.Perform.Cmd:
+	Return
 
+Write.Stack.log:
 	** コマンドスタックのファイル保存
 $IFDEF U2__UNIVERSE
 	OpenSeq stackPath To fpStack Then
@@ -1767,46 +1858,8 @@ $ENDIF
 		Next i
 		CloseSeq fpStack
 	End
-	
-	** 直前のファイル名を格納
-	tmp = Trim(cmdline)[' ',2,1]
-	If tmp >< "" Then
-		Read rec From VOC,tmp[',',1,1] Then
-			type = rec[1,1]
-			If type = "F" OR type = "Q" Then prevFileName = tmp
-		End
-	End
-	
-Run.Command.Ending:
-	If bAutoCommand Then
-		If cmdlines = "BACK.TO.EDITOR" Then
-			!! エディタに戻る
-			bAutoEditor = @TRUE
-		End Else If cmdlines = "PAUSE.AND.BACK.TO.EDITOR" Then
-			!! エディタに戻る前に停止
-			Print "Back to editor, please press any key. :":
-			GoSub GetKey
-			bAutoEditor = @TRUE
-		End Else If cmdlines # "" Then
-			cmdline = cmdlines
-			GoTo Run.Command ;** まだ続く
-		End
-		bAutoCommand = @FALSE
-	End
-	
-	cmdline = ""
-	
-!! 非同期メッセージの表示
-$IFNDEF U2__UNIVERSE
-	msgs = GET.MESSAGES()
-	If msgs THEN PRINT CONVERT(@FM,CHAR(10),msgs)
-$ENDIF
 
-	!! 実行完了後にエディタを開く
-	If bAutoEditor Then bAutoEditor = @FALSE; GoTo Launch.Editor
-
-	GoTo Shell.Input.Begin ;* キーループに戻る
-
+	Return
 
 *---------------------
 * コマンドヘルプ表示
@@ -2445,8 +2498,6 @@ DispCandidate.Common:
 		End Else If candidateMode = "FILE" Then
 			candidateMode = "VOC"
 			GoTo TAB.HOKAN
-		End Else If candidateMode = "VOC" Then
-			candidateMode = "HELP"
 		End Else
 			candidateMode = "FIELD"
 			GoTo TAB.HOKAN
@@ -2544,7 +2595,6 @@ DispCandidate.Common:
 					Crt @(winX,0):
 					GoTo TAB.HOKAN
 				End
-
 		End Case
 		
 	Repeat
@@ -3028,7 +3078,7 @@ ACTION.CMDSTACK.LIST:
 			Next j
 			If Not(flg) Then Continue
 		End
-		result<-1> = (i-1):@VM:cmd:@VM:modify
+		result<-1> = (i-1):@VM:Change(cmd,@VM,CRLF):@VM:modify
 		cnt += 1
 		If cmdStackList.DispCnt<2> < cnt Then Exit
 	Next
@@ -3042,12 +3092,12 @@ ACTION.CMDSTACK.LIST:
 
 	!! コマンドを保存
 	prevListStackCmd = cmdline
-
+	
 	!! 現在行の調整
 	GoSub ACTION.CMDSTACK.NEXT
 	GoSub ACTION.CMDSTACK.BACK
-
-	Return
+	
+	GoTo Shell.Input.Begin ;* キーループに戻る
 
 *--------------------------------
 * コマンドスタックジャンプ Action
@@ -3131,7 +3181,7 @@ ACTION.CMDSTACK.APPEND:
 
 	!! 一覧表示
 	cmdline = ".L":no:",1"
-	GoSub ACTION.CMDSTACK.LIST
+	GoTo ACTION.CMDSTACK.LIST
 
 *--------------------------------
 * コマンドスタック行のSAVE Action
@@ -3220,7 +3270,7 @@ ACTION.CMDSTACK.READ:
 		name = Trim(cmdline[' ',2,1])
 		Read rec From VOC,name Then
 			If rec[1,1] = 'P' Or rec[1,1] = 'S' Then
-				cmdlines = rec[@FM,2,9999]
+				GoSub Conv.rec2cmdlines
 				cmdlines_page = cmdlines
 			End
 		End
@@ -4162,8 +4212,9 @@ Catalog:
 			GoSub ShowWindow
 			Return
 		End Case
-	cmdline<-1> = "PAUSE.AND.BACK.TO.EDITOR"
+	cmdline<-1> = " PAUSE"
 	bAutoCommand = @TRUE
+	bAutoEditor = @TRUE
 	GoSub Act.Exit
 Return
 
@@ -5321,12 +5372,14 @@ $ENDIF
 		crtBuff := @(winX,1):FG.YELLOW:":":BG.BASE3:PFilter:@(-4)
 	End Else
 		crtBuff := @(winX,winY)
-		If choiceActive Then crtBuff := FG.BLUE
-		crtBuff := BG.BASE3
-		If title#"" Then crtBuff := title
-		crtBuff := " ":Fmt("(":choiceOutList.length:")",Len(choiceList.length)+2:"L")
-		crtBuff := " :"
-		crtBuff := If choiceActive Then PFilter Else filter
+		If choiceActive Then
+			If choiceActive Then crtBuff := FG.BLUE
+			crtBuff := BG.BASE3
+			If title#"" Then crtBuff := title
+			crtBuff := " ":Fmt("(":choiceOutList.length:")",Len(choiceList.length)+2:"L")
+			crtBuff := " :"
+			crtBuff := If choiceActive Then PFilter Else filter
+		End
 		crtBuff := HI.OFF:@(-4)
 	End
 	If PFilter.X#"" Then crtBuff := @(-9,PFilter.X) ;** 実際のカーソル位置に戻す
@@ -6303,7 +6356,7 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 			OLine = Line
 			Line.len = Len(Line)
 			C2 = Line[1,2]
-			If C2 = "PA" Then
+			If C2 = "PA" And Row=1 Then
 				Mask := Str(SI.COMMENT,Line.len)
 			End Else If C2 = "* " Then
 				Mask := Str(SI.COMMENT,Line.len)
@@ -6330,19 +6383,20 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 					End
 				End Else If Word = "LOOP" Then
 					Mask := Str(SI.KEY,4)
-					Line = Line[4,BIG]
-					Word = Line[" ",1,1]
+					Line = ""
+					Word = ""
 				End Else If Word = "REPEAT" Then
 					Mask := Str(SI.KEY,6)
-					Line = Line[6,BIG]
-					Word = Line[" ",1,1]
+					Line = ""
+					Word = ""
+				End Else If Word = "$ECHO" Then
+					Mask := Str(SI.DIRECTIVE,BIG)
+					Line = ""
+					Word = ""
 				End
 				
 				!! 補助構文
-				If Word Matches "DISPLAY":@VM:"STOP":@VM:"ABORT" Then
-					!! 以降を強調
-					Mask := Str(SI.STRING,Line.len)
-				End Else If Word = "GO" Then
+				If Word = "GO" Then
 					!! ラベルを強調
 					Mask := Str(SI.KEY,3)
 					Mask := Str(SI.LABEL,Line.len)
@@ -6912,6 +6966,7 @@ SaveAs:
 	
 	cmdline = "WRITE.BUFFER ":CurBuf:" ":BufInfo<BI.FILE>:" ":BufInfo<BI.ITEM>
 	CurBuf = CMD_BUF
+	cmdStackPos = 1
 	Rec = "si:":cmdline
 	X = 999
 	GoSub Act.Exit
@@ -10246,21 +10301,27 @@ Act.Paste:
 		If Index(tmp,@FM) Then
 			!! 複数行
 			InsBuffer = ""
+			tmp = Change(tmp,"_":@FM,@VM) ;** 行末アンダースコアを行内改行にする
 			cnt = DCount(tmp,@FM)
 			For i=1 To cnt
 				isCmd = @False
 				cl = tmp<i>
-				b = cl[" ",1,1]
+				b = TrimF(cl)[" ",1,1]
 				If b#"" Then
-					Read rec From VOC,b Then
-						c = UpCase(rec<1>)
-						If c[1,1]="R" Then
-							rec = TRANS(rec<2>,rec<3>,1,"X")
-							c = UpCase(rec)
-						End
-						If c[1,1]="K" Then c = UpCase(rec<3>)
-						If c[1,1]="V" Or c[1]="S" Or c[1,2]="PA" Then
-							isCmd = @True
+					If UpCase(b) Match "...:":@VM:"LOOP":@VM:"REPEAT":@VM:"$ECHO" Then
+						!! 制御文とラベル
+						isCmd = @True
+					End Else
+						Read rec From VOC,b Then
+							c = UpCase(rec<1>)
+							If c[1,1]="R" Then
+								rec = TRANS(rec<2>,rec<3>,1,"X")
+								c = UpCase(rec)
+							End
+							If c[1,1]="K" Then c = UpCase(rec<3>)
+							If c[1,1]="V" Or c[1]="S" Or c[1,2]="PA" Then
+								isCmd = @True
+							End
 						End
 					End
 				End
@@ -10304,7 +10365,11 @@ Act.Paste:
 	editCmd<6> = If Index(InsBuffer,Char(10)) Then "0:1" Else ""
 	GoSub StackEditCmd
 	
-	If X = 1 Then
+	If CurBuf = CMD_BUF Then
+		BufInfo<BI.BLOCKSTART> = ""
+		BufInfo<BI.BLOCKEND> = ""
+		keepSelection = False
+	End Else If X = 1 Then
 		!! カーソル位置が先頭の時は選択範囲を残す
 		BufInfo<BI.BLOCKSTART> = startPos
 		BufInfo<BI.BLOCKEND> = Y:@VM:X
@@ -10428,8 +10493,8 @@ Act.ShowBuffList:
 					End Else
 						!! 新規オープン
 						cmdline = "READ.BUFFER ":choiceSelection
-						cmdline<-1> = "BACK.TO.EDITOR"
 						bAutoCommand = @TRUE
+						bAutoEditor = @TRUE
 						GoSub Act.Exit
 					End
 				End
@@ -10970,8 +11035,8 @@ Act.Reload:
 		If UpCase(C) = "Y" Else Return
 		
 		cmdline = "READ.BUFFER ":If PathName<>"" And FileName[1,5]="PATH:" Then PathName Else FileName:" ":ItemName
-		cmdline<-1> = "BACK.TO.EDITOR"
 		bAutoCommand = @TRUE
+		bAutoEditor = @TRUE
 		GoSub Act.Exit
 		Changed = @False
 		GoSub Act.CloseBuff
@@ -11001,17 +11066,20 @@ Act.Save:
 
 Act.Compile:
 	
-	If Changed Then GoSub CheckSave
-	FileName = BufInfo<BI.FILE>
-	ItemName = BufInfo<BI.ITEM>
+	If BufInfo<BI.PARSETYPE> = PARSE.BASIC Then
+		If Changed Then GoSub CheckSave
+		FileName = BufInfo<BI.FILE>
+		ItemName = BufInfo<BI.ITEM>
 $IFDEF U2__UNIVERSE
-	cmdline = "BASIC ":FileName:" ":ItemName
+		cmdline = "BASIC ":FileName:" ":ItemName
 $ELSE
-	cmdline = "BASIC ":FileName:" ":ItemName:" DEBUGGING CHANGED"
+		cmdline = "BASIC ":FileName:" ":ItemName:" DEBUGGING CHANGED"
 $ENDIF
-	cmdline<-1> = "PAUSE.AND.BACK.TO.EDITOR"
-	bAutoCommand = @TRUE
-	GoSub Act.Exit
+		cmdline<-1> = " PAUSE"
+		bAutoCommand = @TRUE
+		bAutoEditor = @true
+		GoSub Act.Exit
+	End
 	Return
 
 * **************************************************************************
@@ -11029,12 +11097,32 @@ $ELSE
 $ENDIF
 		cmdline<-1> = "RUN ":FileName:" ":ItemName
 	End Else If BufInfo<BI.PARSETYPE> = PARSE.PARA Then
-		If DCount(Rec,@FM)=1 Then Return
-		cmdline = Rec[@FM,2,9999]
+		rec = rec
+		GoSub Conv.rec2cmdlines
+		cmdline = cmdlines
 	End
-	cmdline<-1> = "PAUSE.AND.BACK.TO.EDITOR"
+	cmdline<-1> = " PAUSE"
 	bAutoCommand = @TRUE
+	bAutoEditor = @true
 	GoSub Act.Exit
+	Return
+
+Conv.rec2cmdlines:
+	cnt = DCount(rec,@FM)
+	If cnt=1 Then Return
+	cmdlines = ""
+	For i=2 To cnt
+		cl = rec<i>
+		If cl[1]="_" Then
+			Loop
+			While cl[1]="_"
+				cl = cl[1,Len(cl)-1]
+				i += 1
+				cl := @VM:rec<i>
+			Repeat
+		End
+		cmdlines<i> = cl
+	Next
 	Return
 
 * **************************************************************************
