@@ -402,7 +402,7 @@ a|  前の単語に移動
 ※上記にさらに kbd:[Shift] 同時押しで範囲選択します
 
 カーソル移動早見表
-
+....
                                  Ctrl+Home
                                       
                                  Ctrl+PgUp
@@ -413,7 +413,7 @@ a|  前の単語に移動
                                       
                                      ↑
                                       
-        Home      Ctrl+←      ←    |    →      Ctrl+→      End
+        Home      Ctrl+<-      <-    |    ->      Ctrl+->      End
                                       
                                      ↓
                                       
@@ -424,6 +424,7 @@ a|  前の単語に移動
                                 Ctrl+PgDown
                                       
                                   Ctrl+End
+....
 kbd:[Ctrl] 押しながら矢印キーの動きはExcelのセル移動に少し似ています。
 
 ※選択中に kbd:[Ctrl+↑] , kbd:[Ctrl+↓] で行の入れ替え。 kbd:[Ctrl+→] , kbd:[Ctrl+←] でインデント増減(エディタのみ)。
