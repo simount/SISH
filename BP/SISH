@@ -8910,39 +8910,50 @@ Act.InsertChar:
 			GoSub StackEditCmd
 			Return
 		End Else
-			ch = Rec<Y>[X,1]
-			If ch = C Then
-				!! 同じ文字を入力した
-				X += 1
-				Return
-			End
-			If ch=" " Or ch="" Then
+			Line = Rec<Y>
+			If C=KAKKO.CHAR.LIST2[ki,1] Then
+				!! 文字列リテラル区切り
+				ch = Line[X,1]
+				If ch = C Then
+					!! 同じ文字を入力したなら偶数の場合はカーソル送り
+					Row = Y
+					Line = Rec<Row>
+					X += 1
+					GoSub ParseLine
+					If kakko2 Then
+						Return
+					End
+					X -= 1
+				End
+				InsBuffer = C
+				GoSub InsertLines
+				If C="\" And Line[X-2,1]#" " Then
+					InsBuffer = "" ;** \囲みの場合は前段にスペースが必要
+				End
+			End Else
 				!! 開く括弧のみ閉じる括弧を自動挿入する
 				InsBuffer = C
 				GoSub InsertLines
 				InsBuffer = KAKKO.CHAR.LIST2[ki,1]
-				If C="\" And Rec<Y>[X-2,1]#" " Then
-					InsBuffer = "" ;** \囲みの場合は前段にスペースが必要
-				End
-				If C <= '<' Then
+				If C = '<' Then
 					!! 前の単語とくっついている場合はダイナミックアレイとみなす
 					inX = X-2
 					inY = Y
 					GoSub GetWord.in
 					If Not(Word#"" And type=1) Then InsBuffer = ""
 				End
-				If InsBuffer Then
-					editCmd = ""
-					editCmd<1> = Y
-					editCmd<2> = X
-					editCmd<3> = ""
-					editCmd<4> = ""
-					editCmd<5> = InsBuffer
-					editCmd<6> = "1"
-					GoSub StackEditCmd
-				End
-				Return
 			End
+			If InsBuffer Then
+				editCmd = ""
+				editCmd<1> = Y
+				editCmd<2> = X
+				editCmd<3> = ""
+				editCmd<4> = ""
+				editCmd<5> = InsBuffer
+				editCmd<6> = "1"
+				GoSub StackEditCmd
+			End
+			Return
 		End
 	End Else
 		ki = Index(KAKKO.CHAR.LIST2,C,1)
@@ -11097,7 +11108,7 @@ $ELSE
 $ENDIF
 		cmdline<-1> = "RUN ":FileName:" ":ItemName
 	End Else If BufInfo<BI.PARSETYPE> = PARSE.PARA Then
-		rec = rec
+		rec = Rec
 		GoSub Conv.rec2cmdlines
 		cmdline = cmdlines
 	End
