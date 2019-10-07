@@ -654,6 +654,7 @@ Shell.KeyLoop.Start:
 		Lines = DCount(Rec,@FM)
 		A = Rec<Y>
 		cmdline = A[":",2,999]
+		If cmdline[1,1]=":" And Y=1 And System(11) Then cmdline = cmdline[2,BIG]
 		
 Set.Command.Editor:
 		
@@ -1756,7 +1757,7 @@ Run.Command.One:
 	** 空コマンドは無視
 	If cmdline = "" Then
 		GoSub CLEAR.FOR.PERFORM
-		GoTo Run.Command.Ending
+		Return
 	End
 
 	GoSub CLEAR.FOR.PERFORM
@@ -1981,6 +1982,10 @@ TAB.HOKAN:
 	A = Rec<Y>
 	cmdline = A[":",2,999]
 	curPos = X - Len(A[":",1,1]) - 1 ;** プロンプト分減らす
+	If cmdline[1,1]=":" And Y=1 And System(11) Then
+		cmdline = cmdline[2,BIG]
+		curPos += 1
+	End
 	cmdline = Convert(@VM," ",cmdline)
 	
 	GoSub Setting.WordInfo
@@ -4448,7 +4453,10 @@ DoEditCmd:
 				Redraw = REDRAW.ALL
 			End
 			
-			If curFlg Else
+			If Index(curFlg,",") Then
+				Y = curFlg[",",1,1]
+				X = curFlg[",",2,1]
+			End Else If curFlg Else
 				** 最終カーソル位置を反映する
 				Y = endY
 				X = endX
