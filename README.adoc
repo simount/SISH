@@ -404,25 +404,25 @@ a|  前の単語に移動
 カーソル移動早見表
 
                                  Ctrl+Home
-                                     
+                                      
                                  Ctrl+PgUp
-                                     
+                                      
                                     PgUp
-                                     
+                                      
                                    Ctrl+↑
-                                     
+                                      
                                      ↑
-                                     
+                                      
         Home      Ctrl+←      ←    |    →      Ctrl+→      End
-                                     
+                                      
                                      ↓
-                                     
+                                      
                                    Ctrl+↓
-                                     
+                                      
                                    PgDown
-                                     
+                                      
                                 Ctrl+PgDown
-                                     
+                                      
                                   Ctrl+End
 kbd:[Ctrl] 押しながら矢印キーの動きはExcelのセル移動に少し似ています。
 
