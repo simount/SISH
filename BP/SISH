@@ -19,7 +19,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.38.0 ]"
+Equ SISH.VERSION To "[ SISH v0.39.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -497,6 +497,12 @@ $ENDIF
 	StatusMessage = ""
 	ignoreCase = False
 
+$IFDEF U2__UNIVERSE
+	PROMPT.STR = ">"
+$ELSE
+	PROMPT.STR = ":"
+$ENDIF
+
 Shell.Input.Begin:
 
 	bFirstCurTop = @TRUE ;** カーソルを画面の最上部に初めての移動か
@@ -506,11 +512,9 @@ Shell.Input.Begin:
 $IFDEF U2__UNIVERSE
 	Perform "PTERM INTR ^Q"
 	assign 0 to system(1005)
-	PROMPT.STR = ">"
 $ELSE
 	x = PTERM(3,28)
 	x = PTERM(4,@FALSE)
-	PROMPT.STR = ":"
 	
 	!! COMO中ならコマンド入力中はサスペンドにする
 	IF SYSTEM(1033) AND NOT(SYSTEM(1034)) THEN
@@ -593,7 +597,7 @@ $ELSE
 					cond = (cmdline And cmdline[1,1] <> ' ' And (retCode >= 0 Or retCode = -15 Or retCode = -7))
 $ENDIF
 					If cond Then
-						cmdline = Trim(cmdline)
+						cmdline = Convert(@VM,CHAR(10),Trim(cmdline))
 						Find cmdline In cmdStack Setting pos Then
 						End Else
 							cmdStack<-1> = cmdline ;** 重複を省いて追加
@@ -634,9 +638,16 @@ $ENDIF
 	prevY = 1
 	prevDP_Y = 1
 	prevX = 1
-	Rec = "si:"
+	GoSub CMDLINE2REC
 	prevRec = Rec
 	keepSelection	=@False
+	
+	!! 実行完了後にエディタを開く
+	If bAutoEditor Then
+		bAutoEditor = @FALSE
+		GoTo Launch.Editor
+	End
+
 	
 *
 * キータイプのループ
@@ -652,15 +663,9 @@ Shell.KeyLoop.Start:
 		End
 		
 		Lines = DCount(Rec,@FM)
-		A = Rec<Y>
-		cmdline = A[":",2,999]
-		If cmdline[1,1]=":" And Y=1 And System(11) Then cmdline = cmdline[2,BIG]
 		
 Set.Command.Editor:
-		
-		GoSub GET.PROMPTSTR
-		Rec<Y> = prmptStr:cmdline
-		
+				
 		** --------------------------
 		** X表示位置の計算
 		** --------------------------
@@ -672,13 +677,13 @@ Set.Command.Editor:
 			X = outX
 		End
 		
-		If X <= Len(prmptStr) Then
+		If X <= prmptLen Then
 			!! プロンプト内にカーソルを入れない処理
 			If prevY+1=Y Then
 				Y -= 1
 				X = Len(Rec<Y>)+1
 			End Else
-				X = Len(prmptStr)+1
+				X = prmptLen+1
 			End
 		End Else If X >= Len(Rec<Y>)+1 Then
 			X = Len(Rec<Y>)+1
@@ -755,9 +760,9 @@ Shell.KeyLoop.Bef.GetKey:
 				If Y<1 Then
 					!! 上の履歴に切り替える
 					GoSub GET.CMDLINES
+					GoSub Upd.CmdStackPage
 					GoSub ACTION.CMDSTACK.NEXT
-					Rec = "si:":cmdline
-					GoSub InitBuf
+					GoSub CMDLINE2REC
 				End
 			Case actNo = A.SEL_UP
 				If BufInfo<BI.BLOCKSTART,2>=1 Or BufInfo<BI.BLOCKEND,2>=1 Then
@@ -808,11 +813,11 @@ Shell.KeyLoop.Bef.GetKey:
 								Y = 1
 								!! 履歴を5つ戻る
 								GoSub GET.CMDLINES
+								GoSub Upd.CmdStackPage
 								For ii=1 To 5
 									GoSub ACTION.CMDSTACK.NEXT
 								Next ii
-								Rec = "si:":cmdline
-								GoSub InitBuf
+								GoSub CMDLINE2REC
 							End Else
 								!! コマンド行を上に5つ広げる
 								For ii=1 To 5
@@ -839,10 +844,12 @@ Shell.KeyLoop.Bef.GetKey:
 					!! 下の履歴に切り替える
 					If 1<cmdStackPos Then
 						GoSub GET.CMDLINES
+						GoSub Upd.CmdStackPage
 						GoSub ACTION.CMDSTACK.BACK
-						Rec = "si:":cmdline
-						GoSub InitBuf
-						X = 999
+						GoSub CMDLINE2REC
+						Y = Lines
+						X = Len(Rec(Y))+1
+						keepDP_X = 999
 					End Else
 						Y = Lines
 					End
@@ -918,12 +925,12 @@ Shell.KeyLoop.Bef.GetKey:
 							If actNo = A.NEXTSTMT Then
 								!! 履歴を5つ進む
 								GoSub GET.CMDLINES
+								GoSub Upd.CmdStackPage
 								For ii=1 To 5
 									Y = 2
 									GoSub ACTION.CMDSTACK.BACK
 								Next ii
-								Rec = "si:":cmdline
-								GoSub InitBuf
+								GoSub CMDLINE2REC
 							End Else
 								!! コマンド行を下に5つ広げる
 								For ii=1 To 5
@@ -946,22 +953,24 @@ Shell.KeyLoop.Bef.GetKey:
 				End
 			Case actNo = A.TOP
 				GoSub GET.CMDLINES
+				GoSub Upd.CmdStackPage
 				Loop
 					GoSub ACTION.CMDSTACK.NEXT
 					If cmdStackPos = DCount(cmdStack,@FM) - 1 Then Exit
 				Repeat
-				Rec = "si:":cmdline
-				GoSub InitBuf
+				GoSub CMDLINE2REC
 			Case actNo = A.BOTTOM
 				GoSub GET.CMDLINES
-				GoSub ACTION.CMDSTACK.BACK
-				cmdStackPos = 2
-				cmdline = ""
-				Y = 2
-				GoSub ACTION.CMDSTACK.BACK
-				Rec = "si:":cmdline
-				GoSub InitBuf
-				X = 999
+				GoSub Upd.CmdStackPage
+				cmdStackPos = 1
+				no = cmdStackPos
+				GoSub Get.Cmdline.From.StackPage
+				GoSub CMDLINE2REC
+				Y = Lines
+				X = Len(Rec(Y))+1
+				keepDP_X = 999
+			Case actNo = A.SEL_TOP ;** 無効
+			Case actNo = A.SEL_BOTTOM ;** 無効
 			Case actNo = A.COPY
 				If BufInfo<BI.BLOCKSTART,2>=1 Or BufInfo<BI.BLOCKEND,2>=1 Then
 					!! 行選択モード
@@ -975,7 +984,7 @@ Shell.KeyLoop.Bef.GetKey:
 				End
 			Case actNo = A.SEL_ALL
 				keepSelection = @True
-				A = Y:@VM:Len(prmptStr)+1
+				A = Y:@VM:prmptLen+1
 				B = Y:@VM:Len(Rec<Y>)+1
 				If BufInfo<BI.BLOCKSTART>=A  And BufInfo<BI.BLOCKEND>=B  Then
 					!! 全行選択
@@ -1072,9 +1081,23 @@ Shell.KeyLoop.Bef.GetKey:
 				bAutoCommand = @TRUE
 				
 			Case actNo = A.NEWLINE
-				If C # CTRL.M Then ;** Ctrl+Enterでコマンド内改行
-					InsBuffer = @VM
-					GoSub InsertLines
+				If C # CTRL.M Then ;** Ctrl+Enterでコマンドを改行する
+					editCmd = ""
+					If BufInfo<BI.BLOCKSTART> Then
+						** 選択中
+						editCmd<1> = BufInfo<BI.BLOCKEND, 1>
+						editCmd<2> = BufInfo<BI.BLOCKEND, 2>
+						editCmd<3> = BufInfo<BI.BLOCKSTART, 1>
+						editCmd<4> = BufInfo<BI.BLOCKSTART, 2>
+					End Else
+						editCmd<1> = Y
+						editCmd<2> = X
+						editCmd<3> = Y
+						editCmd<4> = Len(Rec<Y>)+1
+					End
+					editCmd<5> = CHAR(10):FMT(":",prmptLen:"R"):(If Rec<Y>[X,1] >< "" Then Rec<Y>[X,HUGE] Else "")
+					editCmd<6> = ""
+					GoSub StackEditCmd
 				End Else
 					GoSub GET.CMDLINES
 					GoSub GetSelBlock
@@ -1158,13 +1181,13 @@ Launch.Editor:
 					GoTo Set.Command.Editor
 				End Else
 					If actNo = A.BACKSPACE Or actNo = A.DELETE_BACKWORD Then
-						If X <= Len(prmptStr)+1 Then
-							!! 行頭なら行の削除を行う
-							If cmdStackPos = 1 And Y>1 Then
-								BufInfo<BI.BLOCKSTART> = Y:@VM:X
+						If X <= prmptLen+1 Then
+							If Y>1 Then
+								!! 行頭なら行の削除を行う
+								BufInfo<BI.BLOCKEND> = Y:@VM:X
 								Y -= 1
 								X = Len(Rec<Y>)+1
-								BufInfo<BI.BLOCKEND> = Y:@VM:X
+								BufInfo<BI.BLOCKSTART> = Y:@VM:X
 								GoSub Act.DelBackCh
 							End
 						End Else
@@ -1201,24 +1224,12 @@ Shell.KeyLoop.End:
 	
 GoTo Shell.KeyLoop.Start; * キー入力待ちに戻る
 
-GET.PROMPTSTR:
-	prmptStr = ""
-	prmptStr := "si"
-	If bInvert Then prmptStr = UpCase(prmptStr)
-	
-	!! インクリメンタルサーチ
-	If bIncSearch Then
-		prmptStr := bIncSearch:" `" :iSearchText:"'"
+GET.PROMPTLEN:
+	prmptLen = 3
+	If cmdStackPos>1 Then
+		prmptLen += Maximum(Len(cmdStackPos-1):@FM:2)
 	End
-
-	!! コマンドスタック位置表示
-	no = cmdStackPos-1-Y+1
-	If no > 0 Then
-		prmptStr := Fmt(no,"R%":Maximum(Len(no):@FM:2))
-	End
-	prmptStr := PROMPT.STR
-	If System(11) Then prmptStr := PROMPT.STR ;** アクティブな選択リストあり
-	
+	If System(11) Then prmptLen += 1
 	Return
 
 GET.CMDLINES:
@@ -1226,7 +1237,9 @@ GET.CMDLINES:
 	cmdline = Rec<1>[":",2,999]
 	If cmdline[1,1]=":" Then cmdline = cmdline[2,BIG]
 	For i=2 To Lines
-		cmdline<-1> = Rec<i>[":",2,999]
+		a = Rec<i>[":",2,999]
+		If a[1,1]=":" Then a = a[2,BIG]
+		cmdline<-1> = a
 	Next i
 	
 	Return
@@ -1239,11 +1252,21 @@ CmdRow.Inc.Up:
 	If Y<1 Then
 		!! 枠を増やす
 		cmdStackPos += 1
-		GoSub GET.PROMPTSTR
+		prev.prmptLen = prmptLen
+		GoSub GET.PROMPTLEN
+		If prev.prmptLen # prmptLen Then
+			!! Cancel
+			cmdStackPos -= 1
+			prmptLen = prev.prmptLen
+			Return
+		End
 		Y = 1
 		X = 1
-		InsBuffer = prmptStr:cmdStack<cmdStackPos>:CHAR(10)
-		tmpY = BufInfo<BI.BLOCKSTART,1>
+		no = cmdStackPos
+		GoSub Get.Cmdline.From.StackPage
+		GoSub CMDLINE2TEMP
+		InsBuffer = Temp:@FM
+		tmpY = BufInfo<BI.BLOCKSTART,1>+cnt
 		BufInfo<BI.BLOCKSTART> = ""
 		GoSub InsertLines
 		If tmpY=1 Then tmpY = 2
@@ -1270,9 +1293,19 @@ CmdRow.Inc.Down:
 	keepSelection = @True
 	If Y>Lines Then
 		!! 下の枠を増やす
-		GoSub GET.PROMPTSTR
-		A = cmdStackPos-Lines
-		Rec<-1> = If A > 1 Then prmptStr:cmdStack<A> Else prmptStr
+		cmdStackPos -= 1
+		prev.prmptLen = prmptLen
+		GoSub GET.PROMPTLEN
+		If prev.prmptLen # prmptLen Then
+			!! Cancel
+			cmdStackPos += 1
+			prmptLen = prev.prmptLen
+			Return
+		End
+		no = cmdStackPos
+		GoSub Get.Cmdline.From.StackPage
+		GoSub CMDLINE2TEMP
+		Rec<-1> = Temp
 	End
 	If BufInfo<BI.BLOCKSTART,1> <= Y Then
 		BufInfo<BI.BLOCKEND> = Y+1:@VM:1
@@ -1315,7 +1348,7 @@ AutoTermSize:
 * コマンドライン描画
 *---------------------
 Create.CmdDraw:
-	!! 描画処理
+	
 	cmdDraw = "" ;** 描画構築済み
 	
 	If BufInfo<BI.BLOCKSTART> Then
@@ -1368,23 +1401,24 @@ Create.CmdDraw:
 		Line.len = Len(Line)
 		tmpDX = Index(Line,":")
 		
-		If bIncSearch Then
-			cmdDraw := FG.BASE03
-			cmdDraw := If bIncSearch="R" Then "↑" Else "↓"
-			cmdDraw := @(2):"`":iSearchText:"'"
-		End
-		cmdDraw := HI.SHELL.ON
-		cmdDraw := If bInvert Then UpCase("si") Else "si"
-		no = cmdStackPos-1-Row+1
-		If no > 0 Then
-			cmdDraw := Fmt(no,"R%":Maximum(Len(no):@FM:2))
+		If Row=1 Then
+			If bIncSearch Then
+				cmdDraw := FG.BASE03
+				cmdDraw := If bIncSearch="R" Then "↑" Else "↓"
+				cmdDraw := @(2):"`":iSearchText:"'"
+			End
+			cmdDraw := HI.SHELL.ON
+			If System(11) Then cmdDraw := "#"
+			cmdDraw := If bInvert Then UpCase("si") Else "si"
+			cmdDraw := MatchField(Line[1,tmpDX],"...0N:",2)
+		End Else
+			If bIncSearch Then
+				cmdDraw := Str(" ",Len(iSearchText)+4)
+			End
+			cmdDraw := HI.SHELL.ON
+			cmdDraw := Line[1,tmpDX-1]
 		End
 		cmdDraw := PROMPT.STR
-		If Row=1 And System(11) Then
-			cmdDraw := PROMPT.STR
-			tmpDX += 1
-		End
-		
 		cmdDraw := HI.SHELL.OFF
 		tmpDX += 1
 		For i=tmpDX To Line.len+1
@@ -1555,6 +1589,8 @@ Run.Command:
 		** 補完候補表示していたらアプリケーションモードから戻す
 		GoSub BackAltScreenBuf
 	End
+	crtBuff := @(0):@(IT$CLEOS)
+	Crt crtBuff:
 	
 	cmdlines = "" ;** 複数コマンド
 	If Count(cmdline,@FM)=0 Then
@@ -1669,30 +1705,25 @@ Run.Command:
 		cmd.cnt = DCount(cmdlines,@FM)
 		For cmd.i=1 To cmd.cnt
 			cmdline = cmdlines<cmd.i>
-			!! 先頭が空文字でなければコマンドスタックの更新
-			If cmdline[1,1] <> ' ' Then
-				GoSub CmdStack.Push
-			End
 			a = UpCase(TrimF(cmdline)[" ",1,1])
 			Find a In Convert(",",@FM,"LOOP,REPEAT,GO,$ECHO") Then
 				flg = @True ;** 制御文
-				Continue
+				Exit
 			End
-			If a[1]=":" Then
-				flg = @True ;** ラベル
-				Continue
+			If a[1]=":" Or cmdline[1]="_" Then
+				flg = @True ;** ラベルか複数行コマンド
+				Exit
 			End
 		Next cmd.i
+		cmdline = cmdlines
 		If flg Then
 			!! パラグラフに変換
-			cmdline = cmdlines
 			cmdlines = ""
 		End
-	End Else
-		!! 先頭が空文字でなければコマンドスタックの更新
-		If cmdline[1,1] <> ' ' Then
-			GoSub CmdStack.Push
-		End
+	End
+	!! 先頭が空文字でなければコマンドスタックの更新
+	If cmdline[1,1] <> ' ' Then
+		GoSub CmdStack.Push
 	End
 	
 	bFirstCurTop = @TRUE
@@ -1703,7 +1734,19 @@ $IFNDEF U2__UNIVERSE
 		EXECUTE "COMO RESUME"
 	END
 $ENDIF
-	
+
+	** Ctrl+C のIntruputを戻す
+	** 自動ページングをON
+$IFDEF U2__UNIVERSE
+	Perform "PTERM INTR ^C"
+	assign 1 to system(1005)
+$ELSE
+	x = PTERM(3,3)
+	x = PTERM(4,@TRUE)
+$ENDIF
+
+	@USER.RETURN.CODE = 999999999
+
 	** VOCファイル一度閉じる
 	Close VOC
 
@@ -1713,9 +1756,12 @@ $ENDIF
 			cmdline = cmdlines<cmd.i>
 			GoSub Run.Command.One
 		Next
+		cmdline = cmdlines
 	End Else
 		GoSub Run.Command.One
 	End
+	
+	GoSub Write.Stack.log
 	
 	** VOCファイルを開く
 	Open 'VOC' To VOC Else Abort
@@ -1738,9 +1784,6 @@ $IFNDEF U2__UNIVERSE
 	If msgs THEN PRINT CONVERT(@FM,CHAR(10),msgs)
 $ENDIF
 
-	!! 実行完了後にエディタを開く
-	If bAutoEditor Then bAutoEditor = @FALSE; GoTo Launch.Editor
-
 	GoTo Shell.Input.Begin ;* キーループに戻る
 
 
@@ -1752,26 +1795,25 @@ Run.Command.One:
 	** コマンド行を出力(ECHO)
 	If Index(cmdline,@FM)=0 Then
 		crtBuff = BG.BASE2:HI.SHELL.ON:PROMPT.STR:HI.SHELL.OFF:Change(cmdline,@VM,CRLF)
+	End Else
+		crtBuff = ""
 	End
+	
+	Crt crtBuff ;** 改行
 	
 	** 空コマンドは無視
 	If cmdline = "" Then
-		GoSub CLEAR.FOR.PERFORM
 		Return
 	End
-
-	GoSub CLEAR.FOR.PERFORM
 
 	verb = TRIMF(cmdline[" ",1,1])
 	If verb = "READ.BUFFER" Then
 		!! ファイルをバッファにリードする
 		GoSub READ.BUFFER
-		GoSub Write.Stack.log
 		Return
 	End Else If verb = "WRITE.BUFFER" Then
 		!! バッファの内容をファイルにライトする
 		GoSub WRITE.BUFFER
-		GoSub Write.Stack.log
 		Return
 	End Else If verb = "TERM" Then
 		IF @TERM.TYPE = 'msvt' AND cmdline MATCHES "...1N0N..." THEN
@@ -1780,22 +1822,10 @@ Run.Command.One:
 	End
 
 	!! 普通のコマンド起動
-	
-	** Ctrl+C のIntruputを戻す
-	** 自動ページングをON
-$IFDEF U2__UNIVERSE
-	Perform "PTERM INTR ^C"
-	assign 1 to system(1005)
-$ELSE
-	x = PTERM(3,3)
-	x = PTERM(4,@TRUE)
-$ENDIF
-
+		
 	!! 実行前の端末サイズ
 	prevCrt = @CRTHIGH:@CRTWIDE
 
-	@USER.RETURN.CODE = 999999999
-	
 	If bTimer Then
 		!! 時間計測開始
 		startTime = Time()
@@ -1838,8 +1868,6 @@ $ENDIF
 		Crt CSI:"8;":@CRTHIGH:";":@CRTWIDE:"t":
 	End
 	
-	GoSub Write.Stack.log
-
 	Return
 
 Write.Stack.log:
@@ -1852,11 +1880,8 @@ $ENDIF
 		retCode = (If @USER.RETURN.CODE = 999999999 Then @SYSTEM.RETURN.CODE Else @USER.RETURN.CODE)
 		Seek fpStack, 0, 2 Else Abort "Seek Stack Log Error"
 		dt = OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS")
-		cnt = DCount(cmdline,@FM)
-		For i=1 To cnt
-			line = dt:" ":cmdline<i>:@VM:retCode
-			WriteSeq line To fpStack On Error Print "Cannot Write Stack Log -> ":stackPath Else ;
-		Next i
+		line = dt:" ":Convert(@FM,@VM,cmdline):@VM:retCode
+		WriteSeq line To fpStack On Error Print "Cannot Write Stack Log -> ":stackPath Else ;
 		CloseSeq fpStack
 	End
 
@@ -1982,11 +2007,7 @@ TAB.HOKAN:
 	A = Rec<Y>
 	cmdline = A[":",2,999]
 	curPos = X - Len(A[":",1,1]) - 1 ;** プロンプト分減らす
-	If cmdline[1,1]=":" And Y=1 And System(11) Then
-		cmdline = cmdline[2,BIG]
-		curPos += 1
-	End
-	cmdline = Convert(@VM," ",cmdline)
+	cmdline = Convert(CHAR(10)," ",cmdline)
 	
 	GoSub Setting.WordInfo
 	
@@ -2441,9 +2462,6 @@ CmdHist.Candidate:
 	bIncSearch = ""
 	iSearchText = ""
 	
-	GoSub GET.PROMPTSTR
-	Rec = prmptStr:Rec[":",2,999999]
-	
 	crtBuff = ""
 	crtBuff := SGR.ALL.OFF
 	GoSub Create.CmdDraw
@@ -2456,7 +2474,7 @@ CmdHist.Candidate:
 	cmdStack.len = DCount(cmdStack,@FM)
 	no.fmt = Len(cmdStack.len):"R"
 	For i = cmdStack.len To 2 Step -1
-		choiceList<-1> = Fmt((i-1),no.fmt):"  ":Convert(@VM," ",cmdStack<i>):@VM:i
+		choiceList<-1> = Fmt((i-1),no.fmt):"  ":Change(Change(cmdStack<i>,"_":CHAR(10)," "),CHAR(10)," :"):@VM:i
 	Next i
 	choiceNo = cmdStack.len - cmdStackPos + 1
 	title = "Cmd Hist"
@@ -2478,7 +2496,7 @@ CmdHist.Candidate:
 			Case actNo = A.NEWLINE ;** 決定
 				GoSub CUR.TOP.OF.SCREEN
 				Crt @(winX,0):
-				no = choiceSelection<1,2>-1
+				topos = choiceSelection<1,2>-1
 				GoTo ACTION.CMDSTACK.GOTO.impl
 		End Case
 		
@@ -2964,36 +2982,67 @@ $ENDIF
 	** Shellを抜ける
 	Stop
 
+CMDLINE2REC:
+	GoSub GET.PROMPTLEN
+	no = cmdStackPos
+	GoSub CMDLINE2TEMP
+	Rec = Temp
+	Lines = cnt
+	GoSub InitBuf
+	Return
+
+CMDLINE2TEMP:
+	a = Convert(CHAR(10),@FM,cmdline)
+	If no=1 Then
+		Temp = Fmt("si:",prmptLen:"R"):a<1>
+	End Else
+		Temp = Fmt(no-1,prmptLen:"R%":Maximum(Len(no-1):@FM:2):":"):a<1>
+	End
+	cnt = DCount(a,@FM)
+	For i=2 To cnt
+		Temp := @FM:Str(" ",prmptLen-1):":":a<i>
+	Next i
+	Return
+
+Upd.CmdStackPage:
+	no = cmdStackPos
+	If Trim(cmdline)[1,1] <> "." Then
+		cnt = DCount(Rec,@FM)
+		For i=1 To cnt
+			Line = Rec<i>
+			If cmdStackPos=1 Then
+				cmdStackPage<1> = Convert(@FM,CHAR(10),cmdline<i>)
+			End Else
+				a = MatchField(Line,"...0N:...",2)
+				If a#"" Then
+					no = Int(a)+1
+					cmdStackPage<no> = cmdline<i>
+				End Else
+					cmdStackPage<no> := CHAR(10):cmdline<i>
+				End
+			End
+		Next i
+	End
+	Return
+
+Get.Cmdline.From.StackPage:
+	If DCount(cmdStackPage,@FM) < no Then
+		If cmdStackPage<no> = "" Then
+			cmdStackPage<no> = cmdStack<no>
+		End
+	End
+	cmdline = cmdStackPage<no>
+	Return
+
 *--------------------------------
 * コマンドスタック進む Action
 *--------------------------------
 ACTION.CMDSTACK.NEXT:
 	
 	If DCount(cmdStack,@FM) > cmdStackPos Then
-		If Trim(cmdline)[1,1] <> "." Then
-			cnt = DCount(cmdline,@FM)
-			If cmdStackPos = 1 Then
-				If cnt=0 Then
-					cmdStackPage<1> = ""
-				End Else
-					cmdStackPage<1> = cmdline<1>
-					For i=2 To cnt
-						cmdStackPage<1> := @VM:"si:":cmdline<i> ;** 現在行の保存
-					Next i
-				End
-			End Else
-				For i=1 To cnt
-					cmdStackPage<cmdStackPos-i+1> = cmdline<i> ;** 現在行の保存
-				Next i
-			End
-		End
 		cmdStackPos += 1
-		If DCount(cmdStackPage,@FM) < cmdStackPos Then
-			If cmdStackPage<cmdStackPos> = "" Then
-				cmdStackPage<cmdStackPos> = cmdStack<cmdStackPos>
-			End
-		End
-		cmdline = cmdStackPage<cmdStackPos>
+		no = cmdStackPos
+		GoSub Get.Cmdline.From.StackPage
 	End
 	
 	Return
@@ -3004,15 +3053,9 @@ ACTION.CMDSTACK.NEXT:
 ACTION.CMDSTACK.BACK:
 	
 	If 1<cmdStackPos Then
-		If Trim(cmdline)[1,1] <> "." Then
-			cnt = DCount(cmdline,@FM)
-			For i=1 To cnt
-				cmdStackPage<cmdStackPos-i+1> = cmdline<i> ;** 現在行の保存
-			Next i
-		End
-		cmdStackPos = cmdStackPos-Y+1
-		cmdline = cmdStackPage<cmdStackPos>
-		cmdline = Change(cmdline,@VM:"si:",@FM:"si:") ;** 複数コマンド
+		cmdStackPos = no-1
+		no = cmdStackPos
+		GoSub Get.Cmdline.From.StackPage
 	End
 	
 	Return
@@ -3099,6 +3142,8 @@ ACTION.CMDSTACK.LIST:
 	prevListStackCmd = cmdline
 	
 	!! 現在行の調整
+	GoSub GET.CMDLINES
+	GoSub Upd.CmdStackPage
 	GoSub ACTION.CMDSTACK.NEXT
 	GoSub ACTION.CMDSTACK.BACK
 	
@@ -3108,19 +3153,19 @@ ACTION.CMDSTACK.LIST:
 * コマンドスタックジャンプ Action
 *--------------------------------
 ACTION.CMDSTACK.GOTO:
-	no = MatchField(UpCase(cmdline),"'.G'0N...",2)
+	topos = MatchField(UpCase(cmdline),"'.G'0N...",2)
 ACTION.CMDSTACK.GOTO.impl:
-	If no <> "" And DCount(cmdStack,@FM) > no + 1 Then
+	If topos <> "" And DCount(cmdStack,@FM) > topos + 1 Then
 		GoSub GET.CMDLINES
+		GoSub Upd.CmdStackPage
 		cmdStackPos = 1
 		Loop
 			GoSub ACTION.CMDSTACK.NEXT
-			If cmdStackPos = no + 1 Then Exit
+			If cmdStackPos = topos + 1 Then Exit
 		Repeat
 	End
 	cmdline = cmdStackPage<cmdStackPos>
-	Rec = "si:":cmdline
-	GoSub InitBuf
+	GoSub CMDLINE2REC
 	GoTo Set.Command.Editor
 
 *--------------------------------
@@ -3129,9 +3174,9 @@ ACTION.CMDSTACK.GOTO.impl:
 ACTION.CMDSTACK.INC.SEARCH:
 	
 	cmdline = cmdStackPage<cmdStackPos>
-	Rec = "si:":cmdline
-	GoSub InitBuf
+	GoSub CMDLINE2REC
 	GoSub GET.CMDLINES
+	GoSub Upd.CmdStackPage
 	
 	If iSearchText Then
 		If bIncSearch = "R" Then
@@ -3160,14 +3205,12 @@ ACTION.CMDSTACK.INC.SEARCH:
 				GoSub ACTION.CMDSTACK.BACK
 			Repeat
 		End
-		Rec = "si:":cmdline
-		GoSub InitBuf
+		GoSub CMDLINE2REC
 	End Else
 		GoSub GET.CMDLINES
 		cmdline = cmdline<Y>
 		cmdStackPos = cmdStackPos+Y-1
-		Rec = "si:":cmdline
-		GoSub InitBuf
+		GoSub CMDLINE2REC
 		Y = 1
 	End
 	
@@ -3401,16 +3444,13 @@ ACTION.CMDSTACK.CHANGE:
 
 * コマンドスタックにつむ
 CmdStack.Push:
-	cnt =  DCount(cmdline,@FM)
-	For i = 1 To cnt
-		cmd = cmdline<i>
-		Find cmd In cmdStack Setting pos Then
-			** 存在するので上位に持ってくる為に削除
-			Del cmdStack<pos>
-		End
-		cmdStack<1> = cmd
-		Ins "<NEWLINE>" Before cmdStack<1>
-	Next i
+	cmd = Convert(@FM,CHAR(10),cmdline)
+	Find cmd In cmdStack Setting pos Then
+		** 存在するので上位に持ってくる為に削除
+		Del cmdStack<pos>
+	End
+	cmdStack<1> = cmd
+	Ins "<NEWLINE>" Before cmdStack<1>
 	cmdStack = cmdStack[@FM,1,CMD.STACK.SIZE]
 	cmdStackPage = cmdStackPage[@FM,1,CMD.STACK.SIZE]
 	Return
@@ -3553,11 +3593,6 @@ AUTO.COMPLATE:
 		While ch <> ""
 	Repeat
 	
-Return
-
-CLEAR.FOR.PERFORM:
-	Crt crtBuff ;** 改行
-	Crt @(IT$CLEOS):
 Return
 
 ** -----------------------------------
@@ -5686,6 +5721,12 @@ Draw.Editor:
 	
 	Lines = If Rec = "" Then 1 Else DCount(Rec,@fm)
 	
+	If Y >= Lines Then
+		Y = Lines
+	End Else If Y < 1 Then
+		Y = 1
+	End
+	
 	If prevY >< Y Then moveY = True
 	
 	** --------------------------
@@ -5728,7 +5769,6 @@ Draw.Editor:
 	** --------------------------
 	** Yスクロール位置調整
 	** --------------------------
-	If Y >= Lines Then Y = Lines
 	If prevY >< Y Then
 		tmpY = Top + SCROLLMERGINE
 		If Y < tmpY Then
@@ -6612,7 +6652,7 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 			Old = ""
 			in.selection = @True
 		End
-
+		
 		cc = Line[K,1]
 		ch = Mask[K,1]
 		If cc = Char(9) Then
@@ -6684,7 +6724,7 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 					Case ch = SI.SMK
 						PLine := HI.SMK.ON
 					Case ch = SI.DIRECTIVE
-						PLine := HI.DIR.ON
+						If Not(in.selection) Then PLine := HI.DIR.ON
 				End case
 				Old = Mask[K,1]
 			End
@@ -8935,13 +8975,21 @@ Act.InsertChar:
 				End
 				InsBuffer = C
 				GoSub InsertLines
+				ch = Line[X-1,1]
+				If Not(ch="" Or ch=" ") Then
+					Return ;** 末尾と空白の前以外は閉じ括弧を追加しない
+				End
 				If C="\" And Line[X-2,1]#" " Then
-					InsBuffer = "" ;** \囲みの場合は前段にスペースが必要
+					Return ;** \囲みの場合は前段にスペースが必要
 				End
 			End Else
 				!! 開く括弧のみ閉じる括弧を自動挿入する
 				InsBuffer = C
 				GoSub InsertLines
+				ch = Line[X-1,1]
+				If Not(ch="" Or Index(", ~=+-/*:#",ch)) Then
+					Return
+				End
 				InsBuffer = KAKKO.CHAR.LIST2[ki,1]
 				If C = '<' Then
 					!! 前の単語とくっついている場合はダイナミックアレイとみなす
@@ -8951,16 +8999,14 @@ Act.InsertChar:
 					If Not(Word#"" And type=1) Then InsBuffer = ""
 				End
 			End
-			If InsBuffer Then
-				editCmd = ""
-				editCmd<1> = Y
-				editCmd<2> = X
-				editCmd<3> = ""
-				editCmd<4> = ""
-				editCmd<5> = InsBuffer
-				editCmd<6> = "1"
-				GoSub StackEditCmd
-			End
+			editCmd = ""
+			editCmd<1> = Y
+			editCmd<2> = X
+			editCmd<3> = ""
+			editCmd<4> = ""
+			editCmd<5> = InsBuffer
+			editCmd<6> = "1"
+			GoSub StackEditCmd
 			Return
 		End
 	End Else
@@ -9448,10 +9494,11 @@ Act.ShowOutline:
 			Case actNo = A.NEWLINE
 				CurBuf = prevCurBuf
 				If choiceSelection Then
+					BufInfo<BI.BLOCKSTART> = ""
+					BufInfo<BI.BLOCKEND> = ""
 					GoSub StackJumpHistory
 					Y = choiceSelection<1,2>
 					Line = Rec<Y>
-					If Len(Line) > X Then X = 1
 					!! ハイライト単語があればそのX位置にする
 					If ignoreCase Then
 						Ix = Index(UpCase(Line),UpCase(Word))
@@ -9460,7 +9507,12 @@ Act.ShowOutline:
 						Ix = Index(Line,Word)
 						If Ix And Convert(PUNCS:".":@fm:@vm:@svm,"",Line[Ix-1,1])="" Then X = Ix
 					End
-					keepDP_X = DP_X
+					If Len(Line) < X Then
+						X = Len(Line)+1
+						keepDP_X = X
+					End Else
+						keepDP_X = DP_X
+					End
 					XOffSet = 1
 				End
 				Exit
@@ -10346,7 +10398,7 @@ Act.Paste:
 				End
 				If isCmd Then
 					!! コマンド
-					If i=1 And X <= Len(prmptStr)+1 Then
+					If i=1 And X <= prmptLen Then
 						!! 先頭が行頭の場合にのみそのまま入れる
 						InsBuffer := cl
 					End Else
