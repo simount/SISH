@@ -626,7 +626,6 @@ $ENDIF
 	cmdline = ""
 	CurBuf = CMD_BUF
 	BufInfo<BI.INDENTSIZE> = DEFAULT.INDENT
-	GoSub InitBuf
 
 	crtBuff = ""
 	C = "" ;** 入力文字
@@ -654,12 +653,18 @@ $ENDIF
 *
 Shell.KeyLoop.Start:
 	Loop
-	
+		
 		If bAutoCommand Then
 			crtBuff = ""
 			GoSub Clear.Cmdline.Crt
 			Crt crtBuff:
 			GoTo Run.Command
+		End
+		
+		If Rec="" Then
+			crtBuff = @(0):@(IT$CLEOS)
+			Crt crtBuff:
+			GoTo Shell.Input.Begin
 		End
 		
 		Lines = DCount(Rec,@FM)
@@ -1018,7 +1023,6 @@ Shell.KeyLoop.Bef.GetKey:
 						!! 行選択中のものを保存
 						GoSub GET.CMDLINES
 						cmdline = cmdline[@FM,blockStart<1>,blockEnd<1>-blockStart<1>]
-						cmdline = Change(cmdline,@VM,"_":@FM)
 						GoSub DoNew
 						Rec = "PA Created at ":OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS"):" by ":@LOGNAME:"@":@ACCOUNT
 						Rec<-1> = cmdline
@@ -1100,9 +1104,13 @@ Shell.KeyLoop.Bef.GetKey:
 					GoSub StackEditCmd
 				End Else
 					GoSub GET.CMDLINES
-					GoSub GetSelBlock
-					If blockStart<2>=1 Then
-						cmdline = cmdline[@FM,blockStart<1>,blockEnd<1>-blockStart<1>]
+					If BufInfo<BI.BLOCKSTART> Then
+						GoSub GetSelBlock
+						If blockStart<2>=1 Then
+							cmdline = cmdline[@FM,blockStart<1>,blockEnd<1>-blockStart<1>]
+						End Else
+							cmdline = cmdline<blockStart<1>>
+						End
 					End
 					bAutoCommand = @TRUE
 				End
@@ -1181,20 +1189,22 @@ Launch.Editor:
 					GoTo Set.Command.Editor
 				End Else
 					If actNo = A.BACKSPACE Or actNo = A.DELETE_BACKWORD Then
-						If X <= prmptLen+1 Then
-							If Y>1 Then
-								!! 行頭なら行の削除を行う
-								BufInfo<BI.BLOCKEND> = Y:@VM:X
-								Y -= 1
-								X = Len(Rec<Y>)+1
-								BufInfo<BI.BLOCKSTART> = Y:@VM:X
-								GoSub Act.DelBackCh
-							End
-						End Else
-							If actNo = A.DELETE_BACKWORD Then
-								GoSub Act.DelBackWord
+						If BufInfo<BI.BLOCKSTART,2>#1 Then
+							If X <= prmptLen+1 Then
+								If Y>1 Then
+									!! 行頭なら行の削除を行う
+									BufInfo<BI.BLOCKEND> = Y:@VM:X
+									Y -= 1
+									X = Len(Rec<Y>)+1
+									BufInfo<BI.BLOCKSTART> = Y:@VM:X
+									GoSub Act.DelBackCh
+								End
 							End Else
-								GoSub Act.DelBackCh
+								If actNo = A.DELETE_BACKWORD Then
+									GoSub Act.DelBackWord
+								End Else
+									GoSub Act.DelBackCh
+								End
 							End
 						End
 					End Else
@@ -1293,6 +1303,7 @@ CmdRow.Inc.Down:
 	keepSelection = @True
 	If Y>Lines Then
 		!! 下の枠を増やす
+		If cmdStackPos<=1 Then Return
 		cmdStackPos -= 1
 		prev.prmptLen = prmptLen
 		GoSub GET.PROMPTLEN
@@ -1696,7 +1707,7 @@ Run.Command:
 		
 	End Else
 		!! 複数コマンド
-		cmdlines = cmdline
+		cmdlines = TRIM(cmdline,@FM,"T")
 	End
 	
 	If cmdlines Then
@@ -3085,13 +3096,13 @@ ACTION.CMDSTACK.LIST:
 		Read rec From VOC,id Then
 			cmdline = "CT VOC ":id
 			bAutoCommand = @TRUE
-			Return
+			GoTo Shell.KeyLoop.Start
 		End Else
 			OPEN "PVOC,":@USER TO PVOC Then
 				Read rec From PVOC,id Then
 					cmdline = "CT PVOC,":@USER:" ":id
 					bAutoCommand = @TRUE
-					Return
+					GoTo Shell.KeyLoop.Start
 				End
 			End
 		End
@@ -3126,7 +3137,7 @@ ACTION.CMDSTACK.LIST:
 			Next j
 			If Not(flg) Then Continue
 		End
-		result<-1> = (i-1):@VM:Change(cmd,@VM,CRLF):@VM:modify
+		result<-1> = (i-1):@VM:cmd:@VM:modify
 		cnt += 1
 		If cmdStackList.DispCnt<2> < cnt Then Exit
 	Next
@@ -3135,7 +3146,12 @@ ACTION.CMDSTACK.LIST:
 	!! 画面出力
 	Print ""
 	For i = cnt To 1 Step -1
-		Print result<i,3>:FMT(result<i,1>,w:"R"):" ":result<i,2>
+		a = Convert(CHAR(10),@FM,result<i,2>)
+		Print result<i,3>:FMT(result<i,1>,w:"R"):" ":a<1>
+		cnt2 = DCount(a,@FM)
+		For i2=2 To cnt2
+			Print " ":Str(" ",w):" ":a<i2>
+		Next i2
 	Next i
 
 	!! コマンドを保存
@@ -10372,42 +10388,16 @@ Act.Paste:
 		If Index(tmp,@FM) Then
 			!! 複数行
 			InsBuffer = ""
-			tmp = Change(tmp,"_":@FM,@VM) ;** 行末アンダースコアを行内改行にする
 			cnt = DCount(tmp,@FM)
 			For i=1 To cnt
-				isCmd = @False
 				cl = tmp<i>
-				b = TrimF(cl)[" ",1,1]
-				If b#"" Then
-					If UpCase(b) Match "...:":@VM:"LOOP":@VM:"REPEAT":@VM:"$ECHO" Then
-						!! 制御文とラベル
-						isCmd = @True
-					End Else
-						Read rec From VOC,b Then
-							c = UpCase(rec<1>)
-							If c[1,1]="R" Then
-								rec = TRANS(rec<2>,rec<3>,1,"X")
-								c = UpCase(rec)
-							End
-							If c[1,1]="K" Then c = UpCase(rec<3>)
-							If c[1,1]="V" Or c[1]="S" Or c[1,2]="PA" Then
-								isCmd = @True
-							End
-						End
-					End
-				End
-				If isCmd Then
-					!! コマンド
-					If i=1 And X <= prmptLen Then
-						!! 先頭が行頭の場合にのみそのまま入れる
-						InsBuffer := cl
-					End Else
-						!! それ以外は必ず改行
-						InsBuffer := @FM:"si:":cl
-					End
+				!! コマンド
+				If i=1 And X <= prmptLen+1 Then
+					!! 先頭が行頭の場合にのみそのまま入れる
+					InsBuffer := cl
 				End Else
-					!! コマンド内改行
-					InsBuffer<DCount(InsBuffer,@FM),-1> = cl
+					!! それ以外は必ず改行
+					InsBuffer := @FM:FMT(":",prmptLen:"R"):cl
 				End
 			Next i
 		End
