@@ -2322,6 +2322,8 @@ $ENDIF
 		slist = slistAll
 		
 Complate.Common:
+		If slist="" Then GoTo TAB.HOKAN.END
+		
 		GoSub AUTO.COMPLATE
 		If bComprate And commonWord[1]#" " Then
 			If candidateMode#"" Then
