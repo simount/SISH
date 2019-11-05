@@ -9,7 +9,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.38.0
+**    v0.39.1
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -19,7 +19,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.39.0 ]"
+Equ SISH.VERSION To "[ SISH v0.39.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -832,13 +832,16 @@ Shell.KeyLoop.Bef.GetKey:
 							End
 						End Else
 							For ii=1 To 4
+								If Y<=1 Then
+									Y = 1
+									Exit
+								End
 								If actNo = A.PREVSTMT Then
 									GoSub Act.Up
 								End Else
 									Y -= 1
 									GoSub CmdRow.Inc.Up
 								End
-								If Y<=1 Then Exit
 							Next ii
 						End
 					End
@@ -945,13 +948,13 @@ Shell.KeyLoop.Bef.GetKey:
 							End
 						End Else
 							For ii=1 To 4
+								If Y>=Lines Then Exit
 								If actNo = A.NEXTSTMT Then
 									GoSub Act.Down
 								End Else
 									Y += 1
 									GoSub CmdRow.Inc.Down
 								End
-								If Y>=Lines Then Exit
 							Next ii
 						End
 					End
@@ -1733,7 +1736,7 @@ Run.Command:
 		End
 	End
 	!! 先頭が空文字でなければコマンドスタックの更新
-	If cmdline[1,1] <> ' ' Then
+	If cmdline#'' And cmdline[1,1] <> ' ' Then
 		GoSub CmdStack.Push
 	End
 	
@@ -1772,7 +1775,9 @@ $ENDIF
 		GoSub Run.Command.One
 	End
 	
-	GoSub Write.Stack.log
+	If cmdline#'' Then
+		GoSub Write.Stack.log
+	End
 	
 	** VOCファイルを開く
 	Open 'VOC' To VOC Else Abort
@@ -4270,7 +4275,7 @@ Catalog:
 			GoSub ShowWindow
 			Return
 		End Case
-	cmdline<-1> = " PAUSE"
+	cmdline<-1> = "PAUSE"
 	bAutoCommand = @TRUE
 	bAutoEditor = @TRUE
 	GoSub Act.Exit
@@ -11138,7 +11143,7 @@ $IFDEF U2__UNIVERSE
 $ELSE
 		cmdline = "BASIC ":FileName:" ":ItemName:" DEBUGGING CHANGED"
 $ENDIF
-		cmdline<-1> = " PAUSE"
+		cmdline<-1> = "PAUSE"
 		bAutoCommand = @TRUE
 		bAutoEditor = @true
 		GoSub Act.Exit
@@ -11164,7 +11169,7 @@ $ENDIF
 		GoSub Conv.rec2cmdlines
 		cmdline = cmdlines
 	End
-	cmdline<-1> = " PAUSE"
+	cmdline<-1> = "PAUSE"
 	bAutoCommand = @TRUE
 	bAutoEditor = @true
 	GoSub Act.Exit
