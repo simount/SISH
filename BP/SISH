@@ -647,7 +647,6 @@ $ENDIF
 		bAutoEditor = @FALSE
 		GoTo Launch.Editor
 	End
-
 	
 *
 * キータイプのループ
@@ -7881,10 +7880,11 @@ Act.Left:
 		GoSub GoToRangeStart
 		If prevPos <> Y:@FM:X Then Return ;** Go To Range Start Then Stop
 	End
-
+	
 	If X > 1 Then X -= 1 Else
 		If Y > 1 Then
 			Y -= 1 ; X = Len(Rec<Y>) + 1
+			prevY=""
 		End
 	End
 	Return
@@ -10556,7 +10556,9 @@ Act.AutoIndent:
 	line = Rec<Y-1>
 	GoSub GetIndentCnt
 	prev.indent = line[1,indentLen-1]
+	prev.indentCnt = indentCnt
 	adjustIndentCnt = indentCnt ;** 揃えるインデント数
+	
 
 	autoClosing = "" ;** 自動閉じ処理
 
@@ -10616,7 +10618,6 @@ Act.AutoIndent:
 				autoClosing = "next ":varName
 			End Else
 				autoClosing = "Next ":varName
-				
 			End
 		End
 	End
@@ -10635,7 +10636,7 @@ Act.AutoIndent:
 	editCmd<2> = 1
 	editCmd<3> = Y
 	editCmd<4> = indentLen 
-	editCmd<5> = prev.indent
+	editCmd<5> = prev.indent:Str(IndentCh,(adjustIndentCnt-prev.indentCnt))
 	editCmd<6> = ""
 	GoSub StackEditCmd
 	
