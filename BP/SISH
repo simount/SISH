@@ -2,6 +2,7 @@ PROGRAM SISH
 **========================================================================================
 **  FUNCTION
 **    SImount Shell (Beta)
+**    
 **    Operate like Unix Shell and modern Screen Editor
 **
 **    See. https://github.com/simount/SISH
@@ -9,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.39.1
+**    v0.39.2
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -19,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.39.1 ]"
+Equ SISH.VERSION To "[ SISH v0.39.2 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -5719,6 +5720,8 @@ Enters:
 		Crt CSI:"?25l":crtBuff:
 	End
 	
+	prevC = C ;** 前回の入力文字を保持
+	
 	GoSub GetKey
 	
 	crtBuff = ""
@@ -5768,7 +5771,7 @@ Draw.Editor:
 	NEXT I
 	
 	moveX = (prevX >< X)
-	If Not(moveY) And moveX Then
+	If prevY="" Or (Not(moveY) And moveX) Then
 		** X位置だけが動いた場合にkeepDP_Xを変える
 		keepDP_X = DP_X
 	End
@@ -8961,101 +8964,57 @@ Act.InsertChar:
 		moveChar = "" ;** モード解除
 	End
 	
-	ki = Index(KAKKO.CHAR.LIST1,C,1)
+	InsBuffer = C
+	curFlg = ""
+	ki = Index(KAKKO.CHAR.LIST2,C,1)
 	If ki Then
-		!! 入力文字が開き括弧である
+		!! 入力文字が閉じ括弧である
 		If BufInfo<BI.BLOCKSTART> Then
 			!! 選択範囲があればその前後に括弧を入れる
 			GoSub GET.SELECTION.STRING
-			!! 開く括弧
 			InsBuffer = KAKKO.CHAR.LIST1[ki,1]:selString:KAKKO.CHAR.LIST2[ki,1]
-			Y = blockStart<1>
-			X = blockStart<2>
-			editCmd = ""
-			editCmd<1> = blockEnd<1>
-			editCmd<2> = blockEnd<2>
-			editCmd<3> = blockStart<1>
-			editCmd<4> = blockStart<2>
-			editCmd<5> = InsBuffer
-			editCmd<6> = "1"
-			GoSub StackEditCmd
-			Return
-		End Else
-			Line = Rec<Y>
-			If C=KAKKO.CHAR.LIST2[ki,1] Then
-				!! 文字列リテラル区切り
-				ch = Line[X,1]
-				If ch = C Then
-					!! 同じ文字を入力したなら偶数の場合はカーソル送り
-					Row = Y
-					Line = Rec<Row>
-					X += 1
-					GoSub ParseLine
-					If kakko2 Then
-						Return
-					End
-					X -= 1
-				End
-				InsBuffer = C
-				GoSub InsertLines
-				ch = Line[X-1,1]
-				If Not(ch="" Or ch=" ") Then
-					Return ;** 末尾と空白の前以外は閉じ括弧を追加しない
-				End
-				If C="\" And Line[X-2,1]#" " Then
-					Return ;** \囲みの場合は前段にスペースが必要
-				End
-			End Else
-				!! 開く括弧のみ閉じる括弧を自動挿入する
-				InsBuffer = C
-				GoSub InsertLines
-				ch = Line[X-1,1]
-				If Not(ch="" Or Index(", ~=+-/*:#",ch)) Then
-					Return
-				End
-				InsBuffer = KAKKO.CHAR.LIST2[ki,1]
-				If C = '<' Then
-					!! 前の単語とくっついている場合はダイナミックアレイとみなす
-					inX = X-2
-					inY = Y
-					GoSub GetWord.in
-					If Not(Word#"" And type=1) Then InsBuffer = ""
-				End
-			End
-			editCmd = ""
-			editCmd<1> = Y
-			editCmd<2> = X
-			editCmd<3> = ""
-			editCmd<4> = ""
-			editCmd<5> = InsBuffer
-			editCmd<6> = "1"
-			GoSub StackEditCmd
-			Return
 		End
 	End Else
-		ki = Index(KAKKO.CHAR.LIST2,C,1)
+		ki = Index(KAKKO.CHAR.LIST1,C,1)
 		If ki Then
-			!! 入力文字が閉じ括弧である
+			!! 入力文字が開き括弧である
 			If BufInfo<BI.BLOCKSTART> Then
 				!! 選択範囲があればその前後に括弧を入れる
 				GoSub GET.SELECTION.STRING
+				!! 開く括弧
 				InsBuffer = KAKKO.CHAR.LIST1[ki,1]:selString:KAKKO.CHAR.LIST2[ki,1]
-				GoSub InsertLines
-				Return
-			End Else
-				ch = Rec<Y>[X,1]
-				If ch = C Then
-					!! 同じ文字を入力した
-					X += 1
-					Return
-				End
+				Y = blockStart<1>
+				X = blockStart<2>
+				curFlg = "1"
 			End
 		End
 	End
 
-	!! 文字挿入
-	InsBuffer = C
-	GoSub InsertLines
+	editCmd = ""
+	If BufInfo<BI.BLOCKSTART> Then
+		** 選択中
+		editCmd<1> = BufInfo<BI.BLOCKEND, 1>
+		editCmd<2> = BufInfo<BI.BLOCKEND, 2>
+		editCmd<3> = BufInfo<BI.BLOCKSTART, 1>
+		editCmd<4> = BufInfo<BI.BLOCKSTART, 2>
+		editCmd<5> = InsBuffer
+		editCmd<6> = curFlg
+	End Else
+		editCmd<1> = Y
+		editCmd<2> = X
+		If bOverlay Then
+			editCmd<3> = Y
+			editCmd<4> = X + (If X < Len(Rec<Y>) Then 1 Else 0)
+		End Else
+			editCmd<3> = ""
+			editCmd<4> = ""
+		End
+		editCmd<5> = InsBuffer
+		editCmd<6> = curFlg
+	End
+	
+	GoSub StackEditCmd
+	
 	Return
 
 * **************************************************************************
@@ -10596,6 +10555,7 @@ Act.AutoIndent:
 	!! 直前の行
 	line = Rec<Y-1>
 	GoSub GetIndentCnt
+	prev.indent = line[1,indentLen-1]
 	adjustIndentCnt = indentCnt ;** 揃えるインデント数
 
 	autoClosing = "" ;** 自動閉じ処理
@@ -10656,6 +10616,7 @@ Act.AutoIndent:
 				autoClosing = "next ":varName
 			End Else
 				autoClosing = "Next ":varName
+				
 			End
 		End
 	End
@@ -10663,10 +10624,9 @@ Act.AutoIndent:
 	!! 現在の行
 	line = Rec<Y>
 	GoSub GetIndentCnt
-	
 	!! インデント数が同じならスキップ
 	If adjustIndentCnt = indentCnt Then
- Return
+		Return
 	End
 	
 	!! インデント挿入
@@ -10675,7 +10635,7 @@ Act.AutoIndent:
 	editCmd<2> = 1
 	editCmd<3> = Y
 	editCmd<4> = indentLen 
-	editCmd<5> = Str(IndentCh,adjustIndentCnt)
+	editCmd<5> = prev.indent
 	editCmd<6> = ""
 	GoSub StackEditCmd
 	
@@ -10699,6 +10659,7 @@ Act.AutoIndent:
 				Exit
 			End
 		Next iY
+		
 		
 		nokoriStr = Rec<Y>[X,BIG]
 		
@@ -11532,6 +11493,13 @@ GetIndentCnt:
 	lineLen = Len(line)
 	indentCnt = 0
 	indentLen = 1
+	!! 行頭からのコメントは無視
+	Loop
+		ch = line[indentLen,1]
+		If ch = "" Or Not(Count("*!",ch)) Then Exit
+		indentLen += 1
+		indentCnt += 1
+	Repeat
 	Loop
 		ch = line[indentLen,1]
 		If ch > CHAR(32) Or ch = "" Then Exit
