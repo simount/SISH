@@ -5770,7 +5770,7 @@ Draw.Editor:
 	NEXT I
 	
 	moveX = (prevX >< X)
-	If prevY="" Or (Not(moveY) And moveX) Then
+	If keepDP_X=0 Or (Not(moveY) And moveX) Then
 		** X位置だけが動いた場合にkeepDP_Xを変える
 		keepDP_X = DP_X
 	End
@@ -7301,8 +7301,10 @@ SetupTokens:
 	AddKeyWord "ROLLBACK"
 	AddKeyWord "SELECT"
 	AddKeyWord "SETTING"
+	AddKeyWord "SILENT"
 	AddKeyWord "SSELECT"
 	AddKeyWord "STATUS"
+	AddKeyWord "STEP"
 	AddKeyWord "STOP"
 	AddKeyWord "SUBROUTINE"
 	AddKeyWord "THEN"
@@ -7883,8 +7885,9 @@ Act.Left:
 	
 	If X > 1 Then X -= 1 Else
 		If Y > 1 Then
+			prevY = Y
 			Y -= 1 ; X = Len(Rec<Y>) + 1
-			prevY=""
+			keepDP_X = 0
 		End
 	End
 	Return
