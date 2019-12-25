@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.39.2
+**    v0.40.0
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.39.2 ]"
+Equ SISH.VERSION To "[ SISH v0.40.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -1663,18 +1663,15 @@ Run.Command:
 						OPEN "PVOC,":@USER TO PVOC Then
 							a = Trim(cmdline)[' ',2,9999]
 							cmdline = "READ.BUFFER PVOC,":@USER:" ":a
-							bAutoEditor = @TRUE
 						End
 					End Else
 						a = Trim(cmdline)[' ',2,9999]
 						Read rec From VOC,a Then
 							cmdline = "READ.BUFFER VOC ":a
-							bAutoEditor = @TRUE
 						End
 					End
 					If cmdline Matches "READ.BUFFER..." Else 
 						cmdline = "READ.BUFFER":cmdline[3,9999]
-						bAutoEditor = @TRUE
 					End
 					X += 9
 				Case k = "O" ;** COMO出力
@@ -1773,6 +1770,10 @@ $ENDIF
 		cmdline = cmdlines
 	End Else
 		GoSub Run.Command.One
+		If cmdline[1,11]="READ.BUFFER" Then
+			!! 単発の場合は実行後にエディタ画面に遷移
+			bAutoEditor = @TRUE
+		End
 	End
 	
 	If cmdline#'' Then
@@ -2301,9 +2302,9 @@ $IFNDEF U2__UNIVERSE
 		End
 $ENDIF
 		
-		IF dictName="" Then
-			candidateMode="FILE" ;** 辞書未決定
-		End
+!		IF dictName="" Then
+!			candidateMode="FILE" ;** 辞書未決定
+!		End
 		
 		* 補完候補表示
 		* オートコンプリート
@@ -7038,10 +7039,8 @@ SaveAs:
 	End
 	
 	cmdline = "WRITE.BUFFER ":CurBuf:" ":BufInfo<BI.FILE>:" ":BufInfo<BI.ITEM>
-	CurBuf = CMD_BUF
-	cmdStackPos = 1
-	Rec = "si:":cmdline
-	X = 999
+	bAutoCommand = @TRUE
+	bAutoEditor = @true
 	GoSub Act.Exit
 	
 	Return
@@ -7250,6 +7249,8 @@ SetupTokens:
 	AddKeyWord "EQU"
 	AddKeyWord "EQUATE"
 	AddKeyWord "ERROR"
+	AddKeyWord "EVAL"
+	AddKeyWord "EVALUATE"
 	AddKeyWord "EXECUTE"
 	AddKeyWord "EXIT"
 	AddKeyWord "FIND"
@@ -7484,7 +7485,14 @@ ChangeBuf:
 	
 	keepDP_X = X
 	keepSelection = @TRUE
-
+	
+$IFNDEF U2__UNIVERSE
+	!! 現在バッファの環境変数を設定
+	CALL !SETVAR("@SISH.CBP",BufInfo<BI.PATHNAME>)
+	CALL !SETVAR("@SISH.CBF",BufInfo<BI.FILE>)
+	CALL !SETVAR("@SISH.CBI",BufInfo<BI.ITEM>)
+$ENDIF
+	
 	Return
 *--------------------------------------------------------------------------
 * SubstCommand
