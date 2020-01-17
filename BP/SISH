@@ -2935,10 +2935,15 @@ Get.SList.RECID:
 	** 1000件未満のファイルを補完対象とする
 	flatFile = ""
 	For wordPos = nowWordPos - 1 To 1 Step -1
-		Open words<wordPos> To fpFlat Then
+		IF words<wordPos-1> = "DICT" THEN
+			B = "DICT ":words<wordPos>
+		END ELSE
+			B = words<wordPos>
+		END
+		Open B To fpFlat Then
 			a = FileInfo(fpFlat,1015)
 			If a > 0 And a < 1000 Then
-				flatFile = words<wordPos>
+				flatFile = B
 				Exit
 			End
 		End
@@ -3814,14 +3819,17 @@ WRITE.BUFFER.impl:
 	End Else
 		!! 親バッファ保存モードではない
 		
-		FileName = Trim(cmdline)[" ",3,1]
+		pos = 3
+		FileName = Trim(cmdline)[" ",pos,1]
+		If UPCASE(FileName)="DICT" THEN pos+=1;FileName="DICT ":Trim(cmdline)[" ",pos,1]
 		If FileName="" Then FileName = BufInfo<BI.FILE>
 		If FileName = "" Then
 			GoSub GetFile
 			If FileName = "" Then Return
 		End
 		
-		ItemName = Trim(cmdline)[" ",4,1]
+		pos += 1
+		ItemName = Trim(cmdline)[" ",pos,1]
 		If ItemName = "" Then ItemName = BufInfo<BI.ITEM>
 		If ItemName = "" Then
 			A = "Item Name From '":FileName:"' ->"
@@ -4757,6 +4765,7 @@ $IFNDEF U2__UNIVERSE
 		Return
 	End
 $ENDIF
+
 	Open FileName To FL Else
 		StatusMessage = "Cannot Open ":FileName
 		Return
