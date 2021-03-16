@@ -90,7 +90,8 @@ Equ K.C_F10 To            "@[[21;5~"
 Equ K.A_F10 To            "@[[21;3~"
 Equ K.F11 To              "@[[23~"
 Equ K.C_F11 To            "@[[23;5~"
-Equ K.S_F11 To            "@[[23;2~"
+!Equ K.S_F11 To            "@[[23;2~"
+Equ K.C_S_F11 To          "@[[23;6~"
 Equ K.F12 To              "@[[24~"
 
 Equ K.C_1 To              "@[[1;5q"
@@ -220,7 +221,7 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.THEME>            = K.F11:" ":KEY.FUNCTION.11:" ":Char(138)
 	keySeq<A.CANCEL>           = K.ESC:" ":K.ESC:K.ESC
 	keySeq<A.FIT.TERM>         = K.F8:" ":Char(135)
-	keySeq<A.WORD_HOKAN>       = K.C_SPACE:" ":Char(174):" ":K.S_F11
+	keySeq<A.WORD_HOKAN>       = K.C_SPACE:" ":Char(174):" ":K.C_S_F11
 	keySeq<A.SEL_EXPAND>       = K.C_D
 	keySeq<A.NEWBUF>           = K.C_N
 	keySeq<A.RUN>              = K.F7:" ":Char(134)
@@ -239,10 +240,12 @@ IF @TTY = "console" AND @TERM.TYPE # "msvt" ELSE
 	A = BEL:ESC
 	THEME.COLOR.SETTINGS := ESC:"]4;0;rgb:00/2b/36":A:" "
 	THEME.COLOR.SETTINGS := ESC:"]4;10;rgb:07/36/42":A:" "
-	THEME.COLOR.SETTINGS := ESC:"]4;11;rgb:58/6e/75":A:" "
+!	THEME.COLOR.SETTINGS := ESC:"]4;11;rgb:58/6e/75":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;11;rgb:56/6a/71":A:" "
 	THEME.COLOR.SETTINGS := ESC:"]4;8;rgb:65/7b/83":A:" "
 	THEME.COLOR.SETTINGS := ESC:"]4;12;rgb:83/94/96":A:" "
-	THEME.COLOR.SETTINGS := ESC:"]4;7;rgb:93/a1/a1":A:" "
+!	THEME.COLOR.SETTINGS := ESC:"]4;7;rgb:93/a1/a1":A:" "
+	THEME.COLOR.SETTINGS := ESC:"]4;7;rgb:a1/a9/a9":A:" "
 	THEME.COLOR.SETTINGS := ESC:"]4;13;rgb:ee/e8/d5":A:" "
 	THEME.COLOR.SETTINGS := ESC:"]4;15;rgb:fd/f6/e3":A:" "
 	

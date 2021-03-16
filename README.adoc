@@ -80,8 +80,8 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
 QM Console (qm.exe) で動作します。以下のカスタマイズを行うとより使いやすくなります。
 
 [クリップボード貼り付け] +
-以下の `paste.exe` を system32 に配置すれば、貼り付けで画面が点滅する問題を回避できます。
-http://www.c3scripts.com/tutorials/msdos/paste.html
+以下の `win32yank.exe` を system32 に配置すれば、貼り付けで画面が点滅する問題を回避できます。
+https://github.com/equalsraf/win32yank
 
 ==== リモート接続 from Windows Client
 
@@ -632,6 +632,10 @@ https://myrica.estable.jp/
 
 
 == 更新履歴 ==
+
+=== 2021/03/16 - 0.41.0 ===
+- `[IMP]` 検索ボックスの両端にスペースを入れることで単語検索が可能になった
+- `[IMP]` paste.exeを.netに依存しないwin32yank.exeに変更
 
 === 2020/01/17 - 0.40.1 ===
 - `[BUG]` 辞書ファイルの場合に `@ID` の補完ができない問題を修正

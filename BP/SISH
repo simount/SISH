@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.40.0
+**    v0.41.0
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.40.0 ]"
+Equ SISH.VERSION To "[ SISH v0.40.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -402,11 +402,16 @@ Shell.Main:
 		
 		!! paste.exeを探す
 $IFNDEF U2__UNIVERSE
-		HAS.PASTE.EXE = @FALSE
+		HAS.PASTE.EXE = ""
 		If @TTY = 'console' Then
-			OS.Execute 'where /q paste.exe'
+			OS.Execute 'where /q win32yank.exe'
 			If OS.Error() = 0 Then
-				HAS.PASTE.EXE = @TRUE
+				HAS.PASTE.EXE = "win32yank -o"
+			End Else
+				OS.Execute 'where /q paste.exe'
+				If OS.Error() = 0 Then
+					HAS.PASTE.EXE = "paste.exe"
+				End
 			End
 		End
 $ENDIF
@@ -563,7 +568,7 @@ $ENDIF
 		** 前のパスと違っている時のみ実施する
 		prevPath = @PATH
 		prevAccount = @ACCOUNT
-		account = Convert(CHAR(92),'/',prevPath)
+		account = prevAccount
 		logname = @LOGNAME
 $IFNDEF U2__UNIVERSE
 		logname = @HOSTNAME:"\":logname
@@ -755,6 +760,68 @@ Shell.KeyLoop.Bef.GetKey:
 		Changed = False ;** コマンドラインの編集を感知する為
 		
 		keepSelection = @FALSE
+		
+		If bIncSearch Then
+INC.SEARCH.MODE:
+			!! インクリメンタル検索モード
+			BEGIN CASE
+				CASE actNo = A.TAB
+					GoSub CmdHist.Candidate
+					GoTo Shell.KeyLoop.End
+				CASE actNo = A.INSCHAR
+					iSearchText := C
+					stackPos = cmdStackPos
+					GoSub ACTION.CMDSTACK.INC.SEARCH
+					GoTo Set.Command.Editor
+				CASE actNo = A.BACKSPACE
+					If Len(iSearchText) > 0 Then
+						iSearchText = iSearchText[1,Len(iSearchText)-1]
+						stackPos = cmdStackPos
+						GoSub ACTION.CMDSTACK.INC.SEARCH
+						GoTo Set.Command.Editor
+					End
+					GoTo Shell.KeyLoop.End
+				CASE C = CTRL.R
+					!! コマンド履歴逆順インクリメンタルサーチ
+					If bIncSearch <> "R" Then
+						If bIncSearch = "" Then
+							GoSub GET.SELECTION.STRING
+							iSearchText = selString
+						End
+						bIncSearch = "R"
+						stackPos = cmdStackPos
+					End Else
+						stackPos = cmdStackPos
+						If bIncSearch#"" Then
+							cmdStackPos += 1
+						End
+					End
+					GoSub ACTION.CMDSTACK.INC.SEARCH
+					GoTo Shell.KeyLoop.End
+				CASE C = CTRL.F
+					!! コマンド履歴正順インクリメンタルサーチ
+					If bIncSearch <> "F" Then
+						If bIncSearch = "" Then
+							GoSub GET.SELECTION.STRING
+							iSearchText = selString
+						End
+						bIncSearch = "F"
+						stackPos = cmdStackPos
+					End Else
+						stackPos = cmdStackPos
+						If bIncSearch#"" Then
+							cmdStackPos -= 1
+						End
+					End
+					GoSub ACTION.CMDSTACK.INC.SEARCH
+					GoTo Shell.KeyLoop.End
+				Case actNo = A.NEWLINE
+				CASE 1
+					bIncSearch = ""
+					iSearchText = ""
+					GoTo Shell.KeyLoop.End
+			End Case
+		End 
 		
 		!!
 		!! キーハンドリング
@@ -1008,13 +1075,9 @@ Shell.KeyLoop.Bef.GetKey:
 				
 		** 文字入力系  
 			Case actNo = A.TAB
-				If bIncSearch Then
-					GoSub CmdHist.Candidate
-				End Else
-					candidateMode = "FLATREC"
-					filter = ""
-					GoSub TAB.HOKAN
-				End
+				candidateMode = "FLATREC"
+				filter = ""
+				GoSub TAB.HOKAN
 				
 			Case actNo = A.HELP
 				GoSub COMMAND.HELP
@@ -1045,38 +1108,10 @@ Shell.KeyLoop.Bef.GetKey:
 				GoSub ACTION.INPUT.PREV.EDITPATH
 				
 			Case C = CTRL.R
-				!! コマンド履歴逆順インクリメンタルサーチ
-				If bIncSearch <> "R" Then
-					If bIncSearch = "" Then
-						GoSub GET.SELECTION.STRING
-						iSearchText = selString
-					End
-					bIncSearch = "R"
-					stackPos = cmdStackPos
-				End Else
-					stackPos = cmdStackPos
-					If bIncSearch#"" Then
-						cmdStackPos += 1
-					End
-				End
-				GoSub ACTION.CMDSTACK.INC.SEARCH
+				GoTo INC.SEARCH.MODE
 				
 			Case C = CTRL.F
-				!! コマンド履歴正順インクリメンタルサーチ
-				If bIncSearch <> "F" Then
-					If bIncSearch = "" Then
-						GoSub GET.SELECTION.STRING
-						iSearchText = selString
-					End
-					bIncSearch = "F"
-					stackPos = cmdStackPos
-				End Else
-					stackPos = cmdStackPos
-					If bIncSearch#"" Then
-						cmdStackPos -= 1
-					End
-				End
-				GoSub ACTION.CMDSTACK.INC.SEARCH
+				GoTo INC.SEARCH.MODE
 				
 			Case C = CTRL.L
 				If cmdStackPos = 1 Then
@@ -1161,10 +1196,6 @@ Launch.Editor:
 					Crt crtBuff:
 					bFirstCurTop = @TRUE
 				End
-				If bIncSearch Then
-					bIncSearch = "" ;** 終了
-					iSearchText = ""
-				End
 				
 			Case 1
 				!! 共通処理
@@ -1174,44 +1205,27 @@ Launch.Editor:
 					C = Convert("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz","abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",C)
 				End
 				
-				If bIncSearch Then
-					!! インクリメンタルサーチモード
-					If actNo = A.INSCHAR Then
-						iSearchText := C
-					End Else If actNo = A.BACKSPACE Then
-						If Len(iSearchText) > 0 Then
-							iSearchText = iSearchText[1,Len(iSearchText)-1]
-						End
-					End Else
-						bIncSearch = "" ;** 終了
-						iSearchText = ""
-						GoTo Shell.KeyLoop.Start
-					End
-					stackPos = cmdStackPos
-					GoSub ACTION.CMDSTACK.INC.SEARCH
-					GoTo Set.Command.Editor
-				End Else
-					If actNo = A.BACKSPACE Or actNo = A.DELETE_BACKWORD Then
-						If BufInfo<BI.BLOCKSTART,2>#1 Then
-							If X <= prmptLen+1 Then
-								If Y>1 Then
-									!! 行頭なら行の削除を行う
-									BufInfo<BI.BLOCKEND> = Y:@VM:X
-									Y -= 1
-									X = Len(Rec<Y>)+1
-									BufInfo<BI.BLOCKSTART> = Y:@VM:X
-									GoSub Act.DelBackCh
-								End
+				If actNo = A.BACKSPACE Or actNo = A.DELETE_BACKWORD Then
+					If BufInfo<BI.BLOCKSTART,2>#1 Then
+						If X <= prmptLen+1 Then
+							If Y>1 Then
+								!! 行頭なら行の削除を行う
+								BufInfo<BI.BLOCKEND> = Y:@VM:X
+								Y -= 1
+								X = Len(Rec<Y>)+1
+								BufInfo<BI.BLOCKSTART> = Y:@VM:X
+								GoSub Act.DelBackCh
+							End
+						End Else
+							If actNo = A.DELETE_BACKWORD Then
+								GoSub Act.DelBackWord
 							End Else
-								If actNo = A.DELETE_BACKWORD Then
-									GoSub Act.DelBackWord
-								End Else
-									GoSub Act.DelBackCh
-								End
+								GoSub Act.DelBackCh
 							End
 						End
-					End Else
-						GoSub Input.Actions
+					End
+				End Else
+					GoSub Input.Actions
 !						If actNo = A.LEFT Or actNo = A.RIGHT Or actNo = A.PREVWORD Or actNo = A.NEXTWORD Then
 !							!! カーソル移動なら描画高速化
 !							DP_X = X
@@ -1225,7 +1239,6 @@ Launch.Editor:
 !							CRT (IF IS.CONSOLE AND @TERM.TYPE # 'msvt' THEN @(-19) ELSE CSI:"1@"):C:
 !							GoTo Shell.KeyLoop.Bef.GetKey
 !						End
-					End
 				End
 			
 		End Case
@@ -2942,7 +2955,7 @@ Get.SList.RECID:
 		END
 		Open B To fpFlat Then
 			a = FileInfo(fpFlat,1015)
-			If a > 0 And a < 1000 Then
+			If a > 0 And a < 2000 Then
 				flatFile = B
 				Exit
 			End
@@ -7235,6 +7248,7 @@ SetupTokens:
 	AddKeyWord "CLOSE"
 	AddKeyWord "CLOSESEQ"
 	AddKeyWord "COMMIT"
+	AddKeyWord "COMMON"
 	AddKeyWord "CONTINUE"
 	AddKeyWord "CONVERT"
 	AddKeyWord "CREATE"
@@ -7267,6 +7281,8 @@ SetupTokens:
 	AddKeyWord "FOR"
 	AddKeyWord "FROM"
 	AddKeyWord "FUNCTION"
+	AddKeyWord "GETLIST"
+	AddKeyWord "GETLISTV"
 	AddKeyWord "GOSUB"
 	AddKeyWord "GOTO"
 	AddKeyWord "IF"
@@ -7280,7 +7296,8 @@ SetupTokens:
 	AddKeyWord "LOOP"
 	AddKeyWord "MAT"
 	AddKeyWord "MATBUILD"
-	AddKeyWord "MATCHES"	
+	AddKeyWord "MATCH"
+	AddKeyWord "MATCHES"
 	AddKeyWord "MATPARSE"
 	AddKeyWord "NEXT"
 	AddKeyWord "ON"
@@ -7298,6 +7315,7 @@ SetupTokens:
 	AddKeyWord "READ"
 	AddKeyWord "READBLK"
 	AddKeyWord "READLIST"
+	AddKeyWord "READL"
 	AddKeyWord "READNEXT"
 	AddKeyWord "READSEQ"
 	AddKeyWord "READU"
@@ -7310,7 +7328,9 @@ SetupTokens:
 	AddKeyWord "RETURN"
 	AddKeyWord "ROLLBACK"
 	AddKeyWord "SELECT"
+	AddKeyWord "SELECTV"
 	AddKeyWord "SETTING"
+	AddKeyWord "SHARED"
 	AddKeyWord "SILENT"
 	AddKeyWord "SSELECT"
 	AddKeyWord "STATUS"
@@ -7329,7 +7349,9 @@ SetupTokens:
 	AddKeyWord "WHILE"
 	AddKeyWord "WRITE"
 	AddKeyWord "WRITEBLK"
+	AddKeyWord "WRITELIST"
 	AddKeyWord "WRITESEQ"
+	AddKeyWord "WRITESEQF"
 	AddKeyWord "WRITEU"
 	AddKeyWord "WRITEV"
 	AddKeyWord "WRITEVU"
@@ -9781,7 +9803,7 @@ Core.ShowWordHokan:
 	choiceOrgY = 0
 	choiceNo = 1
 	title = SBOLD:FG.BASE02:BG.YELLOW:" Words"
-	filter = " ":currentWord
+	filter = currentWord
 	GoSub InitChoiceList
 	
 	Loop
@@ -10059,7 +10081,10 @@ Act.GoDeclaration:
 			flg = Trans(FileName,ItemName,0,"X")
 			If flg Then
 				GoSub DoRead
-				If Found Then Return
+				If Found Then
+					GoSub ShowWindow
+					Return
+				End
 			End
 		End
 	End
@@ -10084,7 +10109,10 @@ Act.GoDeclaration:
 						flg = Trans(FileName,ItemName,0,"X")
 						If flg Then
 							GoSub DoRead
-							If Found Then Return
+							If Found Then
+								GoSub ShowWindow
+								Return
+							End
 						End Else
 							!! TODO Buff内からも検索する
 							!! かなりあいまいなのではじめに見つかったものでよい
@@ -10108,7 +10136,10 @@ Act.GoDeclaration:
 					flg = Trans(FileName,ItemName,0,"X")
 					If flg Then
 						GoSub DoRead
-						If Found Then Return
+						If Found Then
+							GoSub ShowWindow
+							Return
+						End
 					End Else
 						!! TODO Buff内からも検索する
 						!! かなりあいまいなのではじめに見つかったものでよい
@@ -10165,6 +10196,9 @@ Act.GoDeclaration:
 				FileName = result<1,1>
 				ItemName = result<1,2>
 				GoSub DoRead
+				If Found Then
+					GoSub ShowWindow
+				End
 			End
 			Y = result<2>
 			X = result<3>
@@ -11607,7 +11641,7 @@ $IFNDEF U2__UNIVERSE
 	TEMP.PATH = SYSTEM(38):"\SISH.CLIP.":@USERNO
 	
 	If HAS.PASTE.EXE Then
-		OS.Execute 'chcp 65001 > NUL & paste.exe > ':TEMP.PATH
+		OS.Execute 'chcp 65001 > NUL & ':HAS.PASTE.EXE:' > ':TEMP.PATH
 		enc = "UTF8"
 	End Else
 		OS.Execute 'mshta.exe "vbscript:Execute("str=window.clipboardData.getData(""text""):CreateObject(""Scripting.FileSystemObject"").GetStandardStream(1,true).Write(str^&""""):close")" > ':TEMP.PATH
