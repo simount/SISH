@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.41.0
+**    v0.41.1
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.40.1 ]"
+Equ SISH.VERSION To "[ SISH v0.41.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -406,12 +406,7 @@ $IFNDEF U2__UNIVERSE
 		If @TTY = 'console' Then
 			OS.Execute 'where /q win32yank.exe'
 			If OS.Error() = 0 Then
-				HAS.PASTE.EXE = "win32yank -o"
-			End Else
-				OS.Execute 'where /q paste.exe'
-				If OS.Error() = 0 Then
-					HAS.PASTE.EXE = "paste.exe"
-				End
+				HAS.PASTE.EXE = "win32yank.exe -o"
 			End
 		End
 $ENDIF
@@ -11643,18 +11638,16 @@ $IFNDEF U2__UNIVERSE
 	If HAS.PASTE.EXE Then
 		OS.Execute 'chcp 65001 > NUL & ':HAS.PASTE.EXE:' > ':TEMP.PATH
 		enc = "UTF8"
+		OSRead clipboard from TEMP.PATH Then
+			OSDelete TEMP.PATH
+		End
 	End Else
 		OS.Execute 'mshta.exe "vbscript:Execute("str=window.clipboardData.getData(""text""):CreateObject(""Scripting.FileSystemObject"").GetStandardStream(1,true).Write(str^&""""):close")" > ':TEMP.PATH
-		enc = "UTF16.L"
-	End
-
-	clipboard = ""
-	OpenPath SYSTEM(38) To fp Then
-		Read clipboard Encoding enc From fp,"SISH.CLIP.":@USERNO Then
+		OSRead clipboard from TEMP.PATH Then
+			clipboard = ICONV(clipboard,"XUTF16.L")
+			OSDelete TEMP.PATH
 		End
 	End
-
-	OSDelete TEMP.PATH
 	
 $ENDIF
 Return
