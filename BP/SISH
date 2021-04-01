@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.41.1
+**    v0.41.2
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.41.1 ]"
+Equ SISH.VERSION To "[ SISH v0.41.2 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -11637,8 +11637,8 @@ $IFNDEF U2__UNIVERSE
 	
 	If HAS.PASTE.EXE Then
 		OS.Execute 'chcp 65001 > NUL & ':HAS.PASTE.EXE:' > ':TEMP.PATH
-		enc = "UTF8"
 		OSRead clipboard from TEMP.PATH Then
+			clipboard = ICONV(clipboard,"XUTF8")
 			OSDelete TEMP.PATH
 		End
 	End Else
