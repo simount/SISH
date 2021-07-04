@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.41.3 ]"
+Equ SISH.VERSION To "[ SISH v0.42.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
