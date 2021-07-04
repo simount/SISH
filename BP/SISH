@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.41.2 ]"
+Equ SISH.VERSION To "[ SISH v0.41.3 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -322,7 +322,7 @@ Shell.Main:
 	EQU STDINDENT TO STDTAB * 1        ; * other indents
 	EQU STDFIRSTINDENT To 0
 
-	EQU biInfoWide To Sum(BufInfo<11>) ;* 情報エリア横幅
+	EQU biInfoWide To Sum(Sum(BufInfo<11>)) ;* 情報エリア横幅
 	EQU biInfoWide.lineNo To BufInfo<11,1> ;* 行数エリア横幅
 	EQU biInfoWide.dict To BufInfo<11,2> ;* 辞書表示エリア横幅
 
@@ -353,6 +353,7 @@ Shell.Main:
 	EQU PARSE.PROC To "Proc"
 	EQU PARSE.PARA To "PA"
 	EQU PARSE.PDUMP To "PDUMP"
+	EQU PARSE.RAW To "Raw"
 
 	MY_COMMAND = Trim(@COMMAND[' ',1,1]) ;** 自コマンド名(SISH)
 	EQU KAKKO.CHAR.LIST1 To (\([<{'"\:"\") ;** 対応する開き括弧定義
@@ -1778,7 +1779,7 @@ $ENDIF
 		cmdline = cmdlines
 	End Else
 		GoSub Run.Command.One
-		If cmdline[1,11]="READ.BUFFER" Then
+		If cmdline[1,11]="READ.BUFFER" AND @USER.RETURN.CODE=0 Then
 			!! 単発の場合は実行後にエディタ画面に遷移
 			bAutoEditor = @TRUE
 		End
@@ -3674,6 +3675,10 @@ READ.BUFFER:
 	CFileName = Remove(args,s)
 	Begin Case
 		Case CFileName = ""
+		Case CFileName Match "'#'1N":@VM:"'#'10"
+			!! 選択リスト
+			FileName = CFileName
+			ItemName = ""
 		Case 1
 			IN.OSBS = CFileName
 			GOSUB GET.OSBS
@@ -3695,20 +3700,28 @@ $ENDIF
 				End
 				If CFileName <> "" Then
 					Open DICT,CFileName To TempFL Else
-						Crt "Cannot open ":CFileName
+						Print "Cannot open ":CFileName
+						@USER.RETURN.CODE = 1
 						Return
 					End
 					FileName = CFileName
 					If DICT><"" Then FileName = "DICT ":CFileName
 				End
 				
-				dictFileName = If DICT Then "DICT.DICT" Else "DICT ":FileName
-
 				!! アクティブな選択リストから取得      
 				If System(11) Then
-					ReadList tmp Then ItemList<-1> = tmp
+					ReadList tmp Then ItemList = tmp
+					Print 'Read from active select list (First item ':DQuote(ItemList<1>):' of ':DCount(ItemList,@FM):')':
+					Input ans
+					If UpCase(Trim(ans))#"Y" Then
+						FormList tmp
+						@USER.RETURN.CODE = 1
+						Return
+					End
 				End
 				
+				dictFileName = If DICT Then "DICT.DICT" Else "DICT ":FileName
+
 				Loop
 					arg = Trim(Remove(args,s))
 					If arg = "*" Then
@@ -3722,7 +3735,7 @@ $ENDIF
 								FldInfo<-1> = arg
 							End Else If a[1,2]="PH" Then
 								!! フレーズからDフィールドを拾う
-								FldInfo<-1> = Convert(" ",@FM,a<2>)
+								FldInfo<-1> = arg
 							End Else
 								If arg Matches "F1N0N" Then
 									!! F1 F2 等は特別
@@ -3745,6 +3758,9 @@ $ENDIF
 	End Case
 
 	If FileName = "" And ItemList = "" Then
+	End Else If FileName Match "'#'1N":@VM:"'#'10" Then
+		buffCnt = DCount(lruBuffList,@FM)
+		GoSub DoRead.Without.Jump
 	End Else If FileName >< "" And ItemList = "" Then
 		!! Item名がない場合はリストから選択
 		GoSub DoOpen                    ; * presents a list
@@ -3807,6 +3823,7 @@ WRITE.BUFFER:
 		ReadOnly = @False
 	End
 	
+
 WRITE.BUFFER.impl:
 	
 	If BufInfo<BI.PBUFNO> Then
@@ -3827,8 +3844,29 @@ WRITE.BUFFER.impl:
 	End Else
 		!! 親バッファ保存モードではない
 		
-		pos = 3
+		a = Trim(cmdline)[" ",3,1]
+		If Upcase(a)="TO" Then
+			pos = 4
+		End Else
+			pos = 3
+		End
+		
 		FileName = Trim(cmdline)[" ",pos,1]
+		If FileName Match "'#'1N":@VM:"'#'10" Then
+			!! 選択リスト
+			FormList Rec To FileName['#',2,1]
+			A = Dcount(Rec,@FM):" record(s) selected to select list ":FileName['#',2,1]
+			If AllDone Then
+				Print A
+			End Else
+				GoSub BackAltScreenBuf
+				Print A
+				GoSub GoAltScreenBuf
+			End
+			saveRec = Rec
+			GoTo WRITE.BUFFER.ending
+		End
+		
 		If UPCASE(FileName)="DICT" THEN pos+=1;FileName="DICT ":Trim(cmdline)[" ",pos,1]
 		If FileName="" Then FileName = BufInfo<BI.FILE>
 		If FileName = "" Then
@@ -3904,7 +3942,7 @@ WRITE.BUFFER.impl:
 		
 	End
 	
-	If TgtFld Then
+	If BufInfo<BI.FIELDFIX> Then
 		!! フィールド指定モード
 		
 		saveRec = StartRec ;** 開始時点レコードに対して上書きする
@@ -4013,6 +4051,15 @@ WRITE.BUFFER.impl:
 	End Else
 		!! 通常モード
 		saveRec = Rec ;** 保存対象レコード
+		
+		!! Conversion
+		fldCnt = DCount(TgtFld,@FM)
+		For i = 1 To fldCnt
+			fno = TgtFld<i,1>
+			conv = TgtFld<i,3>
+			If conv Then saveRec<fno> = IConvS(saveRec<fno>,conv)
+		Next
+
 	End
 	
 	If Not(BufInfo<BI.PBUFNO>) Then
@@ -4031,17 +4078,32 @@ WRITE.BUFFER.impl:
 			END ELSE
 				OUT.OSBS = ItemName
 			END
+$IFDEF U2__UNIVERSE
 			If BufInfo<BI.LOCKED> Then
 				WriteU saveRec On FL,OUT.OSBS On Error Return
 			End Else
 				Write saveRec On FL,OUT.OSBS On Error Return
 			End
+$ELSE
+			Try
+				If BufInfo<BI.LOCKED> Then
+					WriteU saveRec On FL,OUT.OSBS
+				End Else
+					Write saveRec On FL,OUT.OSBS
+				End
+			Catch SYS$ANY
+				StatusMessage = BG.RED:@ABORT.MESSAGE
+				Return
+			End
+$ENDIF
 			If AllDone Then
 				Print "Write Buffer ":CurBuf:" > ":FileName:" ":ItemName:" (":FMT(Len(saveRec),"R,"):" chars) at ":OConv(Date(),"D-YMD"):" ":OConv(Time(),"MTS")
 			End
 			GoSub Common.CloseFile
 		End
 	End
+
+WRITE.BUFFER.ending:
 
 	!! Bufferの初期化処理  
 	BufInfo<BI.FILE> = FileName
@@ -4077,12 +4139,15 @@ Editor.Main:
 		!! バッファがある場合は以前開いていたものを開く
 		Found = lruBuffList<1> ;** 直近を開く
 		GoSub ChangeBuf
+		If FileName Match "'#'1N":@VM:"'#'10" Then
+			!! 選択リストは必ずリロード
+			GoSub ReadItem
+		End
 	End
 
 	biInfoWide.lineNo = 5 ;** 行番号表示の桁数
 	biInfoWide.dict = 0
 
-	DIRec = ""
 	SearchString = ""
 	Replacing = False
 	searchReverse = False
@@ -4221,7 +4286,7 @@ CodeMenu:
 * ChangeModeMenu
 *--------------------------------------------------------------------------
 ChangeModeMenu: 
-	MenuLine = "Basic Pragraph Data :"
+	MenuLine = "Basic Pragraph Item Raw pDump :"
 	GoSub MenuLine
 	C = UpCase(C)
 	Begin Case
@@ -4231,8 +4296,16 @@ ChangeModeMenu:
 		Case C = "P"
 			BufInfo<BI.PARSETYPE> = PARSE.PARA
 			GoSub ShowWindow
-		Case C = "D"
+		Case C = "I"
 			BufInfo<BI.PARSETYPE> = PARSE.DATA
+			GoSub DoShowDictInfo
+			GoSub ShowWindow
+		Case C = "R"
+			BufInfo<BI.PARSETYPE> = PARSE.RAW
+			GoSub DoHideDictInfo
+			GoSub ShowWindow
+		Case C = "D"
+			BufInfo<BI.PARSETYPE> = PARSE.PDUMP
 			GoSub ShowWindow
 		End Case
 	Return
@@ -4789,11 +4862,18 @@ Return
 *  ReadItem
 *-----------------------------------------------------------------------
 ReadItem:
-
+	
 	PathName = ""
 	If ParentBufNo Then
 		!! 親バッファからコピー
 		Rec = Bufs(ParentBufNo)
+	End Else If FileName Match "'#'1N":@VM:"'#'10" Then
+		!! 選択リストから開く
+		ReadList Rec From FileName['#',2,1] Then
+			FormList Rec To FileName['#',2,1] ;** KEEP
+		End Else
+			Rec = ""
+		End
 	End Else
 		!! ファイルから開く
 		GoSub Common.OpenFile
@@ -4830,12 +4910,10 @@ ReadItem:
 
 	!! 改行コードが残っていたら自動除外
 	Convert CHAR(10):CHAR(13) To '' In Rec
-
-	TgtFld = "" ;** フィールドのリスト 
+	
 	If FldInfo Then
 		!! フィールド指定モード
 		dictFileName = "DICT ":FileName
-
 		list = Convert(' ',@FM,FldInfo)
 		cnt = DCount(list,@FM)
 		For i = 1 To cnt
@@ -4848,8 +4926,13 @@ ReadItem:
 			End Else
 				dictRec = Raise(Trans(dictFileName,fldInfo<2>,-1,'X'))
 				If dictRec[1,1] = "D" And dictRec<2> >= 1 Then
-					fldInfo<1> = dictRec<2> ;** location
-					fldInfo<3> = dictRec<3> ;** Conv
+					fldInfo<1> = dictRec<2>  ;** location
+					fldInfo<3> = dictRec<3>  ;** Conv
+					fldInfo<4> = dictRec<4>  ;** 4.NAME
+					fldInfo<5> = dictRec<5>  ;** 5.FMT
+					fldInfo<6> = dictRec<6>  ;** 6.S/M
+					fldInfo<7> = dictRec<7>  ;** 7.ASSOC
+					fldInfo<8> = dictRec<12> ;** 8.CONSTRAINT
 				End Else If dictRec[1,2] = "PH" Then
 					!! PHraseで置き換えてもう一度
 					list<i> = @FM:Convert(' ',@FM,dictRec<2>)
@@ -4862,43 +4945,48 @@ ReadItem:
 				TgtFld<-1> = Lower(fldInfo)
 			End
 		Next
+		
 		TgtFld.Cnt = DCount(TgtFld,@FM)
-		
-		!! マルチバリューを行展開したレコードの構築
-		tmpRec = ""
-		fCnt = DCount(TgtFld,@FM)
-		For f = 1 To fCnt
-			If BufInfo<BI.VALUEFIX> Then
-				!! バリューにダイブ
-				no = f + (BufInfo<BI.VALUEFIX> - 1) * fCnt
-				sep = @SVM
-			End Else
-				!! フィールド固定モード
-				no = TgtFld<f,1>
-				sep = @VM
-			End
-			list = Rec<no>
-			
-			If Not(ParentBufNo) Then
-				!! 物理ファイルからの場合はConversionがあれば適応
-				conv = TgtFld<f,3>
-				If conv Then list = OConvS(list,conv)
-			End
-			
-			cnt = DCount(list,sep)
-			For v = 1 To cnt
-				tmpRec<f + (v - 1) * fCnt> = Field(list,sep,v)
+		If TgtFld.Cnt > 0 Then	
+			!! マルチバリューを行展開したレコードの構築
+			tmpRec = ""
+			fCnt = DCount(TgtFld,@FM)
+			For f = 1 To fCnt
+				If BufInfo<BI.VALUEFIX> Then
+					!! バリューにダイブ
+					no = f + (BufInfo<BI.VALUEFIX> - 1) * fCnt
+					sep = @SVM
+				End Else
+					!! フィールド固定モード
+					no = TgtFld<f,1>
+					sep = @VM
+				End
+				list = Rec<no>
+				
+				If Not(ParentBufNo) Then
+					!! 物理ファイルからの場合はConversionがあれば適応
+					conv = TgtFld<f,3>
+					If conv Then list = OConvS(list,conv)
+				End
+				
+				cnt = DCount(list,sep)
+				For v = 1 To cnt
+					tmpRec<f + (v - 1) * fCnt> = Field(list,sep,v)
+				Next
 			Next
-		Next
-		Rec = tmpRec ;** 抽出したレコードに置き換え
-		
+			Rec = tmpRec ;** 抽出したレコードに置き換え
+			
+		End
+	
+	End Else
+		GoSub DoShowDictInfo
 	End
+	
+	** 辞書ならバイナリデータを削る
+	If FileName[1,4] = "DICT" Then Rec = Rec[@FM,1,15] 
 
 	!! 現在の行数の設定
 	Lines = If Rec = "" Then 1 Else DCount(Rec,@fm)
-
-	** 辞書ならバイナリデータを削る
-	If FileName[1,4] = "DICT" Then Rec = Rec[@FM,1,15] 
 
 Return
 	
@@ -4918,6 +5006,11 @@ DoLock.Impl:
 	
 	FileName = BufInfo<BI.FILE>
 	ItemName = BufInfo<BI.ITEM>
+	
+	If FileName Match "'#'1N":@VM:"'#'10" Then
+		StatusMessage = "Cannot lock at select list"
+		Return
+	End
 	
 	!! レコード格納先ファイルのオープン
 	GoSub Common.OpenFile
@@ -5103,30 +5196,79 @@ DoShowDictInfo:
 	
 	IF FileName = "" Then Return ;** Newバッファは無視
 	
-	If FileName[1,4] = "DICT" Then
-		!! 辞書の場合は固定
-		DIRec = Convert(",",@FM,"TYPE,LOC,CONV,NAME,FMT,S/M,ASSOC")
-	End Else
-		Open "DICT",FileName To fpDict Then
-			If TgtFld Then
-				For i=1 To DCount(TgtFld,@FM)
-					Read dictRec From fpDict,TgtFld<i,2> Then
-						DIRec<i> = dictRec<6>:" ":dictRec<4>:If dictRec<3> Then " {":dictRec<3>:"}" Else "" 
+	If BufInfo<BI.FIELDFIX>="" Then
+		!! 物理位置に辞書を登録する
+		If BufInfo<BI.PARSETYPE> = PARSE.DATA Then
+			If FileName[1,4] = "DICT" Then
+				!! 辞書の場合は固定
+				TgtFld<1,1> = 1:@VM:@VM:@VM:"TYPE"
+				TgtFld<2,1> = 1:@VM:@VM:@VM:"LOC"
+				TgtFld<3,1> = 1:@VM:@VM:@VM:"CONV"
+				TgtFld<4,1> = 1:@VM:@VM:@VM:"NAME"
+				TgtFld<5,1> = 1:@VM:@VM:@VM:"FMT"
+				TgtFld<6,1> = 1:@VM:@VM:@VM:"S/M"
+				TgtFld<7,1> = 1:@VM:@VM:@VM:"ASSOC"
+				TgtFld<12,1> = 1:@VM:@VM:@VM:"CONST"
+			End Else
+				Open "DICT",FileName To fpDict Else Return
+				!! 物理位置で辞書をセット
+				Read a From fpDict,"@MODIFY" Then
+					FormList Convert(" ",@FM,a)
+				End Else
+					Select fpDict
+				End
+				Loop
+					Readnext dict.id Else Exit
+					Read dict.rec From fpDict,dict.id Then
+						If upcase(dict.rec[1,1]) = 'D' Then
+							n = trim(dict.rec<2>)
+							If n >= 1 Then
+								If TgtFld<n>="" Then
+									TgtFld<n,1> = n            ;** 1.location
+									TgtFld<n,2> = dict.id      ;** 2.ID
+									TgtFld<n,3> = dict.rec<3>  ;** 3.conv
+									TgtFld<n,4> = dict.rec<4>  ;** 4.NAME
+									TgtFld<n,5> = dict.rec<5>  ;** 5.FMT
+									TgtFld<n,6> = dict.rec<6>  ;** 6.S/M
+									TgtFld<n,7> = dict.rec<7>  ;** 7.ASSOC
+									TgtFld<n,8> = dict.rec<12> ;** 8.CONSTRAINT
+									If dict.rec<3> Then
+										Rec<n> = OConvS(Rec<n>,dict.rec<3>) ;** Conversion
+									End
+								End
+							End
+						End
 					End
-				Next
+				Repeat
 			End
-			Close fpDict
 		End
 	End
 	
-	If DIRec Then biInfoWide.dict = Maximum(LenSDP(DIRec)) + 1
+	If TgtFld Then
+		id.max = 0
+		name.max = 0
+		For i=1 To DCount(TgtFld,@FM)
+			id.max = Max(id.max,LenDP(TgtFld<i,2>)) ;** 2.ID
+			name.max = Max(name.max,LenDP(TgtFld<i,4>));** 4.Name
+		Next
+		biInfoWide.dict = (id.max+1):@SVM:(name.max+1)
+	End
 
 	Return
 
 DoHideDictInfo:
 
-	biInfoWide.dict = 0
-	DIRec = ""
+	If BufInfo<BI.FIELDFIX>="" Then
+		!! Conversion
+		fldCnt = DCount(TgtFld,@FM)
+		For i = 1 To fldCnt
+			fno = TgtFld<i,1>
+			conv = TgtFld<i,3>
+			If conv Then Rec<fno> = IConvS(Rec<fno>,conv)
+		Next
+		TgtFld = ""
+		biInfoWide.dict = 0
+	End
 
 	Return
 
@@ -5985,6 +6127,10 @@ FileMenu:
 *--------------------------------------------------------------------------
 Format: 
 	FileName = BufInfo<BI.FILE>
+	If FileName Match "'#'1N":@VM:"'#'10" Then
+		Return
+	End
+	
 	If FileName = "" Then FileName = "BP"
 	GoSub Common.OpenFile
 	Write Rec On FL, "%%format_temp%%"
@@ -6519,7 +6665,7 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 		** --------------------
 		** Data
 		** --------------------
-		Case ParseType = PARSE.DATA
+		Case ParseType = PARSE.DATA Or ParseType = PARSE.RAW
 			len = Len(Line)
 			For i = 1 To len
 				ch = Line[i,1]
@@ -6861,7 +7007,7 @@ PrintLine:
 	End Else
 		crtBuff := FG.BASE1:BG.BASE2
 	End
-	If TgtFld Then
+	If BufInfo<BI.FIELDFIX> Then
 		!! フィールド指定モード
 		inY = Row
 		GoSub GetDAPos
@@ -6879,21 +7025,54 @@ PrintLine:
 			crtBuff := str "8L"
 			biInfoWide.lineNo = 8
 		End
-		If DIRec Then
+		If TgtFld Then
 			!! 辞書表示
-			crtBuff := FMTDP(DIRec<fIdx>,biInfoWide.dict:"L")
+			crtBuff := FMTDP(TgtFld<fIdx,2>,biInfoWide.dict<1,1,1>:"L")
+			crtBuff := FMTDP(TgtFld<fIdx,4>,biInfoWide.dict<1,1,2>:"L")
+			If Row=Y And prevY#Y Then
+				!! 現在行の場合はステータス表示
+				StatusMessage  = FMT(TgtFld<fIdx,3>,"14L"):" | "
+				StatusMessage := FMT(TgtFld<fIdx,5>,"10L"):" | "
+				StatusMessage := FMT(TgtFld<fIdx,8>,"20L"):" | "
+				If TgtFld<fIdx,6>="M" Then
+					StatusMessage := "Multi"
+					a = TgtFld<fIdx,7>
+					If a Then
+						StatusMessage := " assoc ":SQuote(a)
+					End
+				End Else IF TgtFld<fIdx,6>="S" Then
+					StatusMessage := "Single"
+				End
+			End
 		End
 		If bShowUnderline Then
 			!! 下線を消す
 			crtBuff := EUL
 		End
+		
 	End Else
 		biInfoWide.lineNo = 5
 		GoSub Get.Gyo
 		crtBuff := Gyo
-		If DIRec Then
+		If TgtFld Then
 			!! 辞書表示
-			crtBuff := FMTDP(DIRec<Row>,biInfoWide.dict:"L")
+			crtBuff := FMTDP(TgtFld<Row,2>,biInfoWide.dict<1,1,1>:"L")
+			crtBuff := FMTDP(TgtFld<Row,4>,biInfoWide.dict<1,1,2>:"L")
+			If Row=Y And (prevY#Y Or prevX#X) Then
+				!! 現在行の場合はステータス表示
+				StatusMessage  = FMT(TgtFld<Row,3>,"14L"):" | "
+				StatusMessage := FMT(TgtFld<Row,5>,"10L"):" | "
+				StatusMessage := FMT(TgtFld<Row,8>,"20L"):" | "
+				If TgtFld<Row,6>="M" Then
+					StatusMessage := "Multi <F4> dive"
+					a = TgtFld<Row,7>
+					If a Then
+						StatusMessage := " with assoc ":SQuote(a)
+					End
+				End Else IF TgtFld<Row,6>="S" Then
+					StatusMessage := "Single"
+				End
+			End
 		End
 	End
 	crtBuff := HI.OFF ;* 行情報部の色指定解除
@@ -7055,7 +7234,7 @@ SaveAs:
 		Return
 	End
 	
-	cmdline = "WRITE.BUFFER ":CurBuf:" ":BufInfo<BI.FILE>:" ":BufInfo<BI.ITEM>
+	cmdline = "WRITE.BUFFER ":CurBuf:" TO ":BufInfo<BI.FILE>:" ":BufInfo<BI.ITEM>
 	bAutoCommand = @TRUE
 	bAutoEditor = @true
 	GoSub Act.Exit
@@ -7079,8 +7258,15 @@ SaveItem:
 	
 	!! ファイル保存
 	If Changed Then
-		cmdline = "WRITE.BUFFER ":CurBuf:" ":BufInfo<BI.FILE>:" ":BufInfo<BI.ITEM>
-		GoSub WRITE.BUFFER.impl
+		If BufInfo<BI.FILE> Match "'#'1N":@VM:"'#'10" Then
+			!! 選択リストの保存
+			cmdline = "WRITE.BUFFER ":CurBuf:" TO ":BufInfo<BI.FILE>
+			bAutoCommand = @TRUE
+			GoSub Act.Exit ;** 保存でコマンドに戻る
+		End Else
+			cmdline = "WRITE.BUFFER ":CurBuf:" TO ":BufInfo<BI.FILE>:" ":BufInfo<BI.ITEM>
+			GoSub WRITE.BUFFER.impl
+		End
 	End
 	
 	Return
@@ -7088,17 +7274,20 @@ SaveItem:
 * Delete
 *--------------------------------------------------------------------------
 Delete: 
+	
+	FileName = BufInfo<BI.FILE>
+	If FileName Match "'#'1N":@VM:"'#'10" Then Return
+	
+	ItemName = BufInfo<BI.ITEM>
+	If FileName = "" Then Return
+	If ItemName = "" Then Return
+
 	PromptLine = "Are you sure you wish to DELETE this item (Y/N) :"
 	GoSub PromptLine
 	GoSub GetKey
 	
 	If UpCase(C) = "Y" Else Return
-	
-	FileName = BufInfo<BI.FILE>
-	ItemName = BufInfo<BI.ITEM>
-	If FileName = "" Then Return
-	If ItemName = "" Then Return
-	
+
 	GoSub Common.OpenFile
 	Crt @(0, PY):
 	IF FILEINFO(FL,3)=4 THEN
@@ -7228,6 +7417,7 @@ LoadKeyBindings:
 SetupTokens: 
 	KEYWORDS = ""
 	AddKeyWord "ABORT"
+	AddKeyWord "ABORTS"
 	AddKeyWord "AND"
 	AddKeyWord "BEFORE"
 	AddKeyWord "BEGIN"
@@ -7274,6 +7464,7 @@ SetupTokens:
 	AddKeyWord "FIND"
 	AddKeyWord "FINDSTR"
 	AddKeyWord "FOR"
+	AddKeyWord "FORMLIST"
 	AddKeyWord "FROM"
 	AddKeyWord "FUNCTION"
 	AddKeyWord "GETLIST"
@@ -7294,6 +7485,7 @@ SetupTokens:
 	AddKeyWord "MATCH"
 	AddKeyWord "MATCHES"
 	AddKeyWord "MATPARSE"
+	AddKeyWord "NO.TTY"
 	AddKeyWord "NEXT"
 	AddKeyWord "ON"
 	AddKeyWord "OPEN"
@@ -7301,6 +7493,7 @@ SetupTokens:
 	AddKeyWord "OPENPATH"
 	AddKeyWord "OPENSEQ"
 	AddKeyWord "OR"
+	AddKeyWord "PASSLIST"
 	AddKeyWord "PERFORM"
 	AddKeyWord "PRINT"
 	AddKeyWord "PRINTER"
@@ -7312,6 +7505,7 @@ SetupTokens:
 	AddKeyWord "READLIST"
 	AddKeyWord "READL"
 	AddKeyWord "READNEXT"
+	AddKeyWord "READONLY"
 	AddKeyWord "READSEQ"
 	AddKeyWord "READU"
 	AddKeyWord "READV"
@@ -7320,8 +7514,10 @@ SetupTokens:
 	AddKeyWord "RECORDLOCKU"
 	AddKeyWord "RELEASE"
 	AddKeyWord "REPEAT"
+	AddKeyWord "RESTRICTED"
 	AddKeyWord "RETURN"
 	AddKeyWord "ROLLBACK"
+	AddKeyWord "RTNLIST"
 	AddKeyWord "SELECT"
 	AddKeyWord "SELECTV"
 	AddKeyWord "SETTING"
@@ -7336,9 +7532,11 @@ SetupTokens:
 	AddKeyWord "THROW"
 	AddKeyWord "TO"
 	AddKeyWord "TRANSACTION"
+	AddKeyWord "TRAPPING"
 	AddKeyWord "TRY"
 	AddKeyWord "UNTIL"
 	AddKeyWord "USING"
+	AddKeyWord "VAR.ARGS"
 	AddKeyWord "VOID"
 	AddKeyWord "WEOFSEQ"
 	AddKeyWord "WHILE"
@@ -7438,12 +7636,12 @@ StartBuf:
 	
 	Changed = False
 	BufInfo<BI.LOCKED> = @FALSE
-	DIRec = ""
 
 	DiveValuePos = ""
+	TgtFld = "" ;** フィールドのリスト
 	
 	!! ParseTypeの自動判定
-	ParseType = PARSE.DATA
+	ParseType = If FileName >< "" Then PARSE.DATA Else PARSE.RAW
 	** Basic
 	If FileName >< "" Then
 $IFDEF U2__UNIVERSE
@@ -8206,10 +8404,10 @@ Act.PrevWord:
 Act.SelNextStmt:
 	GoSub SelectionStart
 Act.NextStmt:
-	If Not(keepSelection) And BufInfo<BI.BLOCKSTART> Then
-		GoSub Act.SwapDown
-		Return
-	End
+!	If Not(keepSelection) And BufInfo<BI.BLOCKSTART> Then
+!		GoSub Act.SwapDown
+!		Return
+!	End
 	
 	If BufInfo<BI.BLOCKEND> Then
 		prevPos = Y:@FM:X
@@ -8384,10 +8582,10 @@ Act.SwapDown:
 Act.SelPrevStmt:
 	GoSub SelectionStart
 Act.PrevStmt:
-	If Not(keepSelection) And BufInfo<BI.BLOCKSTART> Then
-		GoSub Act.SwapUp
-		Return
-	End
+!	If Not(keepSelection) And BufInfo<BI.BLOCKSTART> Then
+!		GoSub Act.SwapUp
+!		Return
+!	End
 	
 	If BufInfo<BI.BLOCKEND> Then
 		prevPos = Y:@FM:X
@@ -10099,19 +10297,13 @@ Act.GoDeclaration:
 						!! InDirect Call なので変数へジャンプ
 						Word = Word[2,999]
 					End Else
-						!! Direct Call
-						FileName = BufInfo<BI.FILE> ;** 同一ファイルから検索
-						flg = Trans(FileName,ItemName,0,"X")
+						GoSub Search.Program
 						If flg Then
 							GoSub DoRead
 							If Found Then
 								GoSub ShowWindow
 								Return
 							End
-						End Else
-							!! TODO Buff内からも検索する
-							!! かなりあいまいなのではじめに見つかったものでよい
-							
 						End
 					End
 				End
@@ -10127,18 +10319,13 @@ Act.GoDeclaration:
 				len = Len(Word)
 				ItemName = temp<Ps+1>[1,len]
 				If ItemName = Word Then
-					FileName = BufInfo<BI.FILE> ;** 同一ファイルから検索
-					flg = Trans(FileName,ItemName,0,"X")
+					GoSub Search.Program
 					If flg Then
 						GoSub DoRead
 						If Found Then
 							GoSub ShowWindow
 							Return
 						End
-					End Else
-						!! TODO Buff内からも検索する
-						!! かなりあいまいなのではじめに見つかったものでよい
-						
 					End
 				End
 			End
@@ -10165,7 +10352,7 @@ Act.GoDeclaration:
 					tmpRec = tmpRec[@FM,Pos+1,HUGE]
 				End Else Exit
 			Repeat
-			FindStr "SUBROUTINE ":Word In UpCase(Rec) Setting Pos Then
+			FindStr "SUBROUTINE ":UpCase(Word) In UpCase(Rec) Setting Pos Then
 				!! ローカルサブルーチンの可能性
 				GoSub StackJumpHistory
 				Y = Pos
@@ -10201,6 +10388,35 @@ Act.GoDeclaration:
 		End
 
 	End
+	Return
+
+Search.Program:
+
+	FileName = BufInfo<BI.FILE> ;** 同一ファイルから検索
+	flg = Trans(FileName,ItemName,0,"X")
+	If flg Then Return
+	
+$IFNDEF U2__UNIVERSE
+	Call !FINDPROG(rslt,ItemName)
+	If rslt Then
+		src.path = rslt<2>
+		If src.path Then
+			a = DCount(src.path,@DS)
+			FileName = src.path[@DS,a-1,1]
+			ItemName = src.path[@DS,a,1]
+			flg = Trans(FileName,ItemName,0,"X")
+			If flg Then Return
+		
+			flg = OSPATH(src.path,16)
+			If flg Then
+				FileName = "PATH:":src.path[@DS,1,a-1]
+				Return
+			End
+		End
+	End
+	
+$ENDIF
+
 	Return
 
 * **************************************************************************
@@ -11025,6 +11241,23 @@ Act.GoDive:
 	End Else
 		!! ValueにDive
 		FldInfo = "F":Y ;** 現在のカーソル行をターゲットにする
+		If TgtFld Then
+			If FldInfo Then
+				inY = Y
+				GoSub GetDAPos
+				If TgtFld<fIdx,7> Then
+					FldInfo = TgtFld<fIdx,7> ;** WITH ASSOC
+				End Else
+					FldInfo = TgtFld<fIdx,2> ;** ID指定
+				End
+			End	Else
+				If TgtFld<Y,7> Then
+					FldInfo = TgtFld<Y,7> ;** WITH ASSOC
+				End Else
+					FldInfo = TgtFld<Y,2> ;** ID指定
+				End
+			End
+		End
 	End
 	GoSub DoRead
 	GoSub DoShowDictInfo
@@ -11079,7 +11312,12 @@ Act.Reload:
 	
 	If IsNew Then Return
 	
-	!! レコード格納先ファイルのオープン  
+	If FileName Match "'#'1N":@VM:"'#'10" Then
+		!! 選択リストから開く
+		GoTo ReadItem
+	End
+	
+	!! レコード格納先ファイルのオープン
 	GoSub Common.OpenFile
 	IF FILEINFO(FL,3)=4 THEN
 		IN.OSBS = ItemName
