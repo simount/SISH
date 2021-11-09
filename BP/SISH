@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.41.2
+**    v0.42.1
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.42.0 ]"
+Equ SISH.VERSION To "[ SISH v0.42.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -725,7 +725,7 @@ Set.Command.Editor:
 		
 		!! カーソルを先頭に持ってきてクリア
 		crtBuff = ""
-		crtBuff := SGR.ALL.OFF
+		crtBuff := SGR.ALL.OFF2
 		GoSub Clear.Cmdline.Crt
 		
 		If NOT(IS.CONSOLE) Then
@@ -1157,7 +1157,7 @@ INC.SEARCH.MODE:
 		** イベント
 			Case actNo = A.THEME
 				GoSub Act.SwitchTheme
-				CRT SGR.ALL.OFF:
+				CRT SGR.ALL.OFF2:
 
 			Case actNo = A.FIT.TERM
 				!! 端末サイズ自動設定
@@ -1426,9 +1426,10 @@ Create.CmdDraw:
 		
 		If Row=1 Then
 			If bIncSearch Then
-				cmdDraw := FG.BASE03
+				cmdDraw := HI.SHELL.ON
 				cmdDraw := If bIncSearch="R" Then "↑" Else "↓"
-				cmdDraw := @(2):"`":iSearchText:"'"
+				cmdDraw := SGR.ALL.OFF2
+				cmdDraw := @(2):" ":iSearchText:" "
 			End
 			cmdDraw := HI.SHELL.ON
 			If System(11) Then cmdDraw := "#"
@@ -1468,7 +1469,7 @@ Create.CmdDraw:
 					cmdDraw := HI.SELECT.ON
 					in.selection = @True 
 				End Else If blockEnd = A Then
-					cmdDraw := SGR.ALL.OFF
+					cmdDraw := SGR.ALL.OFF2
 					in.selection = @False
 				End
 			End Else
@@ -1510,13 +1511,13 @@ Create.CmdDraw:
 				If kakko1 Then
 					!! 対応する括弧を強調
 					If c#"\" And Row = Y And (i=kakko1<1> Or i=kakko1<2>) Then
-						cmdDraw := HI.KAKKO.OFF
+						cmdDraw := SGR.ALL.OFF2
 					End
 				End
 				If kakko2 Then
 					!! 対応する括弧を強調
 					If c#"\" And Row = Y And (i=kakko2<1> Or i=kakko2<2>) Then
-						cmdDraw := HI.KAKKO.OFF
+						cmdDraw := SGR.ALL.OFF2
 					End
 				End
 			End
@@ -1833,19 +1834,20 @@ Run.Command.One:
 	End
 
 	verb = TRIMF(cmdline[" ",1,1])
-	If verb = "READ.BUFFER" Then
-		!! ファイルをバッファにリードする
-		GoSub READ.BUFFER
-		Return
-	End Else If verb = "WRITE.BUFFER" Then
-		!! バッファの内容をファイルにライトする
-		GoSub WRITE.BUFFER
-		Return
-	End Else If verb = "TERM" Then
-		IF @TERM.TYPE = 'msvt' AND cmdline MATCHES "...1N0N..." THEN
-			Execute cmdline : " qmterm":@FM:"TERM msvt"
-		END
-	End
+	Begin Case
+		Case verb = "READ.BUFFER"
+			!! ファイルをバッファにリードする
+			GoSub READ.BUFFER
+			Return
+		Case verb = "WRITE.BUFFER"
+			!! バッファの内容をファイルにライトする
+			GoSub WRITE.BUFFER
+			Return
+		Case verb = "TERM"
+			IF @TERM.TYPE = 'msvt' AND cmdline MATCHES "...1N0N..." THEN
+				Execute cmdline : " qmterm":@FM:"TERM msvt"
+			END	
+	End Case
 
 	!! 普通のコマンド起動
 		
@@ -1981,7 +1983,7 @@ $IFNDEF U2__UNIVERSE
 		GoSub CUR.TOP.OF.SCREEN
 		
 		crtBuff = ""
-		crtBuff := SGR.ALL.OFF
+		crtBuff := SGR.ALL.OFF2
 		GoSub Create.CmdDraw
 		GoSub Clear.Cmdline.Crt
 		GoSub Draw.Cmdline
@@ -2144,7 +2146,7 @@ $ENDIF
 			Ins idU Before slistU<no>
 			Ins desc Before dlist<no>
 		End
-		
+
 		GoSub Prev.Match.Filter
 		candidateMode = ""
 		dispType = "Verb"
@@ -2491,7 +2493,7 @@ CmdHist.Candidate:
 	iSearchText = ""
 	
 	crtBuff = ""
-	crtBuff := SGR.ALL.OFF
+	crtBuff := SGR.ALL.OFF2
 	GoSub Create.CmdDraw
 	GoSub Clear.Cmdline.Crt
 	GoSub Draw.Cmdline
@@ -2559,7 +2561,7 @@ DispCandidate.Common:
 	GoSub CUR.TOP.OF.SCREEN
 	
 	crtBuff = ""
-	crtBuff := SGR.ALL.OFF
+	crtBuff := SGR.ALL.OFF2
 	GoSub Create.CmdDraw
 	GoSub Clear.Cmdline.Crt
 	GoSub Draw.Cmdline
@@ -2599,7 +2601,7 @@ DispCandidate.Common:
 					fullWord.Len = 0
 					crtBuff = ""
 					Crt @(winX,0):
-					crtBuff := SGR.ALL.OFF
+					crtBuff := SGR.ALL.OFF2
 					GoSub Create.CmdDraw
 					GoSub Clear.Cmdline.Crt
 					GoSub Draw.Cmdline
@@ -4126,7 +4128,7 @@ WRITE.BUFFER.ending:
 	@USER.RETURN.CODE=0	
 	
 	Return
-
+	
 ** ================================================================================
 ** Editor.Main
 ** ================================================================================
@@ -7509,8 +7511,8 @@ SetupTokens:
 	AddKeyWord "MATCH"
 	AddKeyWord "MATCHES"
 	AddKeyWord "MATPARSE"
-	AddKeyWord "NO.TTY"
 	AddKeyWord "NEXT"
+	AddKeyWord "NO.TTY"
 	AddKeyWord "ON"
 	AddKeyWord "OPEN"
 	AddKeyWord "OPENDEV"

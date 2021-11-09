@@ -213,6 +213,18 @@ filterは部分一致またはパターン一致させたい文字。
 
 QMの場合は **.LP** **.DP** **.SP** **.EP** 等の Private VOC の命令も利用可能
 
+==== コマンド実行処理のカスタマイズ ====
+
+`SISH.RUN.COMMAND.DELEGATOR` がカタログされているとSISHでコマンド実行時に該当プログラムが呼び出されます。
+実行するコマンドラインが `@SENTENCE` に渡ってくるのでコマンド実行の前後に処理を挟む事が出来ます。
+
+```
+PROGRAM SISH.RUN.COMMAND.DELEGATOR
+PRINT @SENTENCE
+EXECUTE @SENTENCE STATUS ST
+PRINT "Status -> ":ST
+```
+
 ==== スクリーンエディタ ====
 
 ===== 起動方法
@@ -637,6 +649,9 @@ https://myrica.estable.jp/
 
 
 == 更新履歴 ==
+
+=== 2021/011/09 - 0.42.1 ===
+- `[IMP]` コンソールの文字色を１つ明るいものに変更
 
 === 2021/07/05 - 0.42.0 ===
 - `[NEW]` 選択リストをエディタで直接編集できるようにした
