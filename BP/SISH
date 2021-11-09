@@ -1664,8 +1664,12 @@ Run.Command:
 					GoTo Run.Command.Ending
 				Case k = "E"
 					If UpCase(Trim(cmdline)) = ".E" Then
-						cmdline = ""
-						GoTo Launch.Editor ;** 単純にエディタに切り替える
+						If System(11) Then
+							cmdline = "READ.BUFFER #0"
+						End Else
+							cmdline = ""
+							GoTo Launch.Editor ;** 単純にエディタに切り替える
+						End
 					End
 					!! Verbをエディタに置換
 					If UpCase(Trim(cmdline)[1,3]) = ".EP" Then
