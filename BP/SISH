@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.42.1
+**    v0.42.2
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.42.1 ]"
+Equ SISH.VERSION To "[ SISH v0.42.2 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -1423,6 +1423,7 @@ Create.CmdDraw:
 		Line = Rec<Row>
 		Line.len = Len(Line)
 		tmpDX = Index(Line,":")
+		wrapDiffDX = 0
 		
 		If Row=1 Then
 			If bIncSearch Then
@@ -1430,9 +1431,13 @@ Create.CmdDraw:
 				cmdDraw := If bIncSearch="R" Then "↑" Else "↓"
 				cmdDraw := SGR.ALL.OFF2
 				cmdDraw := @(2):" ":iSearchText:" "
+				wrapDiffDX += 4 + LenDP(iSearchText)
 			End
 			cmdDraw := HI.SHELL.ON
-			If System(11) Then cmdDraw := "#"
+			If System(11) Then
+				cmdDraw := "#"
+				wrapDiffDX += 1
+			End
 			cmdDraw := If bInvert Then UpCase("si") Else "si"
 			cmdDraw := MatchField(Line[1,tmpDX],"...0N:",2)
 		End Else
@@ -1448,7 +1453,7 @@ Create.CmdDraw:
 		For i=tmpDX To Line.len+1
 			c = Line[i,1]
 			dispLen = LenDP(c)
-			If tmpDX+dispLen > AutoWrap Then
+			If tmpDX+dispLen+wrapDiffDX > AutoWrap Then
 				!! 自動折り返し
 				cmdDraw := ESC.CRT.MOVE_NEXT_LINE
 				tmpDX = 1
