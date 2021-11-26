@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.42.2
+**    v0.42.3
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.42.2 ]"
+Equ SISH.VERSION To "[ SISH v0.42.3 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -4991,6 +4991,13 @@ ReadItem:
 	
 	End Else
 		GoSub DoShowDictInfo
+		If TgtFld Then
+			For i=1 To DCount(TgtFld,@FM)
+				If TgtFld<i,3> Then
+					Rec<i> = OConvS(Rec<i>,TgtFld<i,3>) ;** Conversion
+				End
+			Next
+		End
 	End
 	
 	** 辞書ならバイナリデータを削る
@@ -5230,8 +5237,8 @@ DoShowDictInfo:
 					TgtFld<5,1> = 5:@VM:"F5":@VM:@VM:"{Security Subr}"
 				End Else If Upcase(Rec[1,1]) = "F" Then
 					TgtFld<1,1> = 1:@VM:"F1":@VM:@VM:"F {Desc}"
-					TgtFld<2,1> = 2:@VM:"F2":@VM:@VM:"Data Path"
-					TgtFld<3,1> = 3:@VM:"F3":@VM:@VM:"Dict Path"
+					TgtFld<2,1> = 2:@VM:"F2":@VM:Trans("DICT VOC","DATA.NAME",3,""):@VM:"Data Path"
+					TgtFld<3,1> = 3:@VM:"F3":@VM:Trans("DICT VOC","DICT.NAME",3,""):@VM:"Dict Path"
 					TgtFld<4,1> = 4:@VM:"F4":@VM:@VM:"Subfiles"
 $IFNDEF U2__UNIVERSE
 					TgtFld<5,1> = 5:@VM:"F5":@VM:@VM:"inclusion flags"
@@ -5267,9 +5274,6 @@ $ENDIF
 									TgtFld<n,6> = dict.rec<6>  ;** 6.S/M
 									TgtFld<n,7> = dict.rec<7>  ;** 7.ASSOC
 									TgtFld<n,8> = dict.rec<12> ;** 8.CONSTRAINT
-									If dict.rec<3> Then
-										Rec<n> = OConvS(Rec<n>,dict.rec<3>) ;** Conversion
-									End
 								End
 							End
 						End
