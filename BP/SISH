@@ -2100,66 +2100,77 @@ $ENDIF
 
 	If nowWordPos <= 1 Then
 		
-		* Verbの補完
-		
-		tgtVocTypes = "V,R,S,PA,PQ,M"
-		GoSub Get.SList.From.Voc
-		
-		!! SISH専用コマンド
-		id = ""
-		desc = ""
-		id<-1> = ".A"
-		desc<-1> = ".An text | コマンドの末尾にテキストを追記"
-		id<-1> = ".C"
-		desc<-1> = ".Cn/old/new/G | コマンドの文字列置換"
-		id<-1> = ".E "
-		desc<-1> = ".E file item | エディタ起動"
-		id<-1> = ".G"
-		desc<-1> = ".Gn | 指定位置のコマンド履歴に移動"
-		id<-1> = ".K"
-		desc<-1> = ".K | キーシーケンス確認モード"
-		id<-1> = ".L"
-		desc<-1> = ".Ln filter | コマンド履歴の一覧表示"
-		id<-1> = ".O"
-		desc<-1> = ".O | COMO ON/OFF"
-		id<-1> = ".R"
-		desc<-1> = ".Rs-e | コマンドを履歴の先頭に読み込む"
-		id<-1> = ".S "
-		desc<-1> = ".Ss-e name | コマンド履歴をVOCにPAとして保存"
-		id<-1> = ".T"
-		desc<-1> = ".T | 時間計測モードON/OFF"
-		id<-1> = ".X"
-		desc<-1> = ".Xs-e | コマンド履歴を実行"
-		idU = UpCase(id)
-		
-		Locate idU<1> In slistU By "AL" Setting no Else
-			Ins id Before slist<no>
-			Ins idU Before slistU<no>
-			Ins desc Before dlist<no>
-		End
-		
-		id = "READ.BUFFER"
-		desc = "エディタのバッファに指定のファイルを読み込む(SISH内部コマンド)"
-		idU = UpCase(id)
-		Locate idU In slistU By "AL" Setting no Else
-			Ins id Before slist<no>
-			Ins idU Before slistU<no>
-			Ins desc Before dlist<no>
-		End
-		
-		id = "WRITE.BUFFER"
-		desc = "エディタのバッファの内容をファイルを書き出す(SISH内部コマンド)"
-		idU = UpCase(id)
-		Locate idU In slistU By "AL" Setting no Else
-			Ins id Before slist<no>
-			Ins idU Before slistU<no>
-			Ins desc Before dlist<no>
-		End
+		If candidateMode="Cmd Hist" Then
+			!! コマンド履歴
+			dispType = "Cmd History"
+			GoSub CmdHist.Candidate
+			candidateMode = "FLATREC"
+			GoTo TAB.HOKAN.END
+		End Else
+			* Verbの補完
+			
+			tgtVocTypes = "V,R,S,PA,PQ,M"
+			GoSub Get.SList.From.Voc
+			
+			!! SISH専用コマンド
+			id = ""
+			desc = ""
+			id<-1> = ".A"
+			desc<-1> = ".An text | コマンドの末尾にテキストを追記"
+			id<-1> = ".C"
+			desc<-1> = ".Cn/old/new/G | コマンドの文字列置換"
+			id<-1> = ".E "
+			desc<-1> = ".E file item | エディタ起動"
+			id<-1> = ".G"
+			desc<-1> = ".Gn | 指定位置のコマンド履歴に移動"
+			id<-1> = ".K"
+			desc<-1> = ".K | キーシーケンス確認モード"
+			id<-1> = ".L"
+			desc<-1> = ".Ln filter | コマンド履歴の一覧表示"
+			id<-1> = ".O"
+			desc<-1> = ".O | COMO ON/OFF"
+			id<-1> = ".R"
+			desc<-1> = ".Rs-e | コマンドを履歴の先頭に読み込む"
+			id<-1> = ".S "
+			desc<-1> = ".Ss-e name | コマンド履歴をVOCにPAとして保存"
+			id<-1> = ".T"
+			desc<-1> = ".T | 時間計測モードON/OFF"
+			id<-1> = ".X"
+			desc<-1> = ".Xs-e | コマンド履歴を実行"
+			idU = UpCase(id)
+			
+			Locate idU<1> In slistU By "AL" Setting no Else
+				Ins id Before slist<no>
+				Ins idU Before slistU<no>
+				Ins desc Before dlist<no>
+			End
+			
+			id = "READ.BUFFER"
+			desc = "エディタのバッファに指定のファイルを読み込む(SISH内部コマンド)"
+			idU = UpCase(id)
+			Locate idU In slistU By "AL" Setting no Else
+				Ins id Before slist<no>
+				Ins idU Before slistU<no>
+				Ins desc Before dlist<no>
+			End
+			
+			id = "WRITE.BUFFER"
+			desc = "エディタのバッファの内容をファイルを書き出す(SISH内部コマンド)"
+			idU = UpCase(id)
+			Locate idU In slistU By "AL" Setting no Else
+				Ins id Before slist<no>
+				Ins idU Before slistU<no>
+				Ins desc Before dlist<no>
+			End
 
-		GoSub Prev.Match.Filter
-		candidateMode = ""
-		dispType = "Verb"
-		GoTo Complate.Common
+			GoSub Prev.Match.Filter
+			If Not(bFirstCurTop) Then
+				candidateMode = "Cmd Hist"
+			End
+			dispType = "Verb"
+			GoTo Complate.Common
+			
+		End
 		
 	End Else
 	
@@ -2516,7 +2527,7 @@ CmdHist.Candidate:
 		choiceList<-1> = Fmt((i-1),no.fmt):"  ":Change(Change(cmdStack<i>,"_":CHAR(10)," "),CHAR(10)," :"):@VM:i
 	Next i
 	choiceNo = cmdStack.len - cmdStackPos + 1
-	title = "Cmd Hist"
+	title = "Cmd History"
 	choiceOrgY = dispRows
 	GoSub InitChoiceList
 	Loop

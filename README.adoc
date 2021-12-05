@@ -5,8 +5,9 @@ Unix like Shell for OpenQM and UniVerse
 
 == 概要 ==
 
-Unix系のShellに近い操作でコマンドライン入力が出来るようになります。 +
-また、データ(Item)やBASICソースを効率よく編集するスクリーンエディタも備えています。
+入力補完などUnix系のShellに近い操作でコマンドライン入力が出来るようになります。 +
+また、データ(Item)やBASICソースを効率よく編集するスクリーンエディタも備えています。 +
+テキスト入力はWindowsのキーバインドをベースにしています。
 
 image:resources/Shell.gif[Overview]
 
