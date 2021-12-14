@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.42.3
+**    v0.42.4
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.42.3 ]"
+Equ SISH.VERSION To "[ SISH v0.42.4 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -2939,24 +2939,25 @@ Get.SList.FLATFILE:
 	slistU = ""
 	dlist = ""
 	If flatFile Then
-!! 		showDesc = Not(flatFile[4] = ".OUT")
+ 		showDesc = Not(flatFile[4] = ".OUT")
 		SelectV fpFlat To sp
-		Loop
-			ReadNext @ID From sp Else Exit
-			idU = UpCase(@ID)
-			Locate idU In slistU By "AL" Setting no Else
-				Ins idU Before slistU<no>
-				Ins @ID:" " Before slist<no>
-!! 重くなる時があるのでやめる
-!! 				If showDesc Then
-!! 					ReadV f1 From fpFlat,@ID,1 Then
-!! 						Ins f1 Before dlist<no>
-!! 					End Else
-!! 						Ins "-" Before dlist<no>
-!! 					End
-!! 				End
-			End
-		Repeat
+		IF @SELECTED <= 1000 THEN
+			Loop
+				ReadNext @ID From sp Else Exit
+				idU = UpCase(@ID)
+				Locate idU In slistU By "AL" Setting no Else
+					Ins idU Before slistU<no>
+					Ins @ID:" " Before slist<no>
+					If showDesc Then
+						ReadV f1 From fpFlat,@ID,1 Then
+							Ins f1 Before dlist<no>
+						End Else
+							Ins "-" Before dlist<no>
+						End
+	 				End
+				End
+			Repeat
+		eND
 	End
 	Close fpFlat
 Return
