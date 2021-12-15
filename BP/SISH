@@ -1165,6 +1165,10 @@ INC.SEARCH.MODE:
 				
 			Case actNo = A.EXIT
 				!! エディタ起動
+				If System(11) Then
+					cmdline = "READ.BUFFER #0"
+					GoSub READ.BUFFER
+				End
 				If Not(bFirstCurTop) Then
 					** 代替画面バッファ開いてる場合は閉じる
 					crtBuff = ""
@@ -3886,6 +3890,12 @@ WRITE.BUFFER.impl:
 				Print A
 				GoSub GoAltScreenBuf
 			End
+			If Rec="" Then
+				!! レコードが空だったらバッファ閉じる
+				Changed = False
+				GoSub Act.CloseBuff
+				Return
+			End
 			saveRec = Rec
 			GoTo WRITE.BUFFER.ending
 		End
@@ -4162,7 +4172,7 @@ Editor.Main:
 		!! バッファがある場合は以前開いていたものを開く
 		Found = lruBuffList<1> ;** 直近を開く
 		GoSub ChangeBuf
-		If FileName Match "'#'1N":@VM:"'#'10" Then
+		If BufInfo<BI.FILE> Match "'#'1N":@VM:"'#'10" Then
 			!! 選択リストは必ずリロード
 			GoSub ReadItem
 		End
@@ -5554,17 +5564,17 @@ ProcChoiceList:
 	crtBuff := HI.OFF
 	listLen = choiceOutList.length - winTop
 	If listLen > winHeight Then listLen = winHeight
-	i = 1
-	Loop While i <= listLen
-		no = choiceOutList<winTop+i,1>
-		selected = (choiceNo = winTop+i) ;** 選択行か？
+	ir = 1
+	Loop While ir <= listLen
+		no = choiceOutList<winTop+ir,1>
+		selected = (choiceNo = winTop+ir) ;** 選択行か？
 		Line = choiceList<no,1>
 $IFDEF U2__UNIVERSE
 		Line = Line[1,Len(FoldDP(Convert(" ","-",Line),winWidth,"UTF8")<1>)]
 $ELSE
 		Line = Line[1,Len(FoldDW(Convert(" ","-",Line),winWidth)<1>)]
 $ENDIF
-		crtBuff := @(winX,i+winY)
+		crtBuff := @(winX,ir+winY)
 		crtBuff := If choiceOrgY=0 Then title[" ",1,1] Else BG.BASE3
 		If selected Then
 			If choiceActive Then crtBuff := BG.BASE2
@@ -5635,12 +5645,12 @@ $ENDIF
 				Next j
 			End
 		End
-		i += 1
+		ir += 1
 	Repeat
 	crtBuff := BG.BASE3
-	Loop While i <= winHeight
-		crtBuff := @(winX,i+winY):@(-4)
-		i += 1
+	Loop While ir <= winHeight
+		crtBuff := @(winX,ir+winY):@(-4)
+		ir += 1
 	Repeat
 	
 	!! フィルター入力欄表示
@@ -7050,6 +7060,13 @@ PrintTextArea:
 * PrintLine
 *--------------------------------------------------------------------------
 PrintLine:
+	!! 行ヘッダ部分の描画
+	GoSub PrintLine.Head
+	!! TABの可視化
+	crtBuff := PLine:@(-4) ;** 内容の描画
+	Return
+
+PrintLine.Head:
 	crtBuff := @(0,Row - Top) ;* 行の開始
 	!! 行情報部の色指定
 	If Row = Y Then
@@ -7127,8 +7144,6 @@ PrintLine:
 		End
 	End
 	crtBuff := HI.OFF ;* 行情報部の色指定解除
-	!! TABの可視化
-	crtBuff := PLine:@(-4) ;** 内容の描画
 	Return
 
 *--------------------------------------------------------------------------
@@ -9597,7 +9612,7 @@ Act.ShowOutline:
 	End
 	choiceList = "" ;** アウトライン出力対象
 	For I = 1 to Lines
-		Line = Convert(char(9)," ",Rec<I>) ;** インデントはSP1とする
+		Line = Convert(char(9):@VM:@SVM:@TM:char(10):char(13),"    ",Rec<I>) ;** インデントはSP1とする
 		
 		If blockStart Then
 			!! 選択範囲内の行を含める
@@ -9705,7 +9720,10 @@ Act.ShowOutline:
 		
 		If choiceSelection#"" And prevChoiceSelection#choiceSelection Then
 			!! 選択が切り替わったらプレビュー表示
-			Top = choiceSelection<1,2> - Int(choiceOrgY/2) + 1
+			a = choiceSelection<1,2>
+			If num(a) Then
+				Top = a - Int(choiceOrgY/2) + 1
+			End
 			If Top <= 0 Then Top = 1
 			Redraw = @True
 		End
@@ -9723,9 +9741,8 @@ Act.ShowOutline:
 					Selection.Key.Color = HI.KEY.ON
 					Selection.Tab.Color = FG.BASE3
 					GoSub ParseLine2
-					GoSub Get.Gyo
-					crtBuff := @(0,Row - Top) ;* 行の開始
-					crtBuff := BG.BASE2:FG.BASE01:Gyo:PLine:Selection.Color:@(-4)
+					GoSub PrintLine.Head
+					crtBuff := PLine:Selection.Color:@(-4)
 				End Else
 					GoSub ParseLine
 					GoSub PrintLine
