@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.42.4 ]"
+Equ SISH.VERSION To "[ SISH v0.42.5 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -498,6 +498,7 @@ $ENDIF
 	ParentBufNo = ""
 	StatusMessage = ""
 	ignoreCase = False
+	AllDone = True
 
 $IFDEF U2__UNIVERSE
 	PROMPT.STR = ">"
@@ -1165,10 +1166,6 @@ INC.SEARCH.MODE:
 				
 			Case actNo = A.EXIT
 				!! エディタ起動
-				If System(11) Then
-					cmdline = "READ.BUFFER #0"
-					GoSub READ.BUFFER
-				End
 				If Not(bFirstCurTop) Then
 					** 代替画面バッファ開いてる場合は閉じる
 					crtBuff = ""
@@ -11413,11 +11410,14 @@ Act.Reload:
 		!! 変更ありなら自分の変更を破棄するか判断させる
 		If AllDone Then
 			If Changed Then
-				Print "Record previously changed by another, Are you sure you want to destroy your modification? (Y) :":
+				Print "Record previously changed by another, Are you sure you want to destroy your modification? (Y)":
 			End Else
-				Print "Record previously changed by another, Do you want to reload this item? (Y) :":
+				Print "Record previously changed by another, Do you want to reload this item? (Y)":
 			End
 			Input C
+			If UpCase(C) = "Y" Else Return
+			GoSub ReadItem
+			Redraw = REDRAW.ALL
 		End Else
 			If Changed Then
 				PromptLine = BG.RED:FG.BASE3:"Record previously changed by another, Are you sure you want to destroy your modification? (Y) :"
@@ -11426,15 +11426,15 @@ Act.Reload:
 			End
 			GoSub PromptLine
 			GoSub GetKey
+			If UpCase(C) = "Y" Else Return
+			
+			cmdline = "READ.BUFFER ":If PathName<>"" And FileName[1,5]="PATH:" Then PathName Else FileName:" ":ItemName
+			bAutoCommand = @TRUE
+			bAutoEditor = @TRUE
+			GoSub Act.Exit
+			Changed = @False
+			GoSub Act.CloseBuff
 		End
-		If UpCase(C) = "Y" Else Return
-		
-		cmdline = "READ.BUFFER ":If PathName<>"" And FileName[1,5]="PATH:" Then PathName Else FileName:" ":ItemName
-		bAutoCommand = @TRUE
-		bAutoEditor = @TRUE
-		GoSub Act.Exit
-		Changed = @False
-		GoSub Act.CloseBuff
 	End Else
 		Redraw = REDRAW.ALL
 	End
