@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.42.4
+**    v0.43.0
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.42.5 ]"
+Equ SISH.VERSION To "[ SISH v0.43.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -2176,7 +2176,7 @@ $ENDIF
 	End Else
 	
 		* Verbは決定済み
-		words = Convert(", ",@FM:@FM,cmdline)
+		words = Convert(", {",@FM:@FM:@FM,cmdline)
 		
 		** 初めの単語がLOGTOならアカウント補完
 		If UpCase(words<1>)="LOGTO" Then
@@ -2252,17 +2252,17 @@ $ENDIF
 		End
 		
 $IFNDEF U2__UNIVERSE
-		If Count(nowWord,"%") Then
+		If Count(nowWord,"%") Or Count(nowWord,".") Then
 			!! Linkフィールドか確認する(OpenQM)
 			lastId = ""
 			linkDictName = dictName
 			
-			lTypeFld = Convert("%",@FM,nowWord)
+			lTypeFld = Convert("%.",@FM:@FM,nowWord)
 			Loop
 				lastId = Remove(lTypeFld,sep)
 				rec = Raise(Trans("DICT ":linkDictName,lastId,-1,"X"))
-				If rec[1,1] = "L" Then
-					linkDictName = rec<3>
+				If rec[1,1] = "L" Or rec<8> <> "" Then
+					linkDictName = If rec<8> Then rec<8> Else rec<3>
 					Read rec From VOC,linkDictName Then
 						If rec[1,1] = "F" And rec<3> Then
 							Continue
@@ -2677,7 +2677,7 @@ DispCandidate.Common:
 Return
 
 Setting.WordInfo:
-	fullLine = Convert(',',' ',cmdline)
+	fullLine = Convert(',{','  ',cmdline)
 	words = ""
 	If actNo = A.INSCHAR And C = Char(32) Then
 		nowLine = fullLine[1,curPos-2]
@@ -2880,7 +2880,11 @@ Get.SList.FIELD:
 					If @RECORD[1,1] = "L" Then
 						@ID := "%"
 						!! ---> Ref Table
-						desc = "---> ":@RECORD<3>
+						desc = "-----> ":@RECORD<3>
+					End Else If @RECORD<8> <> "" Then
+						@ID := "."
+						!! ---> Ref Table
+						desc = "-----> ":@RECORD<8>
 					End Else
 						@ID := " "
 						If Count("DIEC",@RECORD[1,1]) Then
@@ -3578,10 +3582,17 @@ AUTO.COMPLATE:
 				slist = TRIMB(slist)
 				separator = ","
 			End
-		End Else If Trans("DICT ":dictName,slist,1,'X')[1,1] = "L" Then
-			** L-Typeなら'%'で続ける
-			slist = TRIMB(slist)
-			separator = "%"
+		End Else
+			r = Raise(Trans("DICT ":dictName,slist,-1,'X'))
+			If r<1>[1,1] = "L" Then
+				** L-Typeなら'%'で続ける
+				slist = TRIMB(slist)
+				separator = "%"
+			End Else If r<8> # "" Then
+				** F8.参照先テーブル
+				slist = TRIMB(slist)
+				separator = "."
+			End
 		End
 		commonWord = slist : separator ;* 候補は１つなので確定
 		slist = ""
@@ -3624,6 +3635,9 @@ AUTO.COMPLATE:
 			InsBuffer = DQuote(a[1,Len(a)-Len(nowWord)]:commonWord)
 		End
 	End Else
+		If cmdline[fullWord.st-(fullWord.Len-Len(nowWord))-1,1]="{" Then
+			commonWord[1] = "}"
+		End
 		If nowWord#"" And fullWord[1,Len(nowWord)]=nowWord Then
 			BufInfo<BI.BLOCKEND, 2> = fullWord.st + Len(nowWord)
 			InsBuffer = commonWord
