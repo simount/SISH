@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.43.0
+**    v0.43.1
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.43.0 ]"
+Equ SISH.VERSION To "[ SISH v0.43.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -3635,13 +3635,18 @@ AUTO.COMPLATE:
 			InsBuffer = DQuote(a[1,Len(a)-Len(nowWord)]:commonWord)
 		End
 	End Else
-		If cmdline[fullWord.st-(fullWord.Len-Len(nowWord))-1,1]="{" Then
-			commonWord[1] = "}"
+!		logmsg fullWord.st:" # ":fullWord:" / ":nowWord:" / ":commonWord:" # ":Rec<Row>[fullWord.st,1]
+		If Rec<Row>[fullWord.st-1,1]="{" Then
+			If commonWord[1]=" " Then
+				commonWord[1] = "}"
+			End
 		End
-		If nowWord#"" And fullWord[1,Len(nowWord)]=nowWord Then
+		If nowWord#"" And fullWord[1,Len(nowWord)]=nowWord And commonWord=fullWord[1,Len(commonWord)] Then
+			!! 上書きするだけ
 			BufInfo<BI.BLOCKEND, 2> = fullWord.st + Len(nowWord)
 			InsBuffer = commonWord
 		End Else
+			!! 補完処理
 			InsBuffer = fullWord[1,fullWord.Len-Len(nowWord)]:commonWord
 		End
 		If Index(Convert("()"," ",Trim(InsBuffer))," ") Then
@@ -3708,8 +3713,28 @@ READ.BUFFER:
 	DiveValuePos = ""
 	ParentBufNo = ""
 	StatusMessage = ""
-
-	args = Convert(' ',@FM,Trim(cmdline)[' ',2,HUGE])
+	
+	!! コマンドを引数にパース（リテラルのエスケープも対応）
+	args = ""
+	c = cmdline:" "
+	Loop
+		c = TrimF(c)
+		If c[1,1]="'" or c[1,1]='"' Then
+			SEP = c[1,1]
+			c = c[2,9999]
+		End Else
+			SEP = " "
+		End
+		i = index(c,SEP)
+	While i
+		args<-1> = c[1,i-1]
+		If SEP=" " Then
+			c = c[i+1,9999]
+		End Else
+			c = c[i+2,9999]
+		End
+	Repeat
+	
 	CFileName = Remove(args,s)
 	Begin Case
 		Case CFileName = ""
