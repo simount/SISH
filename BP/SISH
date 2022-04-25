@@ -3734,7 +3734,7 @@ READ.BUFFER:
 			c = c[i+2,9999]
 		End
 	Repeat
-	
+	VOID Remove(args,s) ;** READ.BUFFER
 	CFileName = Remove(args,s)
 	Begin Case
 		Case CFileName = ""
