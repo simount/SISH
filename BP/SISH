@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.43.1
+**    v0.43.2
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.43.1 ]"
+Equ SISH.VERSION To "[ SISH v0.43.2 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -3635,19 +3635,20 @@ AUTO.COMPLATE:
 			InsBuffer = DQuote(a[1,Len(a)-Len(nowWord)]:commonWord)
 		End
 	End Else
-!		logmsg fullWord.st:" # ":fullWord:" / ":nowWord:" / ":commonWord:" # ":Rec<Row>[fullWord.st,1]
-		If Rec<Row>[fullWord.st-1,1]="{" Then
-			If commonWord[1]=" " Then
-				commonWord[1] = "}"
-			End
-		End
-		If nowWord#"" And fullWord[1,Len(nowWord)]=nowWord And commonWord=fullWord[1,Len(commonWord)] Then
+!		logmsg fullWord.st:" # ":X:" # ":fullWord:" / ":nowWord:" / ":commonWord:" # ":Rec<Row>[fullWord.st,1]
+		a = TrimB(commonWord)
+		If nowWord#"" And Rec<Row>[X-Len(nowWord),Len(a)]=a Then
 			!! 上書きするだけ
-			BufInfo<BI.BLOCKEND, 2> = fullWord.st + Len(nowWord)
-			InsBuffer = commonWord
+			InsBuffer = fullWord[1,(X-fullWord.st)-Len(nowWord)+Len(a)]
+			BufInfo<BI.BLOCKEND, 2> = fullWord.st + Len(InsBuffer)
 		End Else
 			!! 補完処理
-			InsBuffer = fullWord[1,fullWord.Len-Len(nowWord)]:commonWord
+			If Rec<Row>[fullWord.st-1,1]="{" Then
+				If commonWord[1]=" " Then
+					commonWord[1] = "}"
+				End
+			End
+			InsBuffer = fullWord[1,(X-fullWord.st)-Len(nowWord)]:commonWord
 		End
 		If Index(Convert("()"," ",Trim(InsBuffer))," ") Then
 			!! ""で囲む
