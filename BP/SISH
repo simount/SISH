@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.43.2
+**    v0.43.3
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.43.2 ]"
+Equ SISH.VERSION To "[ SISH v0.43.3 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -3649,6 +3649,9 @@ AUTO.COMPLATE:
 				End
 			End
 			InsBuffer = fullWord[1,(X-fullWord.st)-Len(nowWord)]:commonWord
+			If nowWord#"" And fullWord[1,Len(nowWord)]=nowWord Then
+				BufInfo<BI.BLOCKEND,2> = fullWord.st + Len(nowWord)
+			End
 		End
 		If Index(Convert("()"," ",Trim(InsBuffer))," ") Then
 			!! ""で囲む
@@ -3735,6 +3738,7 @@ READ.BUFFER:
 			c = c[i+2,9999]
 		End
 	Repeat
+	print args
 	VOID Remove(args,s) ;** READ.BUFFER
 	CFileName = Remove(args,s)
 	Begin Case
