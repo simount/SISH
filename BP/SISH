@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.43.3
+**    v0.43.4
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.43.3 ]"
+Equ SISH.VERSION To "[ SISH v0.43.4 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -2283,14 +2283,16 @@ $IFNDEF U2__UNIVERSE
 					Open "DICT",dictName To fpDICT Then ;
 				End
 			End
-
+			
 			If prevC # CHAR(9) Then
 				GoSub Get.SList.FIELD
 				GoSub Prev.Match.Filter
-				GoSub AUTO.COMPLATE
-				dispType = dictType:" ":dictName:" "
-				GoSub Disp.NokoriKouho
-				Return
+				If slist#"" Then
+					GoSub AUTO.COMPLATE
+					dispType = dictType:" ":dictName:" "
+					GoSub Disp.NokoriKouho
+					Return
+				End
 			End
 			
 		End
