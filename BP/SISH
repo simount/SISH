@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.43.4
+**    v0.43.5
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.43.4 ]"
+Equ SISH.VERSION To "[ SISH v0.43.5 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -4181,23 +4181,25 @@ $ENDIF
 
 WRITE.BUFFER.ending:
 
-	!! Bufferの初期化処理  
-	BufInfo<BI.FILE> = FileName
-	BufInfo<BI.ITEM> = ItemName
-	BufInfo<BI.CAPTURE> = ""
-	GoSub Set.BI.ACCOUNT
-	Changed = False
-	IsNew = False
-	StartRec = saveRec
-	
-	!! 編集スタックの調整
-	If EditCmdPos > 1 Then
-		EditCmdStack = EditCmdStack[@FM,EditCmdPos,HUGE]
+	!! Bufferの初期化処理
+	IF Not(FileName Match "'#'1N":@VM:"'#'10") Then
+		BufInfo<BI.FILE> = FileName
+		BufInfo<BI.ITEM> = ItemName
+		BufInfo<BI.CAPTURE> = ""
+		GoSub Set.BI.ACCOUNT
+		Changed = False
+		IsNew = False
+		StartRec = saveRec
+		
+		!! 編集スタックの調整
+		If EditCmdPos > 1 Then
+			EditCmdStack = EditCmdStack[@FM,EditCmdPos,HUGE]
+			EditCmdPos = 1
+		End
+		Find "SAVED_POINT" In EditCmdStack Setting f Then Del EditCmdStack<f>
+		Ins "SAVED_POINT" Before EditCmdStack<1>
 		EditCmdPos = 1
 	End
-	Find "SAVED_POINT" In EditCmdStack Setting f Then Del EditCmdStack<f>
-	Ins "SAVED_POINT" Before EditCmdStack<1>
-	EditCmdPos = 1
 	
 	@USER.RETURN.CODE=0	
 	
