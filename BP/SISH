@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.43.5
+**    v0.43.6
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.43.5 ]"
+Equ SISH.VERSION To "[ SISH v0.43.6 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -3740,7 +3740,7 @@ READ.BUFFER:
 			c = c[i+2,9999]
 		End
 	Repeat
-	print args
+	
 	VOID Remove(args,s) ;** READ.BUFFER
 	CFileName = Remove(args,s)
 	Begin Case
@@ -4219,6 +4219,7 @@ Editor.Main:
 		GoSub ChangeBuf
 		If BufInfo<BI.FILE> Match "'#'1N":@VM:"'#'10" Then
 			!! 選択リストは必ずリロード
+			FileName = BufInfo<BI.FILE>
 			GoSub ReadItem
 		End
 	End
@@ -5177,7 +5178,7 @@ DoList:
 *-----------------------------------------------------------------------
 *  DoNew
 *-----------------------------------------------------------------------
-DoNew:  
+DoNew:
 	FileName = ""
 	ItemName = ""
 	PathName = ""
@@ -5189,6 +5190,7 @@ DoNew:
 	Rec = ""
 	GoSub StartBuf 
 	IsNew = True
+	Redraw = REDRAW.ALL
 	Return
 *-----------------------------------------------------------------------
 *  DoPrint
