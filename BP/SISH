@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.43.6
+**    v0.43.7
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.43.6 ]"
+Equ SISH.VERSION To "[ SISH v0.43.7 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -5295,7 +5295,16 @@ DoShowDictInfo:
 				TgtFld<5,1> = 5:@VM:@VM:@VM:"FMT"
 				TgtFld<6,1> = 6:@VM:@VM:@VM:"S/M"
 				TgtFld<7,1> = 7:@VM:@VM:@VM:"ASSOC"
-				TgtFld<12,1> = 12:@VM:@VM:@VM:"CONST"
+				!! Only SMV
+				A = Trans("DICT.DICT","JOIN",-1,"X")
+				IF A<>"" Then
+					TgtFld<A<1,2>,1> = A<1,2>:@VM:@VM:@VM:A<1,4>
+				End
+				!! Only QM 4
+				A = Trans("DICT.DICT","CONSTRAINT",-1,"X")
+				IF A<>"" Then
+					TgtFld<A<1,2>,1> = A<1,2>:@VM:@VM:@VM:A<1,4>
+				End
 			End Else If FileName = "VOC" OR FileName[1,4] = "PVOC" Then
 				!! VOC
 				IF Upcase(Rec[1,1]) = "V" Then
