@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.43.7
+**    v0.43.8
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    MIT License
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.43.7 ]"
+Equ SISH.VERSION To "[ SISH v0.43.8 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -2366,7 +2366,7 @@ Complate.Common:
 		
 		GoSub AUTO.COMPLATE
 		If bComprate And commonWord[1]#" " Then
-			If candidateMode#"" Then
+			If candidateMode#"" AND candidateMode#"FLATREC" Then
 				prevC = ""
 				GoTo TAB.HOKAN ;** 続きあり
 			End
