@@ -10,17 +10,17 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.43.8
+**    v0.44.0
 **  DATE
 **    2018/04/06
 **  AUTHOR
 **    Kazuya Kosaku <kosaku@simount.com>
 **  LICENSE
-**    Copyright (C) 2017  SImount <info@simount.com>
-**    MIT License
+**    Copyright (C) 2017 SImount <info@simount.com>
+**    Released under the MIT license
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.43.8 ]"
+Equ SISH.VERSION To "[ SISH v0.44.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -6685,6 +6685,12 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 									Mask[St-1,1] = SI.NUMBER ;** 負のリテラル
 								End
 							End
+							Mask[St, Len(Word)] = Str(SI.NUMBER, Len(Word))
+						End
+					Case Word[1,2] = "0X"
+						!! number by Hex
+						A = Convert("1234567890ABCDEF","",Word[3,999])
+						If Len(A)=0 Then
 							Mask[St, Len(Word)] = Str(SI.NUMBER, Len(Word))
 						End
 					Case 1
