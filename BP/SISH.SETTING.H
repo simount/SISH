@@ -135,7 +135,19 @@ Equ K.C_UNDERBAR To       "@_"
 Equ K.ESC To              "@["
 Equ K.RB To               "@]"
 Equ K.C_SPACE To          "@@"
-                          
+
+Equ K.A_1 To              "@[1"
+Equ K.A_2 To              "@[2"
+Equ K.A_3 To              "@[3"
+Equ K.A_4 To              "@[4"
+Equ K.A_5 To              "@[5"
+Equ K.A_6 To              "@[6"
+Equ K.A_7 To              "@[7"
+Equ K.A_8 To              "@[8"
+Equ K.A_9 To              "@[9"
+Equ K.A_0 To              "@[0"
+
+
 * Key To Action Mapping
 	keySeq = ""
 !! Common Input
@@ -180,9 +192,9 @@ Equ K.C_SPACE To          "@@"
 	keySeq<A.NEWLINE>          = K.ENTER:" ":K.C_ENTER
 	keySeq<A.TAB>              = K.TAB
 	keySeq<A.SHIFT_TAB>        = K.SHIFT_TAB:" ":Char(213):" ":K.C_F11
-	keySeq<A.INSVMC>           = K.C_9
-	keySeq<A.INSSMC>           = K.C_8
-	keySeq<A.INSTMC>           = K.C_1
+	keySeq<A.INSFMC>           = K.A_2
+	keySeq<A.INSVMC>           = K.A_3
+	keySeq<A.INSSMC>           = K.A_4
 	keySeq<A.DELETELINE>       = K.C_K
 	keySeq<A.DELETECHAR>       = K.DEL:" ":Char(212)
 If @TTY = "console" Then

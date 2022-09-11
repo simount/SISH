@@ -199,7 +199,7 @@ Equ OS.GATES To SYSTEM(91)
   Equ A.THEME To 57
   Equ A.INSVMC To 58
   Equ A.INSSMC To 59
-  Equ A.INSTMC To 60
+  Equ A.INSFMC To 60
   Equ A.TEMPLATE To 61
   Equ A.COMMENT To 62
   Equ A.SEARCH To 63
@@ -7621,6 +7621,9 @@ SetupTokens:
 	AddKeyWord "OPENPATH"
 	AddKeyWord "OPENSEQ"
 	AddKeyWord "OR"
+	AddKeyWord "OSDELETE"
+	AddKeyWord "OSWRITE"
+	AddKeyWord "OSREAD"
 	AddKeyWord "PASSLIST"
 	AddKeyWord "PERFORM"
 	AddKeyWord "PRINT"
@@ -8188,7 +8191,7 @@ Switch.Actions:
 								Act.SwitchTheme,
 								Act.InsVMC,
 								Act.InsSMC,
-								Act.InsTMC,
+								Act.InsFMC,
 								Act.InsTemplate,
 								Act.InsCommentOut,
 								Act.Search,
@@ -9370,7 +9373,7 @@ Act.InsertChar:
 		editCmd<2> = BufInfo<BI.BLOCKEND, 2>
 		editCmd<3> = BufInfo<BI.BLOCKSTART, 1>
 		editCmd<4> = BufInfo<BI.BLOCKSTART, 2>
-		editCmd<5> = InsBuffer
+		editCmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),InsBuffer)
 		editCmd<6> = curFlg
 	End Else
 		editCmd<1> = Y
@@ -9382,7 +9385,7 @@ Act.InsertChar:
 			editCmd<3> = ""
 			editCmd<4> = ""
 		End
-		editCmd<5> = InsBuffer
+		editCmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),InsBuffer)
 		editCmd<6> = curFlg
 	End
 	
@@ -11226,28 +11229,24 @@ Act.ShiftTab:
 * Act.InsFMC
 
 Act.InsFMC:
-	
+	C = @FM
+	GoSub Act.InsertChar
 	Return
 	
 * **************************************************************************
 * Act.InsVMC
 
 Act.InsVMC:
-	
+	C = @VM
+	GoSub Act.InsertChar
 	Return
 
 * **************************************************************************
 * Act.InsSMC
 
 Act.InsSMC:
-	
-	Return
-
-* **************************************************************************
-* Act.InsTMC
-
-Act.InsTMC:
-	
+	C = @SVM
+	GoSub Act.InsertChar
 	Return
 
 * **************************************************************************
@@ -11279,7 +11278,7 @@ Act.NewLine:
 		editCmd2<2> = 1
 		editCmd2<3> = ""
 		editCmd2<4> = ""
-		editCmd2<5> = Rec<Y>[X,HUGE]
+		editCmd2<5> = Convert(@SM:@VM:@IM,CHAR(28):CHAR(29):CHAR(31),Rec<Y>[X,HUGE])
 		editCmd2<6> = "1"
 		editCmd := @FM:editCmd2
 	End
