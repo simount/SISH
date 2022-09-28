@@ -192,7 +192,7 @@ Equ K.A_0 To              "@[0"
 	keySeq<A.NEWLINE>          = K.ENTER:" ":K.C_ENTER
 	keySeq<A.TAB>              = K.TAB
 	keySeq<A.SHIFT_TAB>        = K.SHIFT_TAB:" ":Char(213):" ":K.C_F11
-	keySeq<A.INSFMC>           = K.A_2
+	keySeq<A.INSTMC>           = K.A_5
 	keySeq<A.INSVMC>           = K.A_3
 	keySeq<A.INSSMC>           = K.A_4
 	keySeq<A.DELETELINE>       = K.C_K

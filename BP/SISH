@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.45.0
+**    v0.45.1
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.45.0 ]"
+Equ SISH.VERSION To "[ SISH v0.45.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -199,7 +199,7 @@ Equ OS.GATES To SYSTEM(91)
   Equ A.THEME To 57
   Equ A.INSVMC To 58
   Equ A.INSSMC To 59
-  Equ A.INSFMC To 60
+  Equ A.INSTMC To 60
   Equ A.TEMPLATE To 61
   Equ A.COMMENT To 62
   Equ A.SEARCH To 63
@@ -4053,7 +4053,7 @@ WRITE.BUFFER.impl:
 				cmd<2> = 1
 				cmd<3> = fno
 				cmd<4> = Len(Rec<fno>) + 1
-				cmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),tmp<i>)
+				cmd<5> = Convert(@TM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),tmp<i>)
 				cmd<6> = ""
 				editCmd<-1> = cmd
 			Next
@@ -4099,7 +4099,7 @@ WRITE.BUFFER.impl:
 					cmd<2> = 1
 					cmd<3> = fno
 					cmd<4> = Len(Rec<fno>) + 1
-					cmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),saveRec<fno>)
+					cmd<5> = Convert(@TM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),saveRec<fno>)
 					cmd<6> = ""
 					editCmd<-1> = cmd
 				Next
@@ -4570,7 +4570,7 @@ DoEditCmd:
 		stX = Remove(editCmd,sep)
 		endY = Remove(editCmd,sep)
 		endX = Remove(editCmd,sep)
-		strings = Convert(CHAR(28):CHAR(29):CHAR(31),@SM:@VM:@IM,Remove(editCmd,sep))
+		strings = Convert(CHAR(28):CHAR(29):CHAR(31),@SM:@VM:@TM,Remove(editCmd,sep))
 		A = Remove(editCmd,sep)
 		curFlg = A[":",1,1]
 		aftSelected = A[":",2,1]
@@ -4699,7 +4699,7 @@ DoEditCmd:
 			
 		End
 		
-		cmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),prevStrings)
+		cmd<5> = Convert(@TM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),prevStrings)
 		cmd<6> = prevCurFlg:":":selected
 		Ins cmd Before undoCmd<1> ;** 逆順に追加していく
 		
@@ -6511,7 +6511,7 @@ InsMenu:
 *--------------------------------------------------------------------------
 InsertLines: 
 	
-	InsBuffer = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),InsBuffer)
+	InsBuffer = Convert(@TM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),InsBuffer)
 	
 	editCmd = ""
 	
@@ -6797,6 +6797,8 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 						Mask := SI.VMK
 					Case ch = @SM
 						Mask := SI.SMK
+					Case ch = @TM
+						Mask := SI.COMMENT
 					Case 1
 						Mask := " "
 				End Case
@@ -8191,7 +8193,7 @@ Switch.Actions:
 								Act.SwitchTheme,
 								Act.InsVMC,
 								Act.InsSMC,
-								Act.InsFMC,
+								Act.InsTMC,
 								Act.InsTemplate,
 								Act.InsCommentOut,
 								Act.Search,
@@ -9373,7 +9375,7 @@ Act.InsertChar:
 		editCmd<2> = BufInfo<BI.BLOCKEND, 2>
 		editCmd<3> = BufInfo<BI.BLOCKSTART, 1>
 		editCmd<4> = BufInfo<BI.BLOCKSTART, 2>
-		editCmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),InsBuffer)
+		editCmd<5> = Convert(@TM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),InsBuffer)
 		editCmd<6> = curFlg
 	End Else
 		editCmd<1> = Y
@@ -9385,7 +9387,7 @@ Act.InsertChar:
 			editCmd<3> = ""
 			editCmd<4> = ""
 		End
-		editCmd<5> = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),InsBuffer)
+		editCmd<5> = Convert(@TM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),InsBuffer)
 		editCmd<6> = curFlg
 	End
 	
@@ -10777,7 +10779,7 @@ Act.Paste:
 		End
 	End
 	
-	InsBuffer = Convert(@IM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),InsBuffer)
+	InsBuffer = Convert(@TM:@FM:@VM:@SM,CHAR(31):CHAR(10):CHAR(29):CHAR(28),InsBuffer)
 	editCmd = ""
 	If BufInfo<BI.BLOCKSTART> Then
 		** 選択中
@@ -11226,10 +11228,10 @@ Act.ShiftTab:
 	Return
 
 * **************************************************************************
-* Act.InsFMC
+* Act.InsTMC
 
-Act.InsFMC:
-	C = @FM
+Act.InsTMC:
+	C = @TM
 	GoSub Act.InsertChar
 	Return
 	
@@ -11278,7 +11280,7 @@ Act.NewLine:
 		editCmd2<2> = 1
 		editCmd2<3> = ""
 		editCmd2<4> = ""
-		editCmd2<5> = Convert(@SM:@VM:@IM,CHAR(28):CHAR(29):CHAR(31),Rec<Y>[X,HUGE])
+		editCmd2<5> = Convert(@SM:@VM:@TM,CHAR(28):CHAR(29):CHAR(31),Rec<Y>[X,HUGE])
 		editCmd2<6> = "1"
 		editCmd := @FM:editCmd2
 	End
