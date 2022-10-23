@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.45.1
+**    v0.46.0
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.45.1 ]"
+Equ SISH.VERSION To "[ SISH v0.46.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -570,7 +570,7 @@ $ENDIF
 $IFNDEF U2__UNIVERSE
 		logname = @HOSTNAME:"\":logname
 $ENDIF
-		act.title = "QM [":@TTY:"] ":account['/',DCount(account,'/'),1]:" @ ":logname:" (":System(18):")"
+		act.title = "QM(":System(18):") ":account['/',DCount(account,'/'),1]: " @ ":logname:" [":@TTY:"]"
 		
 		** コマンドスタック保存ファイルから復元を試みる
 		logFile = @LOGNAME:"$":MY_COMMAND
@@ -1670,12 +1670,8 @@ Run.Command:
 					GoTo Run.Command.Ending
 				Case k = "E"
 					If UpCase(Trim(cmdline)) = ".E" Then
-						If System(11) Then
-							cmdline = "READ.BUFFER #0"
-						End Else
-							cmdline = ""
-							GoTo Launch.Editor ;** 単純にエディタに切り替える
-						End
+						cmdline = ""
+						GoTo Launch.Editor ;** 単純にエディタに切り替える
 					End
 					!! Verbをエディタに置換
 					If UpCase(Trim(cmdline)[1,3]) = ".EP" Then
@@ -1705,6 +1701,12 @@ Run.Command:
 					GoSub Keys
 					cmdline = ""
 			End Case
+		End Else If verb[1,1] = "#" Then
+			!! 選択リストをエディタで開く
+			If verb Match "'#'1N":@VM:"'#'10" Then
+				cmdline = "READ.BUFFER ":verb
+				X += 9
+			End
 		End
 		
 		!! LOGTO単体の場合はLOGTO履歴選択モードにする
@@ -4948,10 +4950,14 @@ ReadItem:
 		Rec = Bufs(ParentBufNo)
 	End Else If FileName Match "'#'1N":@VM:"'#'10" Then
 		!! 選択リストから開く
-		ReadList Rec From FileName['#',2,1] Then
-			FormList Rec To FileName['#',2,1] ;** KEEP
+		ReadList A From FileName['#',2,1] Then
+			FormList A To FileName['#',2,1] ;** KEEP
+			Rec = A
 		End Else
-			Rec = ""
+			If Rec Then
+				!! 前回の状態そのままにする
+				Return
+			End
 		End
 	End Else
 		!! ファイルから開く
@@ -9217,16 +9223,17 @@ Act.DelCh:
 * Act.DelBackCh
 
 Act.DelBackCh:
-	If Y=1 And X=1 Else
-	
-		editCmd = ""
-		If BufInfo<BI.BLOCKSTART> Then
-			** 選択中
-			editCmd<1> = BufInfo<BI.BLOCKEND, 1>
-			editCmd<2> = BufInfo<BI.BLOCKEND, 2>
-			editCmd<3> = BufInfo<BI.BLOCKSTART, 1>
-			editCmd<4> = BufInfo<BI.BLOCKSTART, 2>
-		End Else
+	editCmd = ""
+	If BufInfo<BI.BLOCKSTART> Then
+		** 選択中
+		editCmd<1> = BufInfo<BI.BLOCKEND, 1>
+		editCmd<2> = BufInfo<BI.BLOCKEND, 2>
+		editCmd<3> = BufInfo<BI.BLOCKSTART, 1>
+		editCmd<4> = BufInfo<BI.BLOCKSTART, 2>
+		
+		GoSub StackEditCmd
+	End Else
+		If Y=1 And X=1 Else
 			editCmd<1> = Y
 			editCmd<2> = X
 			If X = 1 Then
@@ -9236,12 +9243,11 @@ Act.DelBackCh:
 				editCmd<3> = Y
 				editCmd<4> = X-1
 			End
+			editCmd<5> = ""
+			editCmd<6> = ""
+			
+			GoSub StackEditCmd
 		End
-		editCmd<5> = ""
-		editCmd<6> = ""
-		
-		GoSub StackEditCmd
-		
 	End
 	
 	Return
