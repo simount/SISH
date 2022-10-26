@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.46.0
+**    v0.47.0
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.46.0 ]"
+Equ SISH.VERSION To "[ SISH v0.47.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -1175,9 +1175,12 @@ INC.SEARCH.MODE:
 				End
 				!! 強制的に端末サイズに合わせる
 				If @TTY = 'console' Then
-					A = "TERM ":@CRTWIDE:",":@CRTHIGH
-					IF @TERM.TYPE = 'msvt' THEN A:=" qmterm":@FM:"TERM msvt"
-					Execute A
+					IF @TERM.TYPE = 'msvt' THEN
+						Crt CSI:"4;":@CRTHIGH:";":@CRTWIDE:"t":
+					END ELSE
+						A = "TERM ":@CRTWIDE:",":@CRTHIGH
+						Execute A
+					END
 				END ELSE
 					Crt CSI:"8;":@CRTHIGH:";":@CRTWIDE:"t":
 				END
@@ -1845,7 +1848,7 @@ Run.Command.One:
 		Return
 	End
 
-	verb = TRIMF(cmdline[" ",1,1])
+	verb = UPCASE(TRIMF(cmdline[" ",1,1]))
 	Begin Case
 		Case verb = "READ.BUFFER"
 			!! ファイルをバッファにリードする
@@ -1858,6 +1861,12 @@ Run.Command.One:
 		Case verb = "TERM"
 			IF @TERM.TYPE = 'msvt' AND cmdline MATCHES "...1N0N..." THEN
 				Execute cmdline : " qmterm":@FM:"TERM msvt"
+				DX = trim(cmdline[" ",2,*][",",3,1])
+				DY = trim(cmdline[" ",2,*][",",4,1])
+				IF DX >= 20 AND DX <= 32767 AND DY >= 10 AND DY <= 32767 THEN
+					CRT CSI:"8;":DY:";":DX:"t":ESC:"[?1049h":ESC:"[?1049l":
+				END
+				Return
 			END	
 	End Case
 
@@ -1884,7 +1893,20 @@ Run.Command.One:
 $IFDEF U2__UNIVERSE
 	Perform cl
 $ELSE
-	Execute cl TRAPPING ABORTS
+	WITH.NO.TTY = @False
+	If verb="LIST" Or verb="SORT" Then
+		!! 画面バッファサイズがLIST SORT なら NOPAGE キーワードが存在したら NO.TTY で実行する
+		!! 高速化のためVOCを見て判定しないで文字列検索で処理する
+		a = Upcase(cmdline)
+		If Index(a,"NO.PAGE") Or Index(a,"NOPAGE") Then
+			WITH.NO.TTY = @True
+		End
+	End
+	If WITH.NO.TTY Then
+		Execute cl TRAPPING ABORTS NO.TTY
+	End Else
+		Execute cl TRAPPING ABORTS
+	End
 	If @ABORT.CODE Then
 		IF @EXCEPTION = "SYS.PROGRAM.RESIZE_ERROR" THEN
 			!! unnamed common missmatch error
@@ -2118,6 +2140,8 @@ $ENDIF
 			!! SISH専用コマンド
 			id = ""
 			desc = ""
+			id<-1> = "#0"
+			desc<-1> = "#0 | 選択リスト0番をエディタで開く"
 			id<-1> = ".A"
 			desc<-1> = ".An text | コマンドの末尾にテキストを追記"
 			id<-1> = ".C"
@@ -2262,7 +2286,18 @@ $IFNDEF U2__UNIVERSE
 			lTypeFld = Convert("%.",@FM:@FM,nowWord)
 			Loop
 				lastId = Remove(lTypeFld,sep)
-				rec = Raise(Trans("DICT ":linkDictName,lastId,-1,"X"))
+				dictName2 = linkDictName
+Get.LinkDictName:
+				rec = Raise(Trans("DICT ":dictName2,lastId,-1,"X"))
+				If rec="" Then
+					ReadV a From VOC,dictName2,1 Then
+						a = MATCHFIELD(a,"'F DATA '...' '...":@VM:"'F DATA '...",2)
+						If a#"" Then
+							dictName2 = a
+							GoTo Get.LinkDictName
+						End
+					End
+				End
 				If rec[1,1] = "L" Or rec<8> <> "" Then
 					linkDictName = If rec<8> Then rec<8> Else rec<3>
 					Read rec From VOC,linkDictName Then
@@ -2876,39 +2911,59 @@ Get.SList.FIELD:
 	slistU = ""
 	dlist = ""
 	If dictName Then
-		SelectV fpDICT To sp
-		Loop
-			ReadNext @ID From sp Else Exit
-			Read @RECORD From fpDICT,@ID Then
-				If Count("DILPCEASC",@RECORD[1,1]) Then
-					If @RECORD[1,1] = "L" Then
-						@ID := "%"
-						!! ---> Ref Table
-						desc = "-----> ":@RECORD<3>
-					End Else If @RECORD<8> <> "" Then
-						@ID := "."
-						!! ---> Ref Table
-						desc = "-----> ":@RECORD<8>
-					End Else
-						@ID := " "
-						If Count("DIEC",@RECORD[1,1]) Then
-							!! Type S/M Assoc Description
-							desc = FMT(@RECORD[1,1],"4L"):FMT(@RECORD<6>,"3L"):@RECORD<7>:"  ":@RECORD<4>
-						End Else If @RECORD[1,2] = "PH" Then
-							desc = FMT("PH","4L"):@RECORD<2>
-						End
-					End
-					idU = UpCase(@ID)
-					Locate idU In slistU By "AL" Setting no Else
-						Ins idU Before slistU<no>
-						Ins @ID Before slist<no>
-						Ins Convert(Char(10):@FM:@VM:@SVM,"    ",desc) Before dlist<no>
-					End
+		fpDICT2 = fpDICT
+		GoSub Get.SList.FIELD2
+$IFNDEF U2__UNIVERSE
+		!! QMの場合はSMVSYSの親テーブルのフィールドも候補に入れる
+		dictName2 = dictName
+Get.SList.FIELD_SMVSYS.Parent:
+		ReadV a From VOC,dictName2,1 Then
+			dictName2 = MATCHFIELD(a,"'F DATA '...' '...":@VM:"'F DATA '...",2)
+			If dictName2#"" Then
+				Open "DICT",dictName2 To fpDICT2 Then
+					GoSub Get.SList.FIELD2
 				End
 			End
-		Repeat
+			GoTo Get.SList.FIELD_SMVSYS.Parent ;** 親が無くなるまで再帰的に繰り返す
+		End
+#ENDIF
 	End
 Return
+
+Get.SList.FIELD2:
+	SelectV fpDICT2 To sp
+	Loop
+		ReadNext @ID From sp Else Exit
+		Read @RECORD From fpDICT2,@ID Then
+			If Count("DILPCEASC",@RECORD[1,1]) Then
+				If @RECORD[1,1] = "L" Then
+					@ID := "%"
+					!! ---> Ref Table
+					desc = "-----> ":@RECORD<3>
+				End Else If @RECORD<8> <> "" Then
+					@ID := "."
+					!! ---> Ref Table
+					desc = "-----> ":@RECORD<8>
+				End Else
+					@ID := " "
+					If Count("DIEC",@RECORD[1,1]) Then
+						!! Type S/M Assoc Description
+						desc = FMT(@RECORD[1,1],"4L"):FMT(@RECORD<6>,"3L"):@RECORD<7>:"  ":@RECORD<4>
+					End Else If @RECORD[1,2] = "PH" Then
+						desc = FMT("PH","4L"):@RECORD<2>
+					End
+				End
+				idU = UpCase(@ID)
+				Locate idU In slistU By "AL" Setting no Else
+					Ins idU Before slistU<no>
+					Ins @ID Before slist<no>
+					Ins Convert(Char(10):@FM:@VM:@SVM,"    ",desc) Before dlist<no>
+				End
+			End
+		End
+	Repeat
+Return
+
 
 Get.SList.FLATFILE:
 
