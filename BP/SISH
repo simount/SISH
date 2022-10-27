@@ -1872,8 +1872,10 @@ Run.Command.One:
 			END	
 		Case verb = "CLR"
 			IF @TERM.TYPE = 'msvt' THEN
-				CRT STR(CHAR(10),@CRTHIGH-1):CSI:"H":CSI:"J":
-				Return
+				If @(-1)=CHAR(13) Then
+					CRT STR(CHAR(10),@CRTHIGH-1):CSI:"H":CSI:"J":
+					Return
+				End
 			END	
 	End Case
 
