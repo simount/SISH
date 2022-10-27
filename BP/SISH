@@ -1859,13 +1859,20 @@ Run.Command.One:
 			GoSub WRITE.BUFFER
 			Return
 		Case verb = "TERM"
-			IF @TERM.TYPE = 'msvt' AND cmdline MATCHES "...1N0N..." THEN
-				Execute cmdline : " qmterm":@FM:"TERM msvt"
-				DX = trim(cmdline[" ",2,*][",",3,1])
-				DY = trim(cmdline[" ",2,*][",",4,1])
-				IF DX >= 20 AND DX <= 32767 AND DY >= 10 AND DY <= 32767 THEN
-					CRT CSI:"8;":DY:";":DX:"t":ESC:"[?1049h":ESC:"[?1049l":
+			IF @TERM.TYPE = 'msvt' THEN
+				IF cmdline MATCHES "...1N0N..." THEN
+					Execute cmdline : " qmterm":@FM:"TERM msvt"
+					DX = trim(cmdline[" ",2,*][",",3,1])
+					DY = trim(cmdline[" ",2,*][",",4,1])
+					IF DX >= 20 AND DX <= 32767 AND DY >= 10 AND DY <= 32767 THEN
+						CRT CSI:"8;":DY:";":DX:"t":ESC:"[?1049h":ESC:"[?1049l":
+					END
+					Return
 				END
+			END	
+		Case verb = "CLR"
+			IF @TERM.TYPE = 'msvt' THEN
+				CRT STR(CHAR(10),@CRTHIGH-1):CSI:"H":CSI:"J":
 				Return
 			END	
 	End Case
@@ -1894,11 +1901,11 @@ $IFDEF U2__UNIVERSE
 	Perform cl
 $ELSE
 	WITH.NO.TTY = @False
-	If verb="LIST" Or verb="SORT" Then
-		!! 画面バッファサイズがLIST SORT なら NOPAGE キーワードが存在したら NO.TTY で実行する
+	If @(-1)#CHAR(13) Then
+		!! NOPAGE キーワードが存在したら NO.TTY で実行する
 		!! 高速化のためVOCを見て判定しないで文字列検索で処理する
 		a = Upcase(cmdline)
-		If Index(a,"NO.PAGE") Or Index(a,"NOPAGE") Then
+		If Index(a," NO.PAGE") Or Index(a," NOPAGE") Then
 			WITH.NO.TTY = @True
 		End
 	End
