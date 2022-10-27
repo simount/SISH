@@ -82,7 +82,7 @@ link:UV.BP.O/SISH[UV.BP.O/SISH] を オブジェクトフォルダに配置し�
 ==== ローカル接続 on Windows
 
 必須バージョン: QM3.4-12以降、Windows10(1803)以降 +
-QM Console (qm.exe) で動作します。以下のカスタマイズを行うとより使いやすくなります。
+QM Console (qm.exe) のターミナルタイプmsvt（link:https://learn.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences[msvtの仕様]）で動作します。以下のカスタマイズを行うとより使いやすくなります。
 
 [クリップボード貼り付け] +
 以下の `win32yank.exe` を system32 に配置すれば、貼り付けで画面が点滅する問題を回避できます。
