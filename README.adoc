@@ -155,7 +155,7 @@ Windowsコンソールの場合に `TERM` コマンドのPrinterサイズ指定�
 以下は画面サイズは40行だが画面バッファは1万行になり出力結果をスクロールできるようになる +
 `TERM 140,40,140,10000`
 
-terminfoの `clear=\r` でクリアシーケンス@(-1)をCHAR(13)にすることでPaginationでも出力結果を残せるようになる（link:terminfo_msvt.src[terminfo_msvt.src]の修正ソース） +
+link:http://downloads.openqm.com/help/terminfo.htm[terminfo] の `clear=\r` でクリアシーケンス@(-1)をCHAR(13)にすることでPaginationでも出力結果を残せるようになる（link:terminfo_msvt.src[terminfo_msvt.src]の修正ソース） +
 上記設定をすると `CLR` コマンドで画面がクリアされなくなるのでSISHでは正しくクリア出来るように修正している。 +
 クリアシーケンス@(-1)がCHAR(13)では無い場合に `NO.PAGE` キーワードが含まれると自動的に NO.TTY モードで EXECUTE するので同じような出力結果となる。 +
 
