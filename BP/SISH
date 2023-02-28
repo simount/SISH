@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.47.0
+**    v0.47.3
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.47.0 ]"
+Equ SISH.VERSION To "[ SISH v0.47.3 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -2941,7 +2941,9 @@ Return
 
 Get.SList.FIELD2:
 	SelectV fpDICT2 To sp
+	tim = TIME()
 	Loop
+		If TIME()-tim>=3 Then Exit
 		ReadNext @ID From sp Else Exit
 		Read @RECORD From fpDICT2,@ID Then
 			If Count("DILPCEASC",@RECORD[1,1]) Then
@@ -3014,23 +3016,23 @@ Get.SList.FLATFILE:
 	If flatFile Then
  		showDesc = Not(flatFile[4] = ".OUT")
 		SelectV fpFlat To sp
-		IF @SELECTED <= 1000 THEN
-			Loop
-				ReadNext @ID From sp Else Exit
-				idU = UpCase(@ID)
-				Locate idU In slistU By "AL" Setting no Else
-					Ins idU Before slistU<no>
-					Ins @ID:" " Before slist<no>
-					If showDesc Then
-						ReadV f1 From fpFlat,@ID,1 Then
-							Ins f1 Before dlist<no>
-						End Else
-							Ins "-" Before dlist<no>
-						End
-	 				End
-				End
-			Repeat
-		eND
+		tim = TIME()
+		Loop
+			If TIME()-tim>=3 Then Exit
+			ReadNext @ID From sp Else Exit
+			idU = UpCase(@ID)
+			Locate idU In slistU By "AL" Setting no Else
+				Ins idU Before slistU<no>
+				Ins @ID:" " Before slist<no>
+				If showDesc Then
+					ReadV f1 From fpFlat,@ID,1 Then
+						Ins f1 Before dlist<no>
+					End Else
+						Ins "-" Before dlist<no>
+					End
+ 				End
+			End
+		Repeat
 	End
 	Close fpFlat
 Return
@@ -3046,11 +3048,8 @@ Get.SList.RECID:
 			B = words<wordPos>
 		END
 		Open B To fpFlat Then
-			a = FileInfo(fpFlat,1015)
-			If a > 0 And a < 2000 Then
-				flatFile = B
-				Exit
-			End
+			flatFile = B
+			Exit
 		End
 	Next
 	
@@ -3059,7 +3058,9 @@ Get.SList.RECID:
 	dlist = ""
 	If flatFile Then
 		SelectV fpFlat To sp
+		tim = TIME()
 		Loop
+			If TIME()-tim>=3 Then Exit
 			ReadNext @ID From sp Else Exit
 			idU = UpCase(@ID)
 			Locate idU In slistU By "AL" Setting no Else
@@ -5885,10 +5886,10 @@ AfterKeyWait:
 			GoSub GetCh.Timeout ; C := ch
 			If ch = "" Then
 				!! 単独ESC
-				Locate C in keys By 'AL' Setting i Then
-					actNo = keysToAction<i,1>
-					Return
-				End
+				IF CurBuf = CMD_BUF THEN
+					!! コマンドラインのクリア
+					GoTo Shell.Input.Begin
+				END
 			End Else If ch = "[" Then
 				!! CSIシーケンス開始
 				GoSub GetCh.Timeout ; C := ch
@@ -6765,7 +6766,7 @@ ParseLine2: * (Outline用、呼び出す前に必ず selection に値を入れ�
 						End
 					Case 1
 						Locate Word In KEYWORDS By "AL" Setting Pos Then
-							If Mask[St,1] = " " AND OldLine[St+Len(Word),1]#"(" Then
+							If Mask[St,1] = " " AND OldLine[St+Len(Word),1]#"(" OR (OldLine[St,Len(Word)+1]="GET(") Then
 								Mask[St, Len(Word)] = Str(SI.KEY, Len(Word))
 							End
 						End Else
@@ -7667,6 +7668,7 @@ SetupTokens:
 	AddKeyWord "FORMLIST"
 	AddKeyWord "FROM"
 	AddKeyWord "FUNCTION"
+	AddKeyWord "GET"
 	AddKeyWord "GETLIST"
 	AddKeyWord "GETLISTV"
 	AddKeyWord "GOSUB"
@@ -7694,8 +7696,8 @@ SetupTokens:
 	AddKeyWord "OPENSEQ"
 	AddKeyWord "OR"
 	AddKeyWord "OSDELETE"
-	AddKeyWord "OSWRITE"
 	AddKeyWord "OSREAD"
+	AddKeyWord "OSWRITE"
 	AddKeyWord "PASSLIST"
 	AddKeyWord "PERFORM"
 	AddKeyWord "PRINT"
@@ -11848,6 +11850,10 @@ Act.SwitchTheme:
 Act.DelBackWord:
 
 	GoSub Act.SelPrevWord
+	
+	If Line[X,1]#"" AND Count(" #=:;<>()[]{}/*+-,'\":'"',Line[X,1]) Then
+		X += 1
+	End
 	
 	editCmd = ""
 	editCmd<1> = BufInfo<BI.BLOCKSTART, 1>
