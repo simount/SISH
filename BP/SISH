@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.47.3
+**    v0.47.4
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.47.3 ]"
+Equ SISH.VERSION To "[ SISH v0.47.4 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -5886,7 +5886,7 @@ AfterKeyWait:
 			GoSub GetCh.Timeout ; C := ch
 			If ch = "" Then
 				!! 単独ESC
-				IF CurBuf = CMD_BUF THEN
+				IF CurBuf = CMD_BUF AND bFirstCurTop THEN
 					!! コマンドラインのクリア
 					GoTo Shell.Input.Begin
 				END
