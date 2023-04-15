@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.47.4 ]"
+Equ SISH.VERSION To "[ SISH v0.48.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -2394,9 +2394,10 @@ $ENDIF
 		
 		GoSub Get.SList.FILE
 		GoSub Marge.SlistAll
-		
-		GoSub Get.SList.RECID
-		GoSub Marge.SlistAll
+
+!!		レコードID補完は思いのでオートコンプリートから除外
+!!		GoSub Get.SList.RECID
+!!		GoSub Marge.SlistAll
 		
 		GoSub Get.SList.FIELD
 		GoSub Marge.SlistAll
@@ -3039,7 +3040,6 @@ Return
 
 Get.SList.RECID:
 	
-	** 1000件未満のファイルを補完対象とする
 	flatFile = ""
 	For wordPos = nowWordPos - 1 To 1 Step -1
 		IF words<wordPos-1> = "DICT" THEN
@@ -3058,9 +3058,9 @@ Get.SList.RECID:
 	dlist = ""
 	If flatFile Then
 		SelectV fpFlat To sp
-		tim = TIME()
+		tim = SYSTEM(1020)
 		Loop
-			If TIME()-tim>=3 Then Exit
+			If SYSTEM(1020)-tim>=2000 Then Exit
 			ReadNext @ID From sp Else Exit
 			idU = UpCase(@ID)
 			Locate idU In slistU By "AL" Setting no Else
@@ -11415,7 +11415,7 @@ Act.InsCommentOut:
 				cmd<1> = Z
 				cmd<2> = 1
 				cmd<3> = Z
-				cmd<4> = 2
+				cmd<4> = 2 + (Rec<Z>[2,1] = "!")
 				cmd<5> = ""
 			End Else
 				** コメント付ける
@@ -11423,7 +11423,7 @@ Act.InsCommentOut:
 				cmd<2> = 1
 				cmd<3> = ""
 				cmd<4> = ""
-				cmd<5> = "!"
+				cmd<5> = "!!"
 			End
 			editCmd<-1> = cmd
 		END
