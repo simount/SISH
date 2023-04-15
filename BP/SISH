@@ -2942,9 +2942,9 @@ Return
 
 Get.SList.FIELD2:
 	SelectV fpDICT2 To sp
-	tim = TIME()
+	tim = SYSTEM(1020)
 	Loop
-		If TIME()-tim>=3 Then Exit
+		If SYSTEM(1020)-tim>=2000 Then Exit
 		ReadNext @ID From sp Else Exit
 		Read @RECORD From fpDICT2,@ID Then
 			If Count("DILPCEASC",@RECORD[1,1]) Then
