@@ -3722,7 +3722,7 @@ AUTO.COMPLATE:
 				BufInfo<BI.BLOCKEND,2> = fullWord.st + Len(nowWord)
 			End
 		End
-		If Index(Convert("()"," ",Trim(InsBuffer))," ") Then
+		If candidateMode = "RECID" Or Index(Convert("()"," ",Trim(InsBuffer))," ") Then
 			!! ""で囲む
 			If InsBuffer[1]=" " Then
 				InsBuffer = DQuote(InsBuffer[1,Len(InsBuffer)-1]):" "
@@ -3730,6 +3730,7 @@ AUTO.COMPLATE:
 				InsBuffer = DQuote(InsBuffer)
 			End
 		End
+
 		!! スペースが２つ続くのを防ぐ
 		IF InsBuffer[1]=" " AND Rec<Y>[X,1]=" " THEN InsBuffer = InsBuffer[1,LEN(InsBuffer)-1]
 	End
