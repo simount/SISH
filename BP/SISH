@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.47.4
+**    v0.48.1
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.48.0 ]"
+Equ SISH.VERSION To "[ SISH v0.48.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -5117,7 +5117,14 @@ ReadItem:
 				If Not(ParentBufNo) Then
 					!! 物理ファイルからの場合はConversionがあれば適応
 					conv = TgtFld<f,3>
-					If conv Then list = OConvS(list,conv)
+					If conv Then
+						If conv="UOSBS" Or conv="XOSBS" Then
+							list = OConv(list,conv) ;** 区切文字が入っている可能性があるのでSingleで変換
+						End Else
+							list = OConvS(list,conv)
+						End
+						
+					End
 				End
 				
 				cnt = DCount(list,sep)
@@ -5134,7 +5141,12 @@ ReadItem:
 		If TgtFld Then
 			For i=1 To DCount(TgtFld,@FM)
 				If TgtFld<i,3> Then
-					Rec<i> = OConvS(Rec<i>,TgtFld<i,3>) ;** Conversion
+					conv = TgtFld<i,3>
+					If conv="UOSBS" Or conv="XOSBS" Then
+						Rec<i> = OConv(Rec<i>,conv) ;** 区切文字が入っている可能性があるのでSingleで変換
+					End Else
+						Rec<i> = OConvS(Rec<i>,conv) ;** Conversion
+					End
 				End
 			Next
 		End
