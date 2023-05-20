@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.48.1 ]"
+Equ SISH.VERSION To "[ SISH v0.49.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -516,7 +516,11 @@ $IFDEF U2__UNIVERSE
 	Perform "PTERM INTR ^Q"
 	assign 0 to system(1005)
 $ELSE
-	x = PTERM(3,28)
+	If @TTY = 'console' THEN
+		x = PTERM(3,28)
+	END ELSE
+		x = PTERM(1,0)
+	END
 	x = PTERM(4,@FALSE)
 	
 	!! COMO中ならコマンド入力中はサスペンドにする
@@ -1777,7 +1781,11 @@ $IFDEF U2__UNIVERSE
 	Perform "PTERM INTR ^C"
 	assign 1 to system(1005)
 $ELSE
-	x = PTERM(3,3)
+	If @TTY = 'console' THEN
+		x = PTERM(3,3)
+	END ELSE
+		x = PTERM(1,1)
+	END
 	x = PTERM(4,@TRUE)
 $ENDIF
 
