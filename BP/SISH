@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.48.1
+**    v0.49.0
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -5908,8 +5908,10 @@ AfterKeyWait:
 			If ch = "" Then
 				!! 単独ESC
 				IF CurBuf = CMD_BUF AND bFirstCurTop THEN
-					!! コマンドラインのクリア
-					GoTo Shell.Input.Begin
+					!! 連続でESCを押されたらコマンドラインのクリア
+					IF prevC = C THEN
+						GoTo Shell.Input.Begin
+					END
 				END
 			End Else If ch = "[" Then
 				!! CSIシーケンス開始
