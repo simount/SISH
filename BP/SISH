@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.49.0
+**    v0.49.1
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.49.0 ]"
+Equ SISH.VERSION To "[ SISH v0.49.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
