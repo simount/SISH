@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.49.1
+**    v0.49.2
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **========================================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.49.1 ]"
+Equ SISH.VERSION To "[ SISH v0.49.2 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -2968,7 +2968,8 @@ Get.SList.FIELD2:
 					@ID := " "
 					If Count("DIEC",@RECORD[1,1]) Then
 						!! Type S/M Assoc Description
-						desc = FMT(@RECORD[1,1],"4L"):FMT(@RECORD<6>,"3L"):@RECORD<7>:"  ":@RECORD<4>
+						t = @RECORD[1,1]
+						desc = FMT((If t="D" Then t:@RECORD<2> Else t),"4L"):FMT(@RECORD<6>,"3L"):@RECORD<7>:"  ":@RECORD<4>
 					End Else If @RECORD[1,2] = "PH" Then
 						desc = FMT("PH","4L"):@RECORD<2>
 					End
