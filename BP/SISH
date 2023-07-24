@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.49.2
+**    v0.50.0
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -18,9 +18,9 @@ PROGRAM SISH
 **  LICENSE
 **    Copyright (C) 2017 SImount <info@simount.com>
 **    Released under the MIT license
-**========================================================================================
+**===========B=============================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.49.2 ]"
+Equ SISH.VERSION To "[ SISH v0.50.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -2954,16 +2954,13 @@ Get.SList.FIELD2:
 	Loop
 		If SYSTEM(1020)-tim>=2000 Then Exit
 		ReadNext @ID From sp Else Exit
+		If @ID[2]="$L" Then Continue
 		Read @RECORD From fpDICT2,@ID Then
 			If Count("DILPCEASC",@RECORD[1,1]) Then
 				If @RECORD[1,1] = "L" Then
 					@ID := "%"
 					!! ---> Ref Table
 					desc = "-----> ":@RECORD<3>
-				End Else If @RECORD<8> <> "" Then
-					@ID := "."
-					!! ---> Ref Table
-					desc = "-----> ":@RECORD<8>
 				End Else
 					@ID := " "
 					If Count("DIEC",@RECORD[1,1]) Then
@@ -2979,6 +2976,17 @@ Get.SList.FIELD2:
 					Ins idU Before slistU<no>
 					Ins @ID Before slist<no>
 					Ins Convert(Char(10):@FM:@VM:@SVM,"    ",desc) Before dlist<no>
+				End
+				If @RECORD<8> <> "" Then
+					@ID = @ID[1,Len(@ID)-1]:"."
+					!! ---> Ref Table
+					desc = "-----> ":@RECORD<8>
+					idU = UpCase(@ID)
+					Locate idU In slistU By "AL" Setting no Else
+						Ins idU Before slistU<no>
+						Ins @ID Before slist<no>
+						Ins Convert(Char(10):@FM:@VM:@SVM,"    ",desc) Before dlist<no>
+					End
 				End
 			End
 		End
