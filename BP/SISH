@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.50.0
+**    v0.50.1
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **===========B=============================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.50.0 ]"
+Equ SISH.VERSION To "[ SISH v0.50.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -5081,7 +5081,7 @@ ReadItem:
 	
 	If FldInfo Then
 		!! フィールド指定モード
-		dictFileName = "DICT ":FileName
+		dictFileName = If FileName[1,4]="DICT" Then "DICT.DICT" Else "DICT ":FileName
 		list = Convert(' ',@FM,FldInfo)
 		cnt = DCount(list,@FM)
 		For i = 1 To cnt
@@ -5167,11 +5167,12 @@ ReadItem:
 				End
 			Next
 		End
+		
+		** 辞書ならバイナリデータを削る
+		If FileName[1,4] = "DICT" Then Rec = Rec[@FM,1,15] 
+
 	End
 	
-	** 辞書ならバイナリデータを削る
-	If FileName[1,4] = "DICT" Then Rec = Rec[@FM,1,15] 
-
 	!! 現在の行数の設定
 	Lines = If Rec = "" Then 1 Else DCount(Rec,@fm)
 
@@ -6310,9 +6311,9 @@ EditMenu:
 FileMenu: 
 	If IsNew Then
 		!! TODO 出来れば使用できないメニューは灰色表示にしたい
-		MenuLine = "Showlist New Read Write writeAs View Close :"
+		MenuLine = "Showlist dIve New Read Write writeAs View Close :"
 	End Else
-		MenuLine = "Showlist New Read Write writeAs rEload Close Lock Delete clOse_all :"
+		MenuLine = "Showlist dIve New Read Write writeAs rEload Close Lock Delete clOse_all :"
 	End
 	GoSub MenuLine
 	Ok = Upcase(C)
@@ -6335,6 +6336,8 @@ FileMenu:
 			GoSub DoLock
 		Case Ok = "D"
 			GoSub Delete
+		Case Ok = "I"
+			GoSub Act.GoDive
 		Case Ok = "O"
 			GoSub Act.AllCloseBuf
 !!     Case Ok = "P"
