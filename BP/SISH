@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.50.1
+**    v0.51.0
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **===========B=============================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.50.1 ]"
+Equ SISH.VERSION To "[ SISH v0.51.0 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -8681,17 +8681,24 @@ Act.NextStmt:
 		End
 	End Else
 		!! コメント行外
-		Line = Change(Rec<Y+1>,Char(9),Space(STDTAB))
+		A = Field(Rec,@FM,Y+1)
+		spos = Col1()
+		Line = Change(A,Char(9),Space(STDTAB))
 		GoSub GetX.From.keepDPX
 		If Count("*!$",TrimF(Line)[1,1]) Or Line[outX,1] = "" Or TrimF(Line[1,outX]) = "" Then
 			!! 次行がインデント内なら次に文字が出現するまで進む
-			For iY = Y+1 To Lines
-				Line = Change(Rec<iY>,Char(9),Space(STDTAB))
+			iY = Y+1
+			SetRem spos On Rec
+			Loop
+				A = Remove(Rec,sep)
+				Line = Change(A,Char(9),Space(STDTAB))
+				iY += 1
 				If Count("*!$",TrimF(Line)[1,1]) Then Continue
 				GoSub GetX.From.keepDPX
 				If Not(Line[outX,1] = "" Or TrimF(Line[1,outX]) = "") Then Exit
-			Next 
-			Y = iY
+			While sep
+			Repeat
+			Y = iY-1
 		End Else
 			!! 文の切れ目まで進む（インデントの出現かコメント行の出現で止める）
 			For iY = Y+1 To Lines+1
@@ -8866,16 +8873,23 @@ Act.PrevStmt:
 		End
 	End Else
 		!! コメント行外
-		Line = Change(Rec<Y-1>,Char(9),Space(STDTAB))
+		A = Field(Rec,@FM,Y-1)
+		spos = Col1()		
+		Line = Change(A,Char(9),Space(STDTAB))
 		GoSub GetX.From.keepDPX
 		If Count("*!$",TrimF(Line)[1,1]) Or Line[outX,1] = "" Or TrimF(Line[1,outX]) = "" Then
 			!! 次行がインデント内なら次に文字が出現するまで進む
-			For iY = Y-1 To 1 Step -1
-				Line = Change(Rec<iY>,Char(9),Space(STDTAB))
+			iY = Y-1
+			SetRem spos On Rec
+			Loop
+				RevRemove A From Rec Setting sep
+				Line = Change(A,Char(9),Space(STDTAB))
+				iY -= 1
 				If Count("*!$",TrimF(Line)[1,1]) Then Continue
 				GoSub GetX.From.keepDPX
 				If Not(Line[outX,1] = "" Or TrimF(Line[1,outX]) = "") Then Exit
-			Next 
+			While sep
+			Repeat
 			Y = iY
 		End Else
 			!! 文の切れ目まで戻る（インデントの出現で止める）
@@ -9586,12 +9600,17 @@ Search.Core:
 		!! 検索ロジック
 		isFound = @FALSE
 		If ignoreCase Then
-			Word = UpCase(SearchString)
 			!! 大小無視
+			Word = UpCase(SearchString)
 			If searchReverse Then
 				Ix = X - 1
-				For Iy = Y To 1 Step -1
-					Line = UpCase(Rec<Iy>[1,Ix])
+				Iy = Y
+				Line = Field(Rec,@FM,Y)
+				spos = Col2()
+				SetRem spos On Rec
+				Loop
+					RevRemove A From Rec Setting sep
+					Line = UpCase(A[1,Ix])
 					Ix = Index(Line, Word, Count(Line,Word))
 					If Ix Then
 						If Not(Y = Iy And X <= Ix) Then
@@ -9602,11 +9621,18 @@ Search.Core:
 						End
 					End
 					Ix = HUGE
-				Next
+					Iy -= 1
+				While sep
+				Repeat
 			End Else
 				Ix = X + 1
-				For Iy = Y To Lines
-					idx = Index(UpCase(Rec<Iy>[Ix,HUGE]), Word, 1)
+				Iy = Y
+				Line = Field(Rec,@FM,Y)
+				spos = Col1()
+				SetRem spos On Rec
+				Loop
+					Line = Remove(Rec,sep)
+					idx = Index(UpCase(Line[Ix,HUGE]), Word, 1)
 					If idx Then
 						Ix += idx - 1
 						If Not(Y = Iy And X >= Ix) Then
@@ -9617,14 +9643,20 @@ Search.Core:
 						End
 					End
 					Ix = 1
-				Next
+					Iy += 1
+				While sep
+				Repeat
 			End
 		End Else
 			!! スペースで始まる場合は単語単位の前方一致で検索
 			If searchReverse Then
 				Ix = X - 1
-				For Iy = Y To 1 Step -1
-					Line = Rec<Iy>
+				Iy = Y
+				Line = Field(Rec,@FM,Y)
+				spos = Col2()
+				SetRem spos On Rec
+				Loop
+					RevRemove Line From Rec Setting sep
 					Loop
 						Line = Line[1,Ix]
 						Ix = Index(Line, SearchString, Count(Line,SearchString))
@@ -9643,11 +9675,17 @@ Search.Core:
 							Ix -= 1
 						End
 					Repeat
-				Next
+					Iy -= 1
+				While sep
+				Repeat
 			End Else
 				Ix = X + 1
-				For Iy = Y To Lines
-					Line = Rec<Iy>
+				Iy = Y
+				Line = Field(Rec,@FM,Y)
+				spos = Col1()
+				SetRem spos On Rec
+				Loop
+					Line = Remove(Rec,sep)
 					Loop
 						idx = Index(Line[Ix,HUGE], SearchString, 1)
 						If idx=0 Then
@@ -9664,7 +9702,9 @@ Search.Core:
 							Ix += 1
 						End
 					Repeat
-				Next
+					Iy += 1
+				While sep
+				Repeat
 			End
 		End
 		
@@ -9785,8 +9825,12 @@ Act.ShowOutline:
 		SWord = BufInfo<BI.HIWORD> ;** 検索ハイライトの単語
 	End
 	choiceList = "" ;** アウトライン出力対象
-	For I = 1 to Lines
-		Line = Convert(char(9):@VM:@SVM:@TM:char(10):char(13),"    ",Rec<I>) ;** インデントはSP1とする
+	
+	SetRem 0 On Rec
+	I = 0
+	Loop
+		I += 1
+		Line = Convert(char(9):@VM:@SVM:@TM:char(10):char(13),"    ",Remove(Rec,sep)) ;** インデントはSP1とする
 		
 		If blockStart Then
 			!! 選択範囲内の行を含める
@@ -9838,7 +9882,8 @@ Act.ShowOutline:
 		If b Matches a Then
 			choiceList<-1> = Line:@VM:I
 		End
-	Next
+	While sep
+	Repeat
 
 	choiceOrgY = Int(Depth / 2) + 1
 	tmpList = Fields(Convert(@VM,char(1),choiceList),char(1),2)
@@ -10013,8 +10058,12 @@ Act.ShowOutline2:
 		SWord = BufInfo<BI.HIWORD> ;** 検索ハイライトの単語
 	End
 	choiceList = "" ;** アウトライン出力対象
-	For I = 1 to Lines
-		Line = Convert(char(9)," ",Rec<I>) ;** インデントはSP1とする
+	
+	SetRem 0 On Rec
+	I = 0
+	Loop
+		I += 1
+		Line = Convert(char(9)," ",Remove(Rec,sep)) ;** インデントはSP1とする
 		
 		If blockStart Then
 			!! 選択範囲内の行を含める
@@ -10066,7 +10115,8 @@ Act.ShowOutline2:
 		If b Matches a Then
 			choiceList<-1> = Line:@VM:I
 		End
-	Next
+	While sep
+	Repeat
 
 	choiceOrgY = 0
 	title = SBOLD:FG.BASE02:BG.YELLOW:" Outline"
