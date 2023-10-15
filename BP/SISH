@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.51.0
+**    v0.51.1
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **===========B=============================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.51.0 ]"
+Equ SISH.VERSION To "[ SISH v0.51.1 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -1925,6 +1925,7 @@ $ELSE
 		Execute cl TRAPPING ABORTS
 	End
 	If @ABORT.CODE Then
+		TRANSACTION ABORT
 		IF @EXCEPTION = "SYS.PROGRAM.RESIZE_ERROR" THEN
 			!! unnamed common missmatch error
 			!! unnamed common をクリアするため自身を再起動して再実行
@@ -2151,7 +2152,7 @@ $ENDIF
 		End Else
 			* Verbの補完
 			
-			tgtVocTypes = "V,R,S,PA,PQ,M"
+			tgtVocTypes = "V,R,S,PA,PQ,M,X"
 			GoSub Get.SList.From.Voc
 			
 			!! SISH専用コマンド
@@ -2869,7 +2870,7 @@ Get.SList.From.Voc2:
 Return
 
 Get.SList.VOC:
-	tgtVocTypes = "V,R,S,K,PA,PQ,PH,M,D"
+	tgtVocTypes = "V,R,S,K,PA,PQ,PH,M,D,X"
 	GoSub Get.SList.From.Voc
 Return
 
