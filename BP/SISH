@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.51.1
+**    v0.51.2
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **===========B=============================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.51.1 ]"
+Equ SISH.VERSION To "[ SISH v0.51.2 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -2097,7 +2097,7 @@ TAB.HOKAN:
 	
 $IFNDEF U2__UNIVERSE
 	!! OSディレクトリ補完
-	path = Convert('\"','/',nowWord)
+	path = Convert('\"!','/',nowWord)
 	If (Count(path,'/') AND Count(path,":")=0) Or nowWord[1,5] = "PATH:" Or path[1,2] Matches "1A:" Then
 		If path[1,5] = "PATH:" Then
 			path = path[6,99]
@@ -2537,7 +2537,7 @@ Disp.NokoriKouho:
 	If slist#"" Then
 		!! 残りの候補を画面出力
 		GoSub CUR.TOP.OF.SCREEN
-		nowWord = commonWord
+		nowWord = commonWorBd
 		GoSub Setting.WordInfo2
 		choiceNo = 0
 		choiceList = slist
@@ -2583,7 +2583,13 @@ CmdHist.Candidate:
 	cmdStack.len = DCount(cmdStack,@FM)
 	no.fmt = Len(cmdStack.len):"R"
 	For i = cmdStack.len To 2 Step -1
-		choiceList<-1> = Fmt((i-1),no.fmt):"  ":Change(Change(cmdStack<i>,"_":CHAR(10)," "),CHAR(10)," :"):@VM:i
+		If dispType = "Cmd History" Then
+			If nowWord=cmdStack<i>[1,len(nowWord)] Then
+				choiceList<-1> = Fmt((i-1),no.fmt):"  ":Change(Change(cmdStack<i>,"_":CHAR(10)," "),CHAR(10)," :"):@VM:i
+			End
+		End Else
+			choiceList<-1> = Fmt((i-1),no.fmt):"  ":Change(Change(cmdStack<i>,"_":CHAR(10)," "),CHAR(10)," :"):@VM:i
+		End
 	Next i
 	choiceNo = cmdStack.len - cmdStackPos + 1
 	title = "Cmd History"
