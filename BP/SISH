@@ -10,7 +10,7 @@ PROGRAM SISH
 **    Please read the "README.adoc" for more information
 **
 **  VERSION
-**    v0.51.2
+**    v0.51.3
 **  DATE
 **    2018/04/06
 **  AUTHOR
@@ -20,7 +20,7 @@ PROGRAM SISH
 **    Released under the MIT license
 **===========B=============================================================================
 $MODE DEBUG.EQUATES
-Equ SISH.VERSION To "[ SISH v0.51.2 ]"
+Equ SISH.VERSION To "[ SISH v0.51.3 ]"
 
 $IFDEF U2__UNIVERSE
 	!! For UniVerse
@@ -2537,7 +2537,7 @@ Disp.NokoriKouho:
 	If slist#"" Then
 		!! 残りの候補を画面出力
 		GoSub CUR.TOP.OF.SCREEN
-		nowWord = commonWorBd
+		nowWord = commonWord
 		GoSub Setting.WordInfo2
 		choiceNo = 0
 		choiceList = slist
@@ -7729,6 +7729,12 @@ SetupTokens:
 	AddKeyWord "MATCH"
 	AddKeyWord "MATCHES"
 	AddKeyWord "MATPARSE"
+	AddKeyWord "MATREAD"
+	AddKeyWord "MATREADL"
+	AddKeyWord "MATREADU"
+	AddKeyWord "MATWRITE"
+	AddKeyWord "MATWRITEL"
+	AddKeyWord "MATWRITEU"
 	AddKeyWord "NEXT"
 	AddKeyWord "NO.TTY"
 	AddKeyWord "ON"
